@@ -33,4 +33,4 @@ COLUMNAS_ESTANDAR = [
 ]
 
 # Columnas de la tabla de labores
-COLUMNAS_LABORES = ["Labor"]
+COLUMNAS_LABORES = ["Labor", "GSI", "RMR", "Soporte", "Tipo"]

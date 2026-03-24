@@ -21,7 +21,7 @@ class BitacoraModel:
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
             estandar = pd.DataFrame(columns=COLUMNAS_ESTANDAR)
-            labores = pd.DataFrame(columns=COLUMNAS_LABORES)
+            labores = pd.DataFrame(columns=["Labor", "GSI", "RMR", "Soporte", "Tipo"])
             
             with pd.ExcelWriter(self.archivo) as writer:
                 bitacora.to_excel(writer, sheet_name="Bitacora", index=False)
@@ -60,35 +60,48 @@ class BitacoraModel:
             return pd.DataFrame(columns=COLUMNAS_BITACORA)
     
     def obtener_labores_guardadas(self):
-        """Obtiene la lista de labores guardadas en la hoja Labores"""
+        """Obtiene la lista de nombres de labores guardadas"""
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Labores")
+            df = self._leer_labores_df()
             return sorted(df["Labor"].dropna().unique().tolist())
         except Exception:
             return []
 
-    def agregar_labor(self, nombre_labor):
+    def _leer_labores_df(self):
+        """Lee el DataFrame completo de la hoja Labores"""
+        try:
+            return pd.read_excel(self.archivo, sheet_name="Labores")
+        except Exception:
+            return pd.DataFrame(columns=COLUMNAS_LABORES)
+
+    def agregar_labor(self, nombre_labor, gsi="", rmr="", soporte="", tipo="Temporal"):
         """
-        Agrega una nueva labor a la hoja Labores.
+        Agrega una nueva labor a la hoja Labores con sus datos técnicos.
         Returns: tuple (éxito: bool, mensaje: str)
         """
         try:
             nombre_labor = nombre_labor.strip()
             if not nombre_labor:
                 return False, "El nombre de la labor no puede estar vacío"
-            
-            labores = self.obtener_labores_guardadas()
-            if nombre_labor in labores:
+
+            df = self._leer_labores_df()
+            if nombre_labor in df["Labor"].values:
                 return False, f"La labor '{nombre_labor}' ya existe"
-            
-            labores.append(nombre_labor)
-            labores = sorted(labores)
-            df = pd.DataFrame({"Labor": labores})
-            
+
+            nueva_fila = pd.DataFrame([{
+                "Labor": nombre_labor,
+                "GSI": gsi,
+                "RMR": rmr,
+                "Soporte": soporte,
+                "Tipo": tipo
+            }])
+            df = pd.concat([df, nueva_fila], ignore_index=True)
+            df = df.sort_values("Labor").reset_index(drop=True)
+
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Labores", index=False)
-            
+
             return True, f"Labor '{nombre_labor}' agregada correctamente"
         except Exception as e:
             return False, f"Error al agregar labor: {str(e)}"
@@ -99,20 +112,33 @@ class BitacoraModel:
         Returns: tuple (éxito: bool, mensaje: str)
         """
         try:
-            labores = self.obtener_labores_guardadas()
-            if nombre_labor not in labores:
+            df = self._leer_labores_df()
+            if nombre_labor not in df["Labor"].values:
                 return False, f"La labor '{nombre_labor}' no existe"
-            
-            labores = [l for l in labores if l != nombre_labor]
-            df = pd.DataFrame({"Labor": labores})
-            
+
+            df = df[df["Labor"] != nombre_labor].reset_index(drop=True)
+
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Labores", index=False)
-            
+
             return True, f"Labor '{nombre_labor}' eliminada correctamente"
         except Exception as e:
             return False, f"Error al eliminar labor: {str(e)}"
+
+    def obtener_datos_labor(self, nombre_labor):
+        """
+        Obtiene los datos técnicos de una labor del catálogo.
+        Returns: dict con GSI, RMR, Soporte, Tipo o None
+        """
+        try:
+            df = self._leer_labores_df()
+            fila = df[df["Labor"] == nombre_labor]
+            if fila.empty:
+                return None
+            return fila.iloc[0].to_dict()
+        except Exception:
+            return None
 
     def obtener_labores_unicas(self):
         """
