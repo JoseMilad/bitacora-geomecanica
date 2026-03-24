@@ -25,12 +25,13 @@ class ValidadorBitacora:
         Returns:
             Tupla (es_valido, mensaje)
         """
+        from utils.config import TURNOS
+
         if not turno or turno.strip() == "":
             return False, "El turno es obligatorio"
         
-        turnos_validos = ["Mañana", "Tarde", "Noche"]
-        if turno not in turnos_validos:
-            return False, f"Turno inválido. Debe ser: {', '.join(turnos_validos)}"
+        if turno not in TURNOS:
+            return False, f"Turno inválido. Debe ser: {', '.join(TURNOS)}"
         
         return True, "OK"
     

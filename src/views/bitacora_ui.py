@@ -132,39 +132,46 @@ class BitacoraApp:
         
         frame_principal.columnconfigure(1, weight=1)
         
-        # Frame de botones
+        # Frame de botones reorganizado
         frame_botones = ttk.Frame(self.root)
-        frame_botones.pack(pady=10)
-        
+        frame_botones.pack(pady=(5, 10))
+
+        # Fila 1: Botón principal de guardar
         ttk.Button(
             frame_botones,
-            text="Guardar Registro",
-            command=self._guardar_datos
-        ).grid(row=0, column=0, padx=5, pady=5)
-        
+            text="💾  Guardar Registro",
+            command=self._guardar_datos,
+            width=25
+        ).grid(row=0, column=0, columnspan=4, pady=(0, 8), padx=5)
+
+        # Fila 2: Botones secundarios
         ttk.Button(
             frame_botones,
-            text="Ver Historial",
-            command=self._abrir_historial
-        ).grid(row=0, column=1, padx=5, pady=5)
-        
+            text="📋 Ver Historial",
+            command=self._abrir_historial,
+            width=18
+        ).grid(row=1, column=0, padx=4, pady=2)
+
         ttk.Button(
             frame_botones,
-            text="Reporte Diario PDF",
-            command=self._generar_reporte
-        ).grid(row=0, column=2, padx=5, pady=5)
-        
+            text="📄 Reporte PDF",
+            command=self._generar_reporte,
+            width=18
+        ).grid(row=1, column=1, padx=4, pady=2)
+
         ttk.Button(
             frame_botones,
-            text="Estándar de Sostenimiento",
-            command=self._abrir_estandar
-        ).grid(row=0, column=3, padx=5, pady=5)
-        
+            text="🔩 Estándar Sosten.",
+            command=self._abrir_estandar,
+            width=18
+        ).grid(row=1, column=2, padx=4, pady=2)
+
         ttk.Button(
             frame_botones,
-            text="Gestionar Labores",
-            command=self._abrir_gestion_labores
-        ).grid(row=0, column=4, padx=5, pady=5)
+            text="🏗 Gestionar Labores",
+            command=self._abrir_gestion_labores,
+            width=18
+        ).grid(row=1, column=3, padx=4, pady=2)
     
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
@@ -288,7 +295,10 @@ class BitacoraApp:
                 try:
                     rmr_val = validar_rmr(str(datos["RMR"]))
                     if rmr_val is not None:
-                        soporte = self.model.recomendar_soporte(rmr_val)
+                        tipo = str(datos.get("Tipo", "Temporal"))
+                        if not es_valor_valido(tipo):
+                            tipo = "Temporal"
+                        soporte = self.model.recomendar_soporte(rmr_val, tipo=tipo)
                         self.entrada_soporte.delete(0, tk.END)
                         self.entrada_soporte.insert(0, soporte)
                 except Exception:
@@ -337,12 +347,25 @@ class BitacoraApp:
         """Calcula automáticamente el soporte según RMR"""
         try:
             rmr = validar_rmr(self.entrada_rmr.get())
-            
             if rmr is None:
                 return
-            
-            soporte = self.model.recomendar_soporte(rmr)
-            
+
+            # Intentar obtener el tipo de labor seleccionada
+            tipo = "Temporal"
+            labor = self.labor_var.get().strip()
+            if labor:
+                datos_labor = self.model.obtener_datos_labor(labor)
+                if datos_labor:
+                    tipo_raw = datos_labor.get("Tipo")
+                    try:
+                        import pandas as pd
+                        tipo_es_valido = tipo_raw and not pd.isna(tipo_raw) and str(tipo_raw).strip() not in ("", "nan")
+                    except (TypeError, ValueError):
+                        tipo_es_valido = bool(tipo_raw and str(tipo_raw).strip() not in ("", "nan"))
+                    if tipo_es_valido:
+                        tipo = str(tipo_raw)
+
+            soporte = self.model.recomendar_soporte(rmr, tipo=tipo)
             self.entrada_soporte.delete(0, tk.END)
             self.entrada_soporte.insert(0, soporte)
         except Exception:
@@ -593,80 +616,82 @@ class VentanaEstandar:
         self.model = model
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Estándar de Sostenimiento")
-        self.ventana.geometry("550x350")
+        self.ventana.geometry("700x400")
         
         self._crear_interfaz()
     
     def _crear_interfaz(self):
         """Crea la interfaz de la ventana de estándar"""
-        columnas = ["RMR_min", "RMR_max", "Soporte"]
-        
+        columnas = ["RMR_min", "RMR_max", "Tipo", "Soporte"]
+
         self.tabla = ttk.Treeview(self.ventana, columns=columnas, show="headings")
-        
+
+        anchos = {"RMR_min": 80, "RMR_max": 80, "Tipo": 120, "Soporte": 250}
         for col in columnas:
             self.tabla.heading(col, text=col)
-            self.tabla.column(col, width=150)
-        
-        self.tabla.pack(pady=10)
-        
-        # Cargar datos
+            self.tabla.column(col, width=anchos.get(col, 100), anchor="center")
+
+        self.tabla.pack(pady=10, fill="both", expand=True, padx=10)
+
+        # Cargar datos existentes
         df = self.model.obtener_estandar_sostenimiento()
         for _, row in df.iterrows():
-            self.tabla.insert("", "end", values=list(row))
-        
+            tipo_val = row.get("Tipo", "") if "Tipo" in df.columns else ""
+            self.tabla.insert("", "end", values=(
+                row["RMR_min"], row["RMR_max"], tipo_val, row["Soporte"]
+            ))
+
         # Frame de inputs
         frame_inputs = tk.Frame(self.ventana)
         frame_inputs.pack(pady=10)
-        
-        tk.Label(frame_inputs, text="RMR min").grid(row=0, column=0)
-        self.entrada_min = tk.Entry(frame_inputs, width=10)
-        self.entrada_min.grid(row=0, column=1)
-        
-        tk.Label(frame_inputs, text="RMR max").grid(row=0, column=2)
-        self.entrada_max = tk.Entry(frame_inputs, width=10)
-        self.entrada_max.grid(row=0, column=3)
-        
-        tk.Label(frame_inputs, text="Soporte").grid(row=0, column=4)
+
+        tk.Label(frame_inputs, text="RMR min").grid(row=0, column=0, padx=5)
+        self.entrada_min = tk.Entry(frame_inputs, width=8)
+        self.entrada_min.grid(row=0, column=1, padx=5)
+
+        tk.Label(frame_inputs, text="RMR max").grid(row=0, column=2, padx=5)
+        self.entrada_max = tk.Entry(frame_inputs, width=8)
+        self.entrada_max.grid(row=0, column=3, padx=5)
+
+        tk.Label(frame_inputs, text="Tipo").grid(row=0, column=4, padx=5)
+        self.tipo_estandar_var = tk.StringVar(value="Temporal")
+        ttk.Combobox(
+            frame_inputs,
+            textvariable=self.tipo_estandar_var,
+            values=["Temporal", "Permanente"],
+            state="readonly",
+            width=12
+        ).grid(row=0, column=5, padx=5)
+
+        tk.Label(frame_inputs, text="Soporte").grid(row=0, column=6, padx=5)
         self.entrada_soporte = tk.Entry(frame_inputs, width=25)
-        self.entrada_soporte.grid(row=0, column=5)
-        
+        self.entrada_soporte.grid(row=0, column=7, padx=5)
+
         # Frame de botones
         frame_botones = tk.Frame(self.ventana)
         frame_botones.pack(pady=10)
-        
-        tk.Button(
-            frame_botones,
-            text="Agregar",
-            command=self._agregar_fila
-        ).pack(side="left", padx=5)
-        
-        tk.Button(
-            frame_botones,
-            text="Eliminar",
-            command=self._eliminar_fila
-        ).pack(side="left", padx=5)
-        
-        tk.Button(
-            frame_botones,
-            text="Guardar estándar",
-            command=self._guardar_estandar
-        ).pack(side="left", padx=5)
+
+        tk.Button(frame_botones, text="Agregar", command=self._agregar_fila).pack(side="left", padx=5)
+        tk.Button(frame_botones, text="Eliminar", command=self._eliminar_fila).pack(side="left", padx=5)
+        tk.Button(frame_botones, text="Guardar estándar", command=self._guardar_estandar).pack(side="left", padx=5)
     
     def _agregar_fila(self):
         """Agrega una fila a la tabla"""
         rmr_min = self.entrada_min.get()
         rmr_max = self.entrada_max.get()
+        tipo = self.tipo_estandar_var.get()
         soporte = self.entrada_soporte.get()
-        
+
         if not rmr_min or not rmr_max or not soporte:
             messagebox.showwarning("Error", "Complete todos los campos")
             return
-        
-        self.tabla.insert("", "end", values=(rmr_min, rmr_max, soporte))
-        
+
+        self.tabla.insert("", "end", values=(rmr_min, rmr_max, tipo, soporte))
+
         self.entrada_min.delete(0, tk.END)
         self.entrada_max.delete(0, tk.END)
         self.entrada_soporte.delete(0, tk.END)
+        self.tipo_estandar_var.set("Temporal")
     
     def _eliminar_fila(self):
         """Elimina la fila seleccionada"""
@@ -679,8 +704,13 @@ class VentanaEstandar:
         datos = []
         for fila in self.tabla.get_children():
             valores = self.tabla.item(fila)["values"]
-            datos.append(valores)
-        
+            datos.append({
+                "RMR_min": valores[0],
+                "RMR_max": valores[1],
+                "Tipo": valores[2],
+                "Soporte": valores[3]
+            })
+
         exito, mensaje = self.model.guardar_estandar_sostenimiento(datos)
         messagebox.showinfo("Resultado", mensaje)
 
@@ -792,7 +822,8 @@ class VentanaLabores:
             if not rmr_texto:
                 return
             rmr = int(rmr_texto)
-            soporte = self.model.recomendar_soporte(rmr)
+            tipo = self.tipo_var.get()
+            soporte = self.model.recomendar_soporte(rmr, tipo=tipo)
             if soporte:
                 self.soporte_var.set(soporte)
         except (ValueError, Exception):
