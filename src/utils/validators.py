@@ -66,25 +66,15 @@ class ValidadorBitacora:
     @staticmethod
     def validar_gsi(gsi: str) -> Tuple[bool, str]:
         """
-        Valida el GSI (Geological Strength Index)
-        
-        Args:
-            gsi: Valor de GSI ingresado
-            
-        Returns:
-            Tupla (es_valido, mensaje)
+        Valida el GSI (Geological Strength Index).
+        Acepta texto libre o vacío (campo opcional).
         """
         if gsi.strip() == "":
             return True, "OK"  # GSI es opcional
-        
-        try:
-            gsi_num = float(gsi)
-        except ValueError:
-            return False, "GSI debe ser un número"
-        
-        if gsi_num < ValidadorBitacora.GSI_MIN or gsi_num > ValidadorBitacora.GSI_MAX:
-            return False, f"GSI debe estar entre {ValidadorBitacora.GSI_MIN} y {ValidadorBitacora.GSI_MAX}"
-        
+
+        if len(gsi.strip()) > 50:
+            return False, "El GSI no puede exceder 50 caracteres"
+
         return True, "OK"
     
     @staticmethod
