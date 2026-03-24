@@ -87,41 +87,44 @@ class BitacoraApp:
         )
         combo_turno.grid(row=1, column=1, sticky="ew")
         
-        # Labor
+        # Labor — Entry para buscar/filtrar
         ttk.Label(frame_principal, text="Labor").grid(row=2, column=0, sticky="w")
-        self.combo_labor = ttk.Combobox(
-            frame_principal,
-            textvariable=self.labor_var,
-            state="readonly",
-            values=self.lista_labores
-        )
-        self.combo_labor.grid(row=2, column=1, sticky="ew")
-        self.combo_labor.bind("<<ComboboxSelected>>", self._seleccionar_labor)
-        
-        # Último registro
+        self.entrada_labor = ttk.Entry(frame_principal, textvariable=self.labor_var)
+        self.entrada_labor.grid(row=2, column=1, sticky="ew")
+        self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
+        self.entrada_labor.bind("<FocusIn>", self._filtrar_labores)
+        self.entrada_labor.bind("<FocusOut>", self._ocultar_lista)
+
+        # Listbox desplegable para mostrar sugerencias filtradas
+        self.lista_filtrada = tk.Listbox(frame_principal, height=5, exportselection=False)
+        self.lista_filtrada.grid(row=3, column=1, sticky="ew")
+        self.lista_filtrada.bind("<<ListboxSelect>>", self._seleccionar_labor_lista)
+        self.lista_filtrada.grid_remove()  # Oculta por defecto
+
+        # Último registro / info de labor
         self.label_ultimo = ttk.Label(
             frame_principal,
             text="",
             foreground="gray"
         )
-        self.label_ultimo.grid(row=3, column=1, sticky="w", pady=5)
-        
+        self.label_ultimo.grid(row=3, column=0, sticky="w", pady=2)
+
         # GSI
         ttk.Label(frame_principal, text="GSI").grid(row=4, column=0, sticky="w")
         self.entrada_gsi = ttk.Entry(frame_principal)
         self.entrada_gsi.grid(row=4, column=1, sticky="ew")
-        
+
         # RMR
         ttk.Label(frame_principal, text="RMR").grid(row=5, column=0, sticky="w")
         self.entrada_rmr = ttk.Entry(frame_principal)
         self.entrada_rmr.grid(row=5, column=1, sticky="ew")
         self.entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
-        
+
         # Soporte recomendado
         ttk.Label(frame_principal, text="Soporte recomendado").grid(row=6, column=0, sticky="w")
         self.entrada_soporte = ttk.Entry(frame_principal)
         self.entrada_soporte.grid(row=6, column=1, sticky="ew")
-        
+
         # Observaciones
         ttk.Label(frame_principal, text="Observaciones").grid(row=7, column=0, sticky="nw")
         self.entrada_obs = tk.Text(frame_principal, height=5, width=30)
@@ -213,11 +216,92 @@ class BitacoraApp:
     def _actualizar_labores(self):
         """Actualiza la lista de labores disponibles"""
         self.lista_labores = self.model.obtener_labores_guardadas()
-        if hasattr(self, 'combo_labor'):
-            self.combo_labor['values'] = self.lista_labores
-    
+
+    def _filtrar_labores(self, event):
+        """Filtra labores según texto escrito y muestra la lista desplegable"""
+        texto = self.labor_var.get()
+        self.lista_filtrada.delete(0, tk.END)
+
+        if texto == "":
+            resultados = self.lista_labores
+        else:
+            resultados = [l for l in self.lista_labores if texto.lower() in l.lower()]
+
+        if resultados:
+            for labor in resultados:
+                self.lista_filtrada.insert(tk.END, labor)
+            self.lista_filtrada.grid()
+        else:
+            self.lista_filtrada.grid_remove()
+
+    def _seleccionar_labor_lista(self, event):
+        """Selecciona labor desde la lista filtrada"""
+        seleccion = self.lista_filtrada.curselection()
+        if not seleccion:
+            return
+        labor = self.lista_filtrada.get(seleccion[0])
+        self.labor_var.set(labor)
+        self.lista_filtrada.grid_remove()
+        self._cargar_datos_labor(labor)
+
+    def _ocultar_lista(self, event):
+        """Oculta la lista al perder el foco (con pequeño delay para permitir selección)"""
+        self.root.after(150, self._verificar_ocultar)
+
+    def _verificar_ocultar(self):
+        """Oculta la lista si el foco no está en ella"""
+        try:
+            widget_foco = self.root.focus_get()
+            if widget_foco != self.lista_filtrada:
+                self.lista_filtrada.grid_remove()
+        except Exception:
+            self.lista_filtrada.grid_remove()
+
+    def _cargar_datos_labor(self, labor):
+        """
+        Carga los datos técnicos de la labor seleccionada desde el catálogo.
+        Si la labor no tiene datos en el catálogo, intenta cargar el último registro de la bitácora.
+        """
+        import pandas as pd
+
+        def es_valor_valido(valor):
+            """Retorna True si el valor no es vacío ni NaN"""
+            if valor is None:
+                return False
+            try:
+                if pd.isna(valor):
+                    return False
+            except (TypeError, ValueError):
+                pass
+            return str(valor).strip() not in ("", "nan")
+
+        datos = self.model.obtener_datos_labor(labor)
+
+        if datos:
+            self.entrada_gsi.delete(0, tk.END)
+            if es_valor_valido(datos.get("GSI")):
+                self.entrada_gsi.insert(0, str(datos["GSI"]))
+
+            self.entrada_rmr.delete(0, tk.END)
+            if es_valor_valido(datos.get("RMR")):
+                self.entrada_rmr.insert(0, str(datos["RMR"]))
+                try:
+                    rmr_val = validar_rmr(str(datos["RMR"]))
+                    if rmr_val is not None:
+                        soporte = self.model.recomendar_soporte(rmr_val)
+                        self.entrada_soporte.delete(0, tk.END)
+                        self.entrada_soporte.insert(0, soporte)
+                except Exception:
+                    pass
+
+            if hasattr(self, 'label_ultimo'):
+                tipo = datos.get("Tipo", "")
+                self.label_ultimo.config(text=f"Tipo: {tipo}" if es_valor_valido(tipo) else "")
+        else:
+            self._cargar_ultimo_registro(labor)
+
     def _seleccionar_labor(self, event):
-        """Selecciona una labor del combobox y carga su último registro"""
+        """Selecciona una labor y carga sus datos técnicos"""
         labor = self.labor_var.get()
         if labor:
             self._cargar_ultimo_registro(labor)
@@ -609,15 +693,13 @@ class VentanaLabores:
         self.callback_actualizar = callback_actualizar
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Gestión de Labores")
-        self.ventana.geometry("400x500")
+        self.ventana.geometry("750x550")
         self.ventana.configure(bg=WINDOW_BG_COLOR)
-        self.ventana.resizable(False, False)
-
+        self.ventana.resizable(True, True)
         self._crear_interfaz()
 
     def _crear_interfaz(self):
         """Crea la interfaz de la ventana de gestión de labores"""
-        # Título
         tk.Label(
             self.ventana,
             text="Gestión de Labores",
@@ -629,37 +711,61 @@ class VentanaLabores:
         frame_agregar = ttk.LabelFrame(self.ventana, text="Nueva Labor", padding=10)
         frame_agregar.pack(fill="x", padx=15, pady=5)
 
+        # Fila 0: Nombre de la labor y Tipo
+        ttk.Label(frame_agregar, text="Nombre:").grid(row=0, column=0, sticky="w", padx=5, pady=3)
         self.nueva_labor_var = tk.StringVar()
-        ttk.Entry(
-            frame_agregar,
-            textvariable=self.nueva_labor_var,
-            width=35
-        ).pack(side="left", padx=5)
+        ttk.Entry(frame_agregar, textvariable=self.nueva_labor_var, width=30).grid(row=0, column=1, sticky="ew", padx=5, pady=3)
 
+        ttk.Label(frame_agregar, text="Tipo:").grid(row=0, column=2, sticky="w", padx=5, pady=3)
+        self.tipo_var = tk.StringVar(value="Temporal")
+        ttk.Combobox(
+            frame_agregar,
+            textvariable=self.tipo_var,
+            values=["Temporal", "Permanente"],
+            state="readonly",
+            width=12
+        ).grid(row=0, column=3, sticky="ew", padx=5, pady=3)
+
+        # Fila 1: GSI, RMR, Soporte
+        ttk.Label(frame_agregar, text="GSI:").grid(row=1, column=0, sticky="w", padx=5, pady=3)
+        self.gsi_var = tk.StringVar()
+        ttk.Entry(frame_agregar, textvariable=self.gsi_var, width=10).grid(row=1, column=1, sticky="w", padx=5, pady=3)
+
+        ttk.Label(frame_agregar, text="RMR:").grid(row=1, column=2, sticky="w", padx=5, pady=3)
+        self.rmr_var = tk.StringVar()
+        entrada_rmr = ttk.Entry(frame_agregar, textvariable=self.rmr_var, width=10)
+        entrada_rmr.grid(row=1, column=3, sticky="w", padx=5, pady=3)
+        entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
+
+        ttk.Label(frame_agregar, text="Soporte:").grid(row=2, column=0, sticky="w", padx=5, pady=3)
+        self.soporte_var = tk.StringVar()
+        ttk.Entry(frame_agregar, textvariable=self.soporte_var, width=40).grid(row=2, column=1, columnspan=3, sticky="ew", padx=5, pady=3)
+
+        frame_agregar.columnconfigure(1, weight=1)
+
+        # Botón Agregar
         ttk.Button(
             frame_agregar,
-            text="Agregar",
+            text="➕ Agregar Labor",
             command=self._agregar_labor
-        ).pack(side="left", padx=5)
+        ).grid(row=3, column=0, columnspan=4, pady=8)
 
         # Frame para lista de labores
         frame_lista = ttk.LabelFrame(self.ventana, text="Labores Registradas", padding=10)
         frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
 
-        # Listbox con scrollbar
-        scrollbar = ttk.Scrollbar(frame_lista)
-        scrollbar.pack(side="right", fill="y")
+        columnas = ["Labor", "GSI", "RMR", "Soporte", "Tipo"]
+        self.tabla_labores = ttk.Treeview(frame_lista, columns=columnas, show="headings", height=10)
 
-        self.listbox_labores = tk.Listbox(
-            frame_lista,
-            yscrollcommand=scrollbar.set,
-            font=("Segoe UI", 10),
-            selectbackground="#4a90d9",
-            selectforeground="white",
-            height=15
-        )
-        self.listbox_labores.pack(fill="both", expand=True)
-        scrollbar.config(command=self.listbox_labores.yview)
+        anchos = {"Labor": 180, "GSI": 60, "RMR": 60, "Soporte": 200, "Tipo": 100}
+        for col in columnas:
+            self.tabla_labores.heading(col, text=col)
+            self.tabla_labores.column(col, anchor="center", width=anchos.get(col, 100))
+
+        scrollbar_y = ttk.Scrollbar(frame_lista, orient="vertical", command=self.tabla_labores.yview)
+        self.tabla_labores.configure(yscrollcommand=scrollbar_y.set)
+        self.tabla_labores.pack(side="left", fill="both", expand=True)
+        scrollbar_y.pack(side="right", fill="y")
 
         # Botones de acción
         frame_botones = ttk.Frame(self.ventana)
@@ -667,7 +773,7 @@ class VentanaLabores:
 
         ttk.Button(
             frame_botones,
-            text="Eliminar Seleccionada",
+            text="🗑 Eliminar Seleccionada",
             command=self._eliminar_labor
         ).pack(side="left", padx=5)
 
@@ -677,26 +783,58 @@ class VentanaLabores:
             command=self._cerrar
         ).pack(side="left", padx=5)
 
-        # Cargar labores existentes
         self._cargar_labores()
 
+    def _calcular_soporte(self, event):
+        """Calcula el soporte automáticamente según RMR ingresado"""
+        try:
+            rmr_texto = self.rmr_var.get().strip()
+            if not rmr_texto:
+                return
+            rmr = int(rmr_texto)
+            soporte = self.model.recomendar_soporte(rmr)
+            if soporte:
+                self.soporte_var.set(soporte)
+        except (ValueError, Exception):
+            pass
+
     def _cargar_labores(self):
-        """Carga y muestra las labores guardadas"""
-        self.listbox_labores.delete(0, tk.END)
-        labores = self.model.obtener_labores_guardadas()
-        for labor in labores:
-            self.listbox_labores.insert(tk.END, labor)
+        """Carga y muestra las labores guardadas en la tabla"""
+        for item in self.tabla_labores.get_children():
+            self.tabla_labores.delete(item)
+
+        try:
+            df = self.model._leer_labores_df()
+            for _, row in df.iterrows():
+                self.tabla_labores.insert("", "end", values=(
+                    row.get("Labor", ""),
+                    row.get("GSI", ""),
+                    row.get("RMR", ""),
+                    row.get("Soporte", ""),
+                    row.get("Tipo", "")
+                ))
+        except Exception:
+            pass
 
     def _agregar_labor(self):
-        """Agrega una nueva labor"""
+        """Agrega una nueva labor con sus datos"""
         nombre = self.nueva_labor_var.get().strip()
         if not nombre:
             messagebox.showwarning("Advertencia", "Ingrese un nombre de labor", parent=self.ventana)
             return
 
-        exito, mensaje = self.model.agregar_labor(nombre)
+        gsi = self.gsi_var.get().strip()
+        rmr = self.rmr_var.get().strip()
+        soporte = self.soporte_var.get().strip()
+        tipo = self.tipo_var.get()
+
+        exito, mensaje = self.model.agregar_labor(nombre, gsi=gsi, rmr=rmr, soporte=soporte, tipo=tipo)
         if exito:
             self.nueva_labor_var.set("")
+            self.gsi_var.set("")
+            self.rmr_var.set("")
+            self.soporte_var.set("")
+            self.tipo_var.set("Temporal")
             self._cargar_labores()
             if self.callback_actualizar:
                 self.callback_actualizar()
@@ -705,13 +843,13 @@ class VentanaLabores:
             messagebox.showerror("Error", mensaje, parent=self.ventana)
 
     def _eliminar_labor(self):
-        """Elimina la labor seleccionada"""
-        seleccion = self.listbox_labores.curselection()
+        """Elimina la labor seleccionada en la tabla"""
+        seleccion = self.tabla_labores.selection()
         if not seleccion:
             messagebox.showwarning("Advertencia", "Seleccione una labor para eliminar", parent=self.ventana)
             return
 
-        labor = self.listbox_labores.get(seleccion[0])
+        labor = self.tabla_labores.item(seleccion[0])["values"][0]
         confirmar = messagebox.askyesno(
             "Confirmar",
             f"¿Desea eliminar la labor '{labor}'?\n\nEsto no eliminará los registros existentes en la bitácora.",
