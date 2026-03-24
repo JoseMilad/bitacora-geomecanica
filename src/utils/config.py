@@ -31,3 +31,6 @@ COLUMNAS_BITACORA = [
 COLUMNAS_ESTANDAR = [
     "RMR_min", "RMR_max", "Soporte"
 ]
+
+# Columnas de la tabla de labores
+COLUMNAS_LABORES = ["Labor"]
