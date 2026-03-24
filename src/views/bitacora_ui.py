@@ -127,7 +127,18 @@ class BitacoraApp:
 
         # Observaciones
         ttk.Label(frame_principal, text="Observaciones").grid(row=7, column=0, sticky="nw")
-        self.entrada_obs = tk.Text(frame_principal, height=5, width=30)
+        self.entrada_obs = tk.Text(
+            frame_principal,
+            height=5,
+            width=30,
+            font=("Segoe UI", 10),
+            relief="flat",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground="#cccccc",
+            highlightcolor="#4a90d9",
+            wrap="word"
+        )
         self.entrada_obs.grid(row=7, column=1, sticky="ew")
         
         frame_principal.columnconfigure(1, weight=1)
@@ -266,8 +277,8 @@ class BitacoraApp:
 
     def _cargar_datos_labor(self, labor):
         """
-        Carga los datos técnicos de la labor seleccionada desde el catálogo.
-        Si la labor no tiene datos en el catálogo, intenta cargar el último registro de la bitácora.
+        Al seleccionar una labor, carga el último registro de la bitácora.
+        Si no hay registros previos, intenta cargar datos del catálogo de labores.
         """
         import pandas as pd
 
@@ -282,33 +293,55 @@ class BitacoraApp:
                 pass
             return str(valor).strip() not in ("", "nan")
 
-        datos = self.model.obtener_datos_labor(labor)
+        # Primero intentar el último registro real de la bitácora
+        registro = self.model.obtener_ultimo_registro_labor(labor)
 
-        if datos:
+        if registro:
             self.entrada_gsi.delete(0, tk.END)
-            if es_valor_valido(datos.get("GSI")):
-                self.entrada_gsi.insert(0, str(datos["GSI"]))
+            if es_valor_valido(registro.get("GSI")):
+                self.entrada_gsi.insert(0, str(registro["GSI"]))
 
             self.entrada_rmr.delete(0, tk.END)
-            if es_valor_valido(datos.get("RMR")):
-                self.entrada_rmr.insert(0, str(datos["RMR"]))
-                try:
-                    rmr_val = validar_rmr(str(datos["RMR"]))
-                    if rmr_val is not None:
-                        tipo = str(datos.get("Tipo", "Temporal"))
-                        if not es_valor_valido(tipo):
-                            tipo = "Temporal"
-                        soporte = self.model.recomendar_soporte(rmr_val, tipo=tipo)
-                        self.entrada_soporte.delete(0, tk.END)
-                        self.entrada_soporte.insert(0, soporte)
-                except Exception:
-                    pass
+            if es_valor_valido(registro.get("RMR")):
+                self.entrada_rmr.insert(0, str(registro["RMR"]))
+
+            self.entrada_soporte.delete(0, tk.END)
+            if es_valor_valido(registro.get("Soporte")):
+                self.entrada_soporte.insert(0, str(registro["Soporte"]))
 
             if hasattr(self, 'label_ultimo'):
-                tipo = datos.get("Tipo", "")
-                self.label_ultimo.config(text=f"Tipo: {tipo}" if es_valor_valido(tipo) else "")
+                self.label_ultimo.config(
+                    text=f"Último registro: {registro.get('Fecha')} | "
+                         f"Turno {registro.get('Turno')} | "
+                         f"RMR {registro.get('RMR')}"
+                )
         else:
-            self._cargar_ultimo_registro(labor)
+            # Si no hay registro en la bitácora, intentar datos del catálogo
+            datos = self.model.obtener_datos_labor(labor)
+            if datos:
+                self.entrada_gsi.delete(0, tk.END)
+                if es_valor_valido(datos.get("GSI")):
+                    self.entrada_gsi.insert(0, str(datos["GSI"]))
+
+                self.entrada_rmr.delete(0, tk.END)
+                if es_valor_valido(datos.get("RMR")):
+                    self.entrada_rmr.insert(0, str(datos["RMR"]))
+                    try:
+                        rmr_val = validar_rmr(str(datos["RMR"]))
+                        if rmr_val is not None:
+                            tipo = str(datos.get("Tipo", "Temporal"))
+                            soporte = self.model.recomendar_soporte(rmr_val, tipo=tipo)
+                            self.entrada_soporte.delete(0, tk.END)
+                            self.entrada_soporte.insert(0, soporte)
+                    except Exception:
+                        pass
+
+                if hasattr(self, 'label_ultimo'):
+                    tipo = datos.get("Tipo", "")
+                    self.label_ultimo.config(text=f"Tipo: {tipo}" if es_valor_valido(tipo) else "Sin registros previos")
+            else:
+                if hasattr(self, 'label_ultimo'):
+                    self.label_ultimo.config(text="Sin registros previos")
 
     def _seleccionar_labor(self, event):
         """Selecciona una labor y carga sus datos técnicos"""
@@ -748,13 +781,15 @@ class VentanaLabores:
 
         ttk.Label(frame_agregar, text="Tipo:").grid(row=0, column=2, sticky="w", padx=5, pady=3)
         self.tipo_var = tk.StringVar(value="Temporal")
-        ttk.Combobox(
+        combo_tipo = ttk.Combobox(
             frame_agregar,
             textvariable=self.tipo_var,
             values=["Temporal", "Permanente"],
             state="readonly",
             width=12
-        ).grid(row=0, column=3, sticky="ew", padx=5, pady=3)
+        )
+        combo_tipo.grid(row=0, column=3, sticky="ew", padx=5, pady=3)
+        combo_tipo.bind("<<ComboboxSelected>>", self._calcular_soporte)
 
         # Fila 1: GSI, RMR, Soporte
         ttk.Label(frame_agregar, text="GSI:").grid(row=1, column=0, sticky="w", padx=5, pady=3)
@@ -770,6 +805,17 @@ class VentanaLabores:
         ttk.Label(frame_agregar, text="Soporte:").grid(row=2, column=0, sticky="w", padx=5, pady=3)
         self.soporte_var = tk.StringVar()
         ttk.Entry(frame_agregar, textvariable=self.soporte_var, width=40).grid(row=2, column=1, columnspan=3, sticky="ew", padx=5, pady=3)
+
+        # Conversión automática a mayúsculas para campos de texto
+        def _a_mayusculas(var, *args):
+            valor = var.get()
+            mayus = valor.upper()
+            if valor != mayus:
+                var.set(mayus)
+
+        self.nueva_labor_var.trace_add("write", lambda *a: _a_mayusculas(self.nueva_labor_var))
+        self.gsi_var.trace_add("write", lambda *a: _a_mayusculas(self.gsi_var))
+        self.soporte_var.trace_add("write", lambda *a: _a_mayusculas(self.soporte_var))
 
         frame_agregar.columnconfigure(1, weight=1)
 
