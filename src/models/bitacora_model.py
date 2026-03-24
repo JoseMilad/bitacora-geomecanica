@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from utils.config import (
-    ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR
+    ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR, COLUMNAS_LABORES
 )
 
 class BitacoraModel:
@@ -21,10 +21,12 @@ class BitacoraModel:
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
             estandar = pd.DataFrame(columns=COLUMNAS_ESTANDAR)
+            labores = pd.DataFrame(columns=COLUMNAS_LABORES)
             
             with pd.ExcelWriter(self.archivo) as writer:
                 bitacora.to_excel(writer, sheet_name="Bitacora", index=False)
                 estandar.to_excel(writer, sheet_name="Estandar_Sostenimiento", index=False)
+                labores.to_excel(writer, sheet_name="Labores", index=False)
     
     def guardar_registro(self, datos):
         """
@@ -57,25 +59,74 @@ class BitacoraModel:
             print(f"Error al leer bitácora: {str(e)}")
             return pd.DataFrame(columns=COLUMNAS_BITACORA)
     
-    def obtener_labores_unicas(self):
-        """Obtiene lista de labores únicas ordenadas"""
+    def obtener_labores_guardadas(self):
+        """Obtiene la lista de labores guardadas en la hoja Labores"""
         try:
-            df = self.obtener_bitacora()
+            df = pd.read_excel(self.archivo, sheet_name="Labores")
             return sorted(df["Labor"].dropna().unique().tolist())
         except Exception:
             return []
+
+    def agregar_labor(self, nombre_labor):
+        """
+        Agrega una nueva labor a la hoja Labores.
+        Returns: tuple (éxito: bool, mensaje: str)
+        """
+        try:
+            nombre_labor = nombre_labor.strip()
+            if not nombre_labor:
+                return False, "El nombre de la labor no puede estar vacío"
+            
+            labores = self.obtener_labores_guardadas()
+            if nombre_labor in labores:
+                return False, f"La labor '{nombre_labor}' ya existe"
+            
+            labores.append(nombre_labor)
+            labores = sorted(labores)
+            df = pd.DataFrame({"Labor": labores})
+            
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                               if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Labores", index=False)
+            
+            return True, f"Labor '{nombre_labor}' agregada correctamente"
+        except Exception as e:
+            return False, f"Error al agregar labor: {str(e)}"
+
+    def eliminar_labor(self, nombre_labor):
+        """
+        Elimina una labor de la hoja Labores.
+        Returns: tuple (éxito: bool, mensaje: str)
+        """
+        try:
+            labores = self.obtener_labores_guardadas()
+            if nombre_labor not in labores:
+                return False, f"La labor '{nombre_labor}' no existe"
+            
+            labores = [l for l in labores if l != nombre_labor]
+            df = pd.DataFrame({"Labor": labores})
+            
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                               if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Labores", index=False)
+            
+            return True, f"Labor '{nombre_labor}' eliminada correctamente"
+        except Exception as e:
+            return False, f"Error al eliminar labor: {str(e)}"
+
+    def obtener_labores_unicas(self):
+        """
+        Mantiene compatibilidad: ahora retorna las labores guardadas
+        en la hoja 'Labores' en lugar de las únicas de la bitácora.
+        """
+        return self.obtener_labores_guardadas()
     
     def filtrar_labores(self, texto):
         """
-        Filtra labores que contengan el texto
-        
-        Args:
-            texto (str): Texto a buscar
-        
-        Returns:
-            list: Lista de labores que coinciden
+        Filtra labores guardadas que contengan el texto.
+        IMPORTANTE: Ahora usa la hoja 'Labores' en lugar de la bitácora.
         """
-        labores = self.obtener_labores_unicas()
+        labores = self.obtener_labores_guardadas()
         texto_lower = texto.lower()
         return [l for l in labores if texto_lower in l.lower()][:5]
     
