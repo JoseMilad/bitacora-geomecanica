@@ -29,7 +29,7 @@ COLUMNAS_BITACORA = [
 
 # Columnas del estándar de sostenimiento
 COLUMNAS_ESTANDAR = [
-    "RMR_min", "RMR_max", "Soporte"
+    "RMR_min", "RMR_max", "Tipo", "Soporte"
 ]
 
 # Columnas de la tabla de labores

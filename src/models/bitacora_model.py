@@ -20,7 +20,7 @@ class BitacoraModel:
         """Crea el archivo Excel si no existe"""
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
-            estandar = pd.DataFrame(columns=COLUMNAS_ESTANDAR)
+            estandar = pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
             labores = pd.DataFrame(columns=["Labor", "GSI", "RMR", "Soporte", "Tipo"])
             
             with pd.ExcelWriter(self.archivo) as writer:
@@ -184,26 +184,35 @@ class BitacoraModel:
         except Exception:
             return pd.DataFrame(columns=COLUMNAS_ESTANDAR)
     
-    def recomendar_soporte(self, rmr):
+    def recomendar_soporte(self, rmr, tipo="Temporal"):
         """
-        Recomienda soporte según el valor de RMR
-        
+        Recomienda soporte según el valor de RMR y el tipo de labor.
+
         Args:
             rmr (int): Valor de Rock Mass Rating
-        
+            tipo (str): Tipo de labor ("Temporal" o "Permanente")
+
         Returns:
             str: Recomendación de soporte o vacío
         """
         try:
             df = self.obtener_estandar_sostenimiento()
-            
-            for _, row in df.iterrows():
+
+            # Filtrar por tipo si la columna existe
+            if "Tipo" in df.columns:
+                df_tipo = df[df["Tipo"] == tipo]
+                # Si no hay filas para ese tipo, usar todas (retrocompatibilidad)
+                if df_tipo.empty:
+                    df_tipo = df
+            else:
+                df_tipo = df
+
+            for _, row in df_tipo.iterrows():
                 rmr_min = int(row["RMR_min"])
                 rmr_max = int(row["RMR_max"])
-                
                 if rmr_min <= rmr <= rmr_max:
                     return str(row["Soporte"])
-            
+
             return ""
         except Exception:
             return ""
@@ -219,7 +228,16 @@ class BitacoraModel:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
-            df = pd.DataFrame(datos)
+            cols = ["RMR_min", "RMR_max", "Tipo", "Soporte"]
+            if datos:
+                df = pd.DataFrame(datos)
+                # Ensure column order and add missing columns with empty values
+                for col in cols:
+                    if col not in df.columns:
+                        df[col] = ""
+                df = df[cols]
+            else:
+                df = pd.DataFrame(columns=cols)
             
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                if_sheet_exists="replace") as writer:
