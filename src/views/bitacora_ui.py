@@ -11,11 +11,11 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-from src.models.bitacora_model import BitacoraModel
-from src.utils.config import (
+from models.bitacora_model import BitacoraModel
+from utils.config import (
     APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
 )
-from src.utils.helpers import (
+from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
     validar_campos_obligatorios
 )

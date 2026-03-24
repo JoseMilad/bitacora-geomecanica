@@ -5,7 +5,7 @@ Maneja toda la lógica de lectura/escritura de Excel
 import pandas as pd
 import os
 from datetime import datetime
-from src.utils.config import (
+from utils.config import (
     ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR
 )
 
