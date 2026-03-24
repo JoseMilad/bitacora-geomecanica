@@ -1,0 +1,597 @@
+"""
+Interfaz gráfica de la Bitácora Geomecánica
+Separada de la lógica de datos
+"""
+import tkinter as tk
+from tkinter import messagebox, ttk
+from datetime import datetime
+from tkcalendar import DateEntry
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+from src.models.bitacora_model import BitacoraModel
+from src.utils.config import (
+    APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
+)
+from src.utils.helpers import (
+    obtener_fecha_actual, validar_rmr, validar_gsi,
+    validar_campos_obligatorios
+)
+
+
+class BitacoraApp:
+    """Aplicación principal de la Bitácora Geomecánica"""
+    
+    def __init__(self, root):
+        self.root = root
+        self.root.title(APP_NAME)
+        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        self.root.configure(bg=WINDOW_BG_COLOR)
+        
+        # Inicializar modelo
+        self.model = BitacoraModel()
+        
+        # Variables de la interfaz
+        self.turno_var = tk.StringVar()
+        self.labor_var = tk.StringVar()
+        self.lista_labores = []
+        
+        # Crear interfaz
+        self._crear_interfaz()
+        self._actualizar_labores()
+    
+    def _crear_interfaz(self):
+        """Crea la interfaz gráfica principal"""
+        # Estilo
+        style = ttk.Style()
+        style.theme_use("clam")
+        
+        # Título
+        titulo = tk.Label(
+            self.root,
+            text=APP_NAME,
+            font=("Segoe UI", 18, "bold"),
+            bg=WINDOW_BG_COLOR
+        )
+        titulo.pack(pady=10)
+        
+        # Subtítulo
+        subtitulo = tk.Label(
+            self.root,
+            text="Registro de condiciones del macizo rocoso",
+            font=("Segoe UI", 10),
+            bg=WINDOW_BG_COLOR
+        )
+        subtitulo.pack()
+        
+        # Frame principal
+        frame_principal = ttk.Frame(self.root, padding=20)
+        frame_principal.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Fecha
+        ttk.Label(frame_principal, text="Fecha").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            frame_principal,
+            text=obtener_fecha_actual()
+        ).grid(row=0, column=1, sticky="w")
+        
+        # Turno
+        ttk.Label(frame_principal, text="Turno").grid(row=1, column=0, sticky="w")
+        combo_turno = ttk.Combobox(
+            frame_principal,
+            textvariable=self.turno_var,
+            state="readonly",
+            values=TURNOS
+        )
+        combo_turno.grid(row=1, column=1, sticky="ew")
+        
+        # Labor
+        ttk.Label(frame_principal, text="Labor").grid(row=2, column=0, sticky="w")
+        self.entrada_labor = ttk.Entry(frame_principal, textvariable=self.labor_var)
+        self.entrada_labor.grid(row=2, column=1, sticky="ew")
+        self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
+        
+        # Lista filtrada
+        self.lista_filtrada = tk.Listbox(frame_principal, height=5)
+        self.lista_filtrada.grid(row=3, column=1, sticky="ew")
+        self.lista_filtrada.bind("<<ListboxSelect>>", self._seleccionar_labor)
+        
+        # Último registro
+        self.label_ultimo = ttk.Label(
+            frame_principal,
+            text="",
+            foreground="gray"
+        )
+        self.label_ultimo.grid(row=4, column=1, sticky="w", pady=5)
+        
+        # GSI
+        ttk.Label(frame_principal, text="GSI").grid(row=5, column=0, sticky="w")
+        self.entrada_gsi = ttk.Entry(frame_principal)
+        self.entrada_gsi.grid(row=5, column=1, sticky="ew")
+        
+        # RMR
+        ttk.Label(frame_principal, text="RMR").grid(row=6, column=0, sticky="w")
+        self.entrada_rmr = ttk.Entry(frame_principal)
+        self.entrada_rmr.grid(row=6, column=1, sticky="ew")
+        self.entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
+        
+        # Soporte recomendado
+        ttk.Label(frame_principal, text="Soporte recomendado").grid(row=7, column=0, sticky="w")
+        self.entrada_soporte = ttk.Entry(frame_principal)
+        self.entrada_soporte.grid(row=7, column=1, sticky="ew")
+        
+        # Observaciones
+        ttk.Label(frame_principal, text="Observaciones").grid(row=8, column=0, sticky="nw")
+        self.entrada_obs = tk.Text(frame_principal, height=5, width=30)
+        self.entrada_obs.grid(row=8, column=1, sticky="ew")
+        
+        frame_principal.columnconfigure(1, weight=1)
+        
+        # Frame de botones
+        frame_botones = ttk.Frame(self.root)
+        frame_botones.pack(pady=10)
+        
+        ttk.Button(
+            frame_botones,
+            text="Guardar Registro",
+            command=self._guardar_datos
+        ).grid(row=0, column=0, padx=5, pady=5)
+        
+        ttk.Button(
+            frame_botones,
+            text="Ver Historial",
+            command=self._abrir_historial
+        ).grid(row=0, column=1, padx=5, pady=5)
+        
+        ttk.Button(
+            frame_botones,
+            text="Reporte Diario PDF",
+            command=self._generar_reporte
+        ).grid(row=0, column=2, padx=5, pady=5)
+        
+        ttk.Button(
+            frame_botones,
+            text="Estándar de Sostenimiento",
+            command=self._abrir_estandar
+        ).grid(row=0, column=3, padx=5, pady=5)
+    
+    def _guardar_datos(self):
+        """Guarda un nuevo registro"""
+        # Validar campos obligatorios
+        valido, mensaje = validar_campos_obligatorios(
+            self.labor_var.get(),
+            self.turno_var.get()
+        )
+        
+        if not valido:
+            messagebox.showwarning("Error", mensaje)
+            return
+        
+        # Preparar datos
+        datos = {
+            "Fecha": obtener_fecha_actual(),
+            "Turno": self.turno_var.get(),
+            "Labor": self.labor_var.get(),
+            "GSI": self.entrada_gsi.get(),
+            "RMR": self.entrada_rmr.get(),
+            "Soporte": self.entrada_soporte.get(),
+            "Observaciones": self.entrada_obs.get("1.0", tk.END).strip()
+        }
+        
+        # Guardar con modelo
+        exito, mensaje = self.model.guardar_registro(datos)
+        messagebox.showinfo("Resultado", mensaje)
+        
+        if exito:
+            self._limpiar_campos()
+            self._actualizar_labores()
+    
+    def _limpiar_campos(self):
+        """Limpia todos los campos de entrada"""
+        self.entrada_gsi.delete(0, tk.END)
+        self.entrada_rmr.delete(0, tk.END)
+        self.entrada_soporte.delete(0, tk.END)
+        self.entrada_obs.delete("1.0", tk.END)
+    
+    def _actualizar_labores(self):
+        """Actualiza la lista de labores disponibles"""
+        self.lista_labores = self.model.obtener_labores_unicas()
+    
+    def _filtrar_labores(self, event):
+        """Filtra labores según el texto ingresado"""
+        texto = self.labor_var.get()
+        self.lista_filtrada.delete(0, tk.END)
+        
+        if texto == "":
+            return
+        
+        resultados = self.model.filtrar_labores(texto)
+        for labor in resultados:
+            self.lista_filtrada.insert(tk.END, labor)
+    
+    def _seleccionar_labor(self, event):
+        """Selecciona una labor de la lista filtrada"""
+        seleccion = self.lista_filtrada.curselection()
+        
+        if not seleccion:
+            return
+        
+        labor = self.lista_filtrada.get(seleccion[0])
+        self.labor_var.set(labor)
+        self.lista_filtrada.delete(0, tk.END)
+        self._cargar_ultimo_registro(labor)
+    
+    def _cargar_ultimo_registro(self, labor):
+        """Carga el último registro de una labor"""
+        registro = self.model.obtener_ultimo_registro_labor(labor)
+        
+        if not registro:
+            return
+        
+        self.entrada_gsi.delete(0, tk.END)
+        self.entrada_gsi.insert(0, str(registro.get("GSI", "")))
+        
+        self.entrada_rmr.delete(0, tk.END)
+        self.entrada_rmr.insert(0, str(registro.get("RMR", "")))
+        
+        self.entrada_soporte.delete(0, tk.END)
+        self.entrada_soporte.insert(0, str(registro.get("Soporte", "")))
+        
+        self.label_ultimo.config(
+            text=f"Último registro: {registro.get('Fecha')} | "
+                 f"Turno {registro.get('Turno')} | "
+                 f"RMR {registro.get('RMR')}"
+        )
+    
+    def _calcular_soporte(self, event):
+        """Calcula automáticamente el soporte según RMR"""
+        try:
+            rmr = validar_rmr(self.entrada_rmr.get())
+            
+            if rmr is None:
+                return
+            
+            soporte = self.model.recomendar_soporte(rmr)
+            
+            self.entrada_soporte.delete(0, tk.END)
+            self.entrada_soporte.insert(0, soporte)
+        except Exception:
+            pass
+    
+    def _abrir_historial(self):
+        """Abre ventana de historial"""
+        ventana = VentanaHistorial(self.root, self.model)
+    
+    def _abrir_estandar(self):
+        """Abre ventana de estándar de sostenimiento"""
+        ventana = VentanaEstandar(self.root, self.model)
+    
+    def _generar_reporte(self):
+        """Genera reporte PDF del día"""
+        df = self.model.obtener_bitacora()
+        fecha_hoy = obtener_fecha_actual()
+        
+        df_hoy = df[df["Fecha"] == fecha_hoy]
+        
+        if df_hoy.empty:
+            messagebox.showinfo("Info", "No hay registros hoy")
+            return
+        
+        self._generar_pdf_diario(df_hoy, fecha_hoy)
+    
+    def _generar_pdf_diario(self, df, fecha):
+        """Genera PDF con registros del día"""
+        fecha_archivo = datetime.now().strftime("%d-%m-%Y")
+        nombre_archivo = f"reporte_geomecanica_{fecha_archivo}.pdf"
+        
+        pdf = SimpleDocTemplate(nombre_archivo, pagesize=letter)
+        estilos = getSampleStyleSheet()
+        elementos = []
+        
+        # Título
+        titulo = Paragraph("REPORTE DIARIO GEOMECÁNICA", estilos['Title'])
+        elementos.append(titulo)
+        elementos.append(Spacer(1, 10))
+        
+        # Tabla
+        datos = [df.columns.tolist()]
+        for _, row in df.iterrows():
+            fila = [
+                row["Fecha"], row["Turno"], row["Labor"],
+                row["GSI"], row["RMR"],
+                Paragraph(str(row["Soporte"]), estilos["Normal"]),
+                Paragraph(str(row["Observaciones"]), estilos["Normal"])
+            ]
+            datos.append(fila)
+        
+        tabla = Table(datos, colWidths=[60, 50, 80, 40, 40, 120, 130])
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey)
+        ]))
+        
+        elementos.append(tabla)
+        elementos.append(Spacer(1, 40))
+        
+        # Firmas
+        firma_tabla = Table([
+            ["_______________________", "_______________________"],
+            ["Geomecánica", "Supervisor"]
+        ])
+        firma_tabla.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+        elementos.append(firma_tabla)
+        
+        pdf.build(elementos)
+        messagebox.showinfo("PDF", f"Reporte diario generado: {nombre_archivo}")
+
+
+class VentanaHistorial:
+    """Ventana para ver historial de registros"""
+    
+    def __init__(self, parent, model):
+        self.model = model
+        self.ventana = tk.Toplevel(parent)
+        self.ventana.title("Historial de Labores")
+        self.ventana.geometry("900x500")
+        self.ventana.configure(bg=WINDOW_BG_COLOR)
+        
+        self._crear_interfaz()
+    
+    def _crear_interfaz(self):
+        """Crea la interfaz de la ventana de historial"""
+        # Frame de búsqueda
+        frame_busqueda = ttk.Frame(self.ventana)
+        frame_busqueda.pack(pady=10, padx=10, fill="x")
+        
+        for i in range(6):
+            frame_busqueda.columnconfigure(i, weight=1)
+        
+        # Variables
+        self.buscar_var = tk.StringVar()
+        self.fecha_inicio_var = tk.StringVar()
+        self.fecha_fin_var = tk.StringVar()
+        
+        # Búsqueda
+        ttk.Label(frame_busqueda, text="Buscar Labor:").grid(row=0, column=0, padx=5, pady=5)
+        entrada_buscar = ttk.Entry(frame_busqueda, textvariable=self.buscar_var, width=25)
+        entrada_buscar.grid(row=0, column=1, padx=5, pady=5)
+        entrada_buscar.bind("<KeyRelease>", lambda e: self._buscar_labor())
+        
+        ttk.Label(frame_busqueda, text="Desde:").grid(row=0, column=2, padx=5, pady=5)
+        entrada_inicio = DateEntry(
+            frame_busqueda,
+            textvariable=self.fecha_inicio_var,
+            date_pattern="dd/mm/yyyy",
+            width=12
+        )
+        entrada_inicio.grid(row=0, column=3, padx=5, pady=5)
+        entrada_inicio.bind("<<DateEntrySelected>>", lambda e: self._buscar_labor())
+        
+        ttk.Label(frame_busqueda, text="Hasta:").grid(row=0, column=4, padx=5, pady=5)
+        entrada_fin = DateEntry(
+            frame_busqueda,
+            textvariable=self.fecha_fin_var,
+            date_pattern="dd/mm/yyyy",
+            width=12
+        )
+        entrada_fin.grid(row=0, column=5, padx=5, pady=5)
+        entrada_fin.bind("<<DateEntrySelected>>", lambda e: self._buscar_labor())
+        
+        # Tabla
+        columnas = ["Fecha", "Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones"]
+        self.tabla = ttk.Treeview(
+            self.ventana,
+            columns=columnas,
+            show="headings",
+            height=18
+        )
+        
+        for col in columnas:
+            self.tabla.heading(col, text=col)
+            self.tabla.column(col, anchor="center")
+        
+        self.tabla.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(self.tabla, orient="vertical", command=self.tabla.yview)
+        self.tabla.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Botones
+        frame_botones = ttk.Frame(self.ventana)
+        frame_botones.pack(pady=10)
+        
+        ttk.Button(
+            frame_botones,
+            text="Exportar PDF",
+            command=self._exportar_pdf
+        ).pack(side="left", padx=10)
+        
+        ttk.Button(
+            frame_botones,
+            text="Cerrar",
+            command=self.ventana.destroy
+        ).pack(side="left", padx=10)
+        
+        self._buscar_labor()
+    
+    def _buscar_labor(self):
+        """Busca registros según filtros"""
+        labor = self.buscar_var.get()
+        fecha_inicio = self.fecha_inicio_var.get()
+        fecha_fin = self.fecha_fin_var.get()
+        
+        df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
+        
+        for fila in self.tabla.get_children():
+            self.tabla.delete(fila)
+        
+        for _, row in df.iterrows():
+            self.tabla.insert("", "end", values=list(row))
+    
+    def _exportar_pdf(self):
+        """Exporta historial a PDF"""
+        labor = self.buscar_var.get()
+        fecha_inicio = self.fecha_inicio_var.get()
+        fecha_fin = self.fecha_fin_var.get()
+        
+        df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
+        
+        if df.empty:
+            messagebox.showinfo("Info", "No hay datos para exportar")
+            return
+        
+        labor_real = df["Labor"].iloc[0]
+        nombre = f"historial_labor_{labor_real}.pdf".replace(" ", "_")
+        
+        pdf = SimpleDocTemplate(nombre, pagesize=letter)
+        estilos = getSampleStyleSheet()
+        elementos = []
+        
+        titulo = Paragraph("HISTORIAL DE LABORES - GEOMECÁNICA", estilos["Title"])
+        elementos.append(titulo)
+        elementos.append(Spacer(1, 10))
+        
+        fecha_texto = Paragraph(
+            f"Fecha de exportación: {obtener_fecha_actual()}",
+            estilos['Normal']
+        )
+        elementos.append(fecha_texto)
+        elementos.append(Spacer(1, 20))
+        
+        subtitulo = Paragraph(f"Labor: {labor_real}", estilos["Heading2"])
+        elementos.append(subtitulo)
+        elementos.append(Spacer(1, 20))
+        
+        datos = [df.columns.tolist()]
+        for _, row in df.iterrows():
+            fila = [
+                row["Fecha"], row["Turno"], row["Labor"],
+                row["GSI"], row["RMR"],
+                Paragraph(str(row["Soporte"]), estilos["Normal"]),
+                Paragraph(str(row["Observaciones"]), estilos["Normal"])
+            ]
+            datos.append(fila)
+        
+        tabla = Table(datos, colWidths=[60, 50, 80, 40, 40, 120, 130])
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke)
+        ]))
+        
+        elementos.append(tabla)
+        pdf.build(elementos)
+        
+        messagebox.showinfo("PDF", f"Historial exportado:\n{nombre}")
+
+
+class VentanaEstandar:
+    """Ventana para editar estándares de sostenimiento"""
+    
+    def __init__(self, parent, model):
+        self.model = model
+        self.ventana = tk.Toplevel(parent)
+        self.ventana.title("Estándar de Sostenimiento")
+        self.ventana.geometry("550x350")
+        
+        self._crear_interfaz()
+    
+    def _crear_interfaz(self):
+        """Crea la interfaz de la ventana de estándar"""
+        columnas = ["RMR_min", "RMR_max", "Soporte"]
+        
+        self.tabla = ttk.Treeview(self.ventana, columns=columnas, show="headings")
+        
+        for col in columnas:
+            self.tabla.heading(col, text=col)
+            self.tabla.column(col, width=150)
+        
+        self.tabla.pack(pady=10)
+        
+        # Cargar datos
+        df = self.model.obtener_estandar_sostenimiento()
+        for _, row in df.iterrows():
+            self.tabla.insert("", "end", values=list(row))
+        
+        # Frame de inputs
+        frame_inputs = tk.Frame(self.ventana)
+        frame_inputs.pack(pady=10)
+        
+        tk.Label(frame_inputs, text="RMR min").grid(row=0, column=0)
+        self.entrada_min = tk.Entry(frame_inputs, width=10)
+        self.entrada_min.grid(row=0, column=1)
+        
+        tk.Label(frame_inputs, text="RMR max").grid(row=0, column=2)
+        self.entrada_max = tk.Entry(frame_inputs, width=10)
+        self.entrada_max.grid(row=0, column=3)
+        
+        tk.Label(frame_inputs, text="Soporte").grid(row=0, column=4)
+        self.entrada_soporte = tk.Entry(frame_inputs, width=25)
+        self.entrada_soporte.grid(row=0, column=5)
+        
+        # Frame de botones
+        frame_botones = tk.Frame(self.ventana)
+        frame_botones.pack(pady=10)
+        
+        tk.Button(
+            frame_botones,
+            text="Agregar",
+            command=self._agregar_fila
+        ).pack(side="left", padx=5)
+        
+        tk.Button(
+            frame_botones,
+            text="Eliminar",
+            command=self._eliminar_fila
+        ).pack(side="left", padx=5)
+        
+        tk.Button(
+            frame_botones,
+            text="Guardar estándar",
+            command=self._guardar_estandar
+        ).pack(side="left", padx=5)
+    
+    def _agregar_fila(self):
+        """Agrega una fila a la tabla"""
+        rmr_min = self.entrada_min.get()
+        rmr_max = self.entrada_max.get()
+        soporte = self.entrada_soporte.get()
+        
+        if not rmr_min or not rmr_max or not soporte:
+            messagebox.showwarning("Error", "Complete todos los campos")
+            return
+        
+        self.tabla.insert("", "end", values=(rmr_min, rmr_max, soporte))
+        
+        self.entrada_min.delete(0, tk.END)
+        self.entrada_max.delete(0, tk.END)
+        self.entrada_soporte.delete(0, tk.END)
+    
+    def _eliminar_fila(self):
+        """Elimina la fila seleccionada"""
+        seleccionado = self.tabla.selection()
+        if seleccionado:
+            self.tabla.delete(seleccionado)
+    
+    def _guardar_estandar(self):
+        """Guarda los estándares"""
+        datos = []
+        for fila in self.tabla.get_children():
+            valores = self.tabla.item(fila)["values"]
+            datos.append(valores)
+        
+        exito, mensaje = self.model.guardar_estandar_sostenimiento(datos)
+        messagebox.showinfo("Resultado", mensaje)
