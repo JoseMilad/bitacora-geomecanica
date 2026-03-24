@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Archivos de la aplicación
+*.xlsx
+*.pdf
+data/bitacora_geomecanica.xlsx
