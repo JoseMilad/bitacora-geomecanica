@@ -159,34 +159,43 @@ class BitacoraApp:
     
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
-        # Validar campos obligatorios
-        valido, mensaje = validar_campos_obligatorios(
-            self.labor_var.get(),
-            self.turno_var.get()
-        )
-        
-        if not valido:
-            messagebox.showwarning("Error", mensaje)
-            return
-        
+        from utils.validators import ValidadorBitacora
+        from utils.logger import LoggerBitacora
+    
         # Preparar datos
         datos = {
             "Fecha": obtener_fecha_actual(),
             "Turno": self.turno_var.get(),
-            "Labor": self.labor_var.get(),
-            "GSI": self.entrada_gsi.get(),
-            "RMR": self.entrada_rmr.get(),
-            "Soporte": self.entrada_soporte.get(),
-            "Observaciones": self.entrada_obs.get("1.0", tk.END).strip()
+            "Labor": ValidadorBitacora.sanitizar_entrada(self.labor_var.get()),
+            "GSI": self.entrada_gsi.get().strip(),
+            "RMR": self.entrada_rmr.get().strip(),
+            "Soporte": ValidadorBitacora.sanitizar_entrada(self.entrada_soporte.get()),
+            "Observaciones": ValidadorBitacora.sanitizar_entrada(self.entrada_obs.get("1.0", tk.END))
         }
+    
+        # Validar registro completo
+        valido, mensaje = ValidadorBitacora.validar_registro_completo(datos)
+    
+        if not valido:
+            LoggerBitacora.registrar_validacion_fallida("registro_completo", str(datos), mensaje)
+            messagebox.showerror("Error de validación", mensaje)
+            return
+    
+        try:
+            # Guardar con modelo
+            exito, mensaje = self.model.guardar_registro(datos)
         
-        # Guardar con modelo
-        exito, mensaje = self.model.guardar_registro(datos)
-        messagebox.showinfo("Resultado", mensaje)
-        
-        if exito:
-            self._limpiar_campos()
-            self._actualizar_labores()
+            if exito:
+                LoggerBitacora.registrar_guardar_registro(datos)
+                messagebox.showinfo("Resultado", mensaje)
+                self._limpiar_campos()
+                self._actualizar_labores()
+            else:
+                messagebox.showerror("Error", mensaje)
+                LoggerBitacora.registrar_error("guardar_registro", Exception(mensaje))
+        except Exception as e:
+            LoggerBitacora.registrar_error("guardar_registro", e)
+            messagebox.showerror("Error", f"Error al guardar: {str(e)}")
     
     def _limpiar_campos(self):
         """Limpia todos los campos de entrada"""
