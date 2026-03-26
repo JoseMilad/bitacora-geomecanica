@@ -9,8 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 ARCHIVO_BITACORA = DATA_DIR / "bitacora_geomecanica.xlsx"
 
-# Crear directorio si no existe
+# Crear directorios si no existen
 DATA_DIR.mkdir(exist_ok=True)
+
+BACKUP_DIR = DATA_DIR / "backups"
+BACKUP_DIR.mkdir(exist_ok=True)
 
 # Configuración de la aplicación
 APP_NAME = "Bitácora Geomecánica"
@@ -34,3 +37,10 @@ COLUMNAS_ESTANDAR = [
 
 # Columnas de la tabla de labores
 COLUMNAS_LABORES = ["Labor", "GSI", "RMR", "Soporte", "Tipo"]
+
+# Columnas del sostenimiento diario
+COLUMNAS_SOSTENIMIENTO = [
+    "Fecha", "Turno", "Labor",
+    "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+    "Mesh_Strap", "Cable_Bolting", "Marco_Acero", "Observaciones"
+]

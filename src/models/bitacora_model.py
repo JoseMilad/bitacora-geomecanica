@@ -2,35 +2,77 @@
 Modelo de datos para la Bitácora Geomecánica
 Maneja toda la lógica de lectura/escritura de Excel
 """
+import shutil
 import pandas as pd
 import os
 from datetime import datetime
 from utils.config import (
-    ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR, COLUMNAS_LABORES
+    ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR,
+    COLUMNAS_LABORES, COLUMNAS_SOSTENIMIENTO, BACKUP_DIR
 )
 
 class BitacoraModel:
     """Gestiona la lógica de datos de la bitácora"""
     
-    def __init__(self):
-        self.archivo = ARCHIVO_BITACORA
+    def __init__(self, archivo=None):
+        self.archivo = archivo or ARCHIVO_BITACORA
         self.inicializar_excel()
     
+    def _hacer_backup(self):
+        """
+        Crea una copia de respaldo del archivo Excel en data/backups/.
+        Si ya existe un backup del día, lo sobreescribe.
+        Respeta el flag backup_automatico de la configuración.
+        """
+        try:
+            from utils.config_manager import cargar_config
+            config = cargar_config()
+            if not config.get("backup_automatico", True):
+                return
+        except Exception:
+            pass
+
+        try:
+            if not os.path.exists(self.archivo):
+                return
+            fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+            nombre_backup = BACKUP_DIR / f"bitacora_backup_{fecha_hoy}.xlsx"
+            shutil.copy2(self.archivo, nombre_backup)
+        except Exception as e:
+            print(f"Advertencia: no se pudo crear backup: {str(e)}")
+
     def inicializar_excel(self):
-        """Crea el archivo Excel si no existe"""
+        """Crea el archivo Excel si no existe; añade hojas faltantes si ya existe."""
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
             estandar = pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
             labores = pd.DataFrame(columns=["Labor", "GSI", "RMR", "Soporte", "Tipo"])
+            sostenimiento = pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
             
             with pd.ExcelWriter(self.archivo) as writer:
                 bitacora.to_excel(writer, sheet_name="Bitacora", index=False)
                 estandar.to_excel(writer, sheet_name="Estandar_Sostenimiento", index=False)
                 labores.to_excel(writer, sheet_name="Labores", index=False)
+                sostenimiento.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+        else:
+            # Verificar si falta la hoja Sostenimiento_Diario y añadirla si es el caso
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(self.archivo)
+                if "Sostenimiento_Diario" not in wb.sheetnames:
+                    wb.close()
+                    sostenimiento = pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
+                    with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl") as writer:
+                        sostenimiento.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+                else:
+                    wb.close()
+            except Exception:
+                pass
     
     def guardar_registro(self, datos):
         """
-        Guarda un nuevo registro en la bitácora
+        Guarda un nuevo registro en la bitácora.
+        Verifica duplicados por (Fecha, Turno, Labor) antes de guardar.
         
         Args:
             datos (dict): Diccionario con los datos del registro
@@ -39,6 +81,42 @@ class BitacoraModel:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
+            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
+
+            # Verificar duplicado
+            mascara = (
+                (df["Fecha"].astype(str) == str(datos.get("Fecha", ""))) &
+                (df["Turno"].astype(str) == str(datos.get("Turno", ""))) &
+                (df["Labor"].astype(str) == str(datos.get("Labor", "")))
+            )
+            if mascara.any():
+                return False, "DUPLICADO: Ya existe un registro para esta labor en este turno y fecha."
+
+            self._hacer_backup()
+            df_nuevo = pd.DataFrame([datos])
+            df = pd.concat([df, df_nuevo], ignore_index=True)
+            
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl", 
+                               if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Bitacora", index=False)
+            
+            return True, "Registro guardado exitosamente"
+        except Exception as e:
+            return False, f"Error al guardar: {str(e)}"
+
+    def guardar_registro_forzado(self, datos):
+        """
+        Guarda un registro omitiendo la verificación de duplicados.
+        Usar cuando el usuario confirma sobreescribir un duplicado.
+        
+        Args:
+            datos (dict): Diccionario con los datos del registro
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
             df = pd.read_excel(self.archivo, sheet_name="Bitacora")
             df_nuevo = pd.DataFrame([datos])
             df = pd.concat([df, df_nuevo], ignore_index=True)
@@ -88,6 +166,7 @@ class BitacoraModel:
             if nombre_labor in df["Labor"].values:
                 return False, f"La labor '{nombre_labor}' ya existe"
 
+            self._hacer_backup()
             nueva_fila = pd.DataFrame([{
                 "Labor": nombre_labor,
                 "GSI": gsi,
@@ -116,6 +195,7 @@ class BitacoraModel:
             if nombre_labor not in df["Labor"].values:
                 return False, f"La labor '{nombre_labor}' no existe"
 
+            self._hacer_backup()
             df = df[df["Labor"] != nombre_labor].reset_index(drop=True)
 
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
@@ -228,6 +308,7 @@ class BitacoraModel:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
+            self._hacer_backup()
             cols = ["RMR_min", "RMR_max", "Tipo", "Soporte"]
             if datos:
                 df = pd.DataFrame(datos)
@@ -285,3 +366,238 @@ class BitacoraModel:
         except Exception as e:
             print(f"Error al buscar: {str(e)}")
             return pd.DataFrame(columns=COLUMNAS_BITACORA)
+
+    def editar_registro(self, indice: int, datos: dict) -> tuple:
+        """
+        Edita un registro de la bitácora por su índice (0-based).
+        
+        Args:
+            indice: Índice de la fila en el DataFrame
+            datos: Diccionario con los nuevos datos (solo los campos a modificar)
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
+            if indice < 0 or indice >= len(df):
+                return False, "Índice fuera de rango"
+            for campo, valor in datos.items():
+                if campo in df.columns:
+                    df.at[indice, campo] = valor
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Bitacora", index=False)
+            return True, "Registro editado correctamente"
+        except Exception as e:
+            return False, f"Error al editar: {str(e)}"
+
+    def eliminar_registro(self, indice: int) -> tuple:
+        """
+        Elimina un registro de la bitácora por su índice (0-based).
+        
+        Args:
+            indice: Índice de la fila en el DataFrame
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
+            if indice < 0 or indice >= len(df):
+                return False, "Índice fuera de rango"
+            df = df.drop(index=indice).reset_index(drop=True)
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Bitacora", index=False)
+            return True, "Registro eliminado correctamente"
+        except Exception as e:
+            return False, f"Error al eliminar: {str(e)}"
+
+    def exportar_historial_excel(self, df, nombre_archivo):
+        """
+        Exporta un DataFrame a un archivo Excel.
+        
+        Args:
+            df: DataFrame a exportar
+            nombre_archivo: Nombre/ruta del archivo destino
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            df.to_excel(nombre_archivo, index=False)
+            return True, f"Archivo exportado: {nombre_archivo}"
+        except Exception as e:
+            return False, f"Error al exportar: {str(e)}"
+
+    # ── Sostenimiento Diario ─────────────────────────────────────────────────
+
+    def guardar_sostenimiento(self, datos: dict) -> tuple:
+        """
+        Guarda un registro de sostenimiento diario.
+        Verifica duplicado por (Fecha, Turno, Labor); si existe retorna
+        (False, 'DUPLICADO') para que la UI gestione la confirmación.
+        
+        Args:
+            datos: Diccionario con los campos de COLUMNAS_SOSTENIMIENTO
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+
+            # Verificar duplicado
+            mascara = (
+                (df["Fecha"].astype(str) == str(datos.get("Fecha", ""))) &
+                (df["Turno"].astype(str) == str(datos.get("Turno", ""))) &
+                (df["Labor"].astype(str) == str(datos.get("Labor", "")))
+            )
+            if mascara.any():
+                return False, "DUPLICADO"
+
+            self._hacer_backup()
+            df_nuevo = pd.DataFrame([datos])
+            df = pd.concat([df, df_nuevo], ignore_index=True)
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+            return True, "Sostenimiento guardado correctamente"
+        except Exception as e:
+            return False, f"Error al guardar sostenimiento: {str(e)}"
+
+    def guardar_sostenimiento_forzado(self, datos: dict) -> tuple:
+        """
+        Guarda un registro de sostenimiento omitiendo la verificación de duplicados.
+        """
+        try:
+            self._hacer_backup()
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            df_nuevo = pd.DataFrame([datos])
+            df = pd.concat([df, df_nuevo], ignore_index=True)
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+            return True, "Sostenimiento guardado correctamente"
+        except Exception as e:
+            return False, f"Error al guardar sostenimiento: {str(e)}"
+
+    def obtener_sostenimiento(self, fecha=None, labor=None) -> "pd.DataFrame":
+        """
+        Retorna registros de sostenimiento diario, opcionalmente filtrados.
+        
+        Args:
+            fecha: Filtrar por fecha exacta (string dd/mm/yyyy)
+            labor: Filtrar por nombre de labor (substring)
+        
+        Returns:
+            DataFrame con los registros
+        """
+        try:
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            if fecha:
+                df = df[df["Fecha"].astype(str) == str(fecha)]
+            if labor:
+                df = df[df["Labor"].astype(str).str.contains(labor, case=False, na=False)]
+            return df
+        except Exception:
+            return pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
+
+    def editar_sostenimiento(self, indice: int, datos: dict) -> tuple:
+        """
+        Edita un registro de sostenimiento por índice (0-based).
+        
+        Args:
+            indice: Índice de la fila
+            datos: Campos a actualizar
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            if indice < 0 or indice >= len(df):
+                return False, "Índice fuera de rango"
+            for campo, valor in datos.items():
+                if campo in df.columns:
+                    df.at[indice, campo] = valor
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+            return True, "Sostenimiento editado correctamente"
+        except Exception as e:
+            return False, f"Error al editar sostenimiento: {str(e)}"
+
+    def eliminar_sostenimiento(self, indice: int) -> tuple:
+        """
+        Elimina un registro de sostenimiento por índice (0-based).
+        
+        Args:
+            indice: Índice de la fila
+        
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            if indice < 0 or indice >= len(df):
+                return False, "Índice fuera de rango"
+            df = df.drop(index=indice).reset_index(drop=True)
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+            return True, "Registro de sostenimiento eliminado"
+        except Exception as e:
+            return False, f"Error al eliminar sostenimiento: {str(e)}"
+
+    def obtener_totales_sostenimiento(self, fecha_inicio=None, fecha_fin=None,
+                                      labor=None) -> "pd.DataFrame":
+        """
+        Agrupa y suma los totales de cada elemento de sostenimiento por labor.
+        
+        Args:
+            fecha_inicio: Fecha mínima (string dd/mm/yyyy)
+            fecha_fin: Fecha máxima (string dd/mm/yyyy)
+            labor: Filtrar por labor específica
+        
+        Returns:
+            DataFrame agrupado por Labor con sumas de cada elemento
+        """
+        try:
+            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            if df.empty:
+                return df
+
+            cols_num = [
+                "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+                "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+            ]
+            for col in cols_num:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+            if "Fecha" in df.columns:
+                df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
+                if fecha_inicio:
+                    inicio = datetime.strptime(fecha_inicio, "%d/%m/%Y")
+                    df = df[df["Fecha_dt"] >= inicio]
+                if fecha_fin:
+                    fin = datetime.strptime(fecha_fin, "%d/%m/%Y")
+                    df = df[df["Fecha_dt"] <= fin]
+
+            if labor:
+                df = df[df["Labor"].astype(str).str.contains(labor, case=False, na=False)]
+
+            cols_agrupar = [c for c in cols_num if c in df.columns]
+            if "Labor" not in df.columns or not cols_agrupar:
+                return pd.DataFrame()
+
+            return df.groupby("Labor")[cols_agrupar].sum().reset_index()
+        except Exception as e:
+            print(f"Error al obtener totales: {str(e)}")
+            return pd.DataFrame()

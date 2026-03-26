@@ -17,7 +17,7 @@ from utils.config import (
 )
 from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
-    validar_campos_obligatorios
+    validar_campos_obligatorios, _obtener_turno_automatico
 )
 
 
@@ -86,6 +86,7 @@ class BitacoraApp:
             values=TURNOS
         )
         combo_turno.grid(row=1, column=1, sticky="ew")
+        self.turno_var.set(_obtener_turno_automatico())
         
         # Labor — Entry para buscar/filtrar
         ttk.Label(frame_principal, text="Labor").grid(row=2, column=0, sticky="w")
@@ -143,7 +144,7 @@ class BitacoraApp:
         
         frame_principal.columnconfigure(1, weight=1)
         
-        # Frame de botones reorganizado
+        # Frame de botones: fila 0 (guardar), fila 1 (4 botones), fila 2 (3 botones)
         frame_botones = ttk.Frame(self.root)
         frame_botones.pack(pady=(5, 10))
 
@@ -155,7 +156,7 @@ class BitacoraApp:
             width=25
         ).grid(row=0, column=0, columnspan=4, pady=(0, 8), padx=5)
 
-        # Fila 2: Botones secundarios
+        # Fila 2: 4 botones secundarios
         ttk.Button(
             frame_botones,
             text="📋 Ver Historial",
@@ -183,6 +184,28 @@ class BitacoraApp:
             command=self._abrir_gestion_labores,
             width=18
         ).grid(row=1, column=3, padx=4, pady=2)
+
+        # Fila 3: Nuevos botones
+        ttk.Button(
+            frame_botones,
+            text="🪨 Sostenimiento Diario",
+            command=self._abrir_sostenimiento,
+            width=18
+        ).grid(row=2, column=0, padx=4, pady=2)
+
+        ttk.Button(
+            frame_botones,
+            text="📊 Dashboard",
+            command=self._abrir_dashboard,
+            width=18
+        ).grid(row=2, column=1, padx=4, pady=2)
+
+        ttk.Button(
+            frame_botones,
+            text="⚙ Configuración",
+            command=self._abrir_configuracion,
+            width=18
+        ).grid(row=2, column=2, padx=4, pady=2)
     
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
@@ -217,6 +240,21 @@ class BitacoraApp:
                 messagebox.showinfo("Resultado", mensaje)
                 self._limpiar_campos()
                 self._actualizar_labores()
+            elif "DUPLICADO" in mensaje:
+                confirmar = messagebox.askyesno(
+                    "Registro duplicado",
+                    "Ya existe un registro para esta labor en este turno y fecha.\n"
+                    "¿Desea guardar de todas formas?"
+                )
+                if confirmar:
+                    exito2, msg2 = self.model.guardar_registro_forzado(datos)
+                    if exito2:
+                        LoggerBitacora.registrar_guardar_registro(datos)
+                        messagebox.showinfo("Resultado", msg2)
+                        self._limpiar_campos()
+                        self._actualizar_labores()
+                    else:
+                        messagebox.showerror("Error", msg2)
             else:
                 messagebox.showerror("Error", mensaje)
                 LoggerBitacora.registrar_error("guardar_registro", Exception(mensaje))
@@ -406,11 +444,30 @@ class BitacoraApp:
     
     def _abrir_historial(self):
         """Abre ventana de historial"""
-        ventana = VentanaHistorial(self.root, self.model)
+        VentanaHistorial(self.root, self.model)
     
     def _abrir_estandar(self):
         """Abre ventana de estándar de sostenimiento"""
-        ventana = VentanaEstandar(self.root, self.model)
+        VentanaEstandar(self.root, self.model)
+
+    def _abrir_sostenimiento(self):
+        """Abre ventana de sostenimiento diario"""
+        VentanaSostenimiento(self.root, self.model)
+
+    def _abrir_dashboard(self):
+        """Abre el dashboard de sostenimiento"""
+        VentanaDashboard(self.root, self.model)
+
+    def _abrir_configuracion(self):
+        """Abre el panel de configuración"""
+        def _al_cerrar():
+            # Recargar configuración al cerrar
+            from utils.config_manager import cargar_config
+            config = cargar_config()
+            color = config.get("theme_color", WINDOW_BG_COLOR)
+            self.root.configure(bg=color)
+
+        VentanaConfiguracion(self.root, _al_cerrar)
     
     def _generar_reporte(self):
         """Genera reporte PDF del día"""
@@ -484,8 +541,10 @@ class VentanaHistorial:
         self.model = model
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Historial de Labores")
-        self.ventana.geometry("900x500")
+        self.ventana.geometry("900x560")
         self.ventana.configure(bg=WINDOW_BG_COLOR)
+        self._df_actual = None
+        self._indices_originales = []
         
         self._crear_interfaz()
     
@@ -535,7 +594,7 @@ class VentanaHistorial:
             self.ventana,
             columns=columnas,
             show="headings",
-            height=18
+            height=15
         )
         
         for col in columnas:
@@ -555,31 +614,152 @@ class VentanaHistorial:
         
         ttk.Button(
             frame_botones,
+            text="✏ Editar seleccionado",
+            command=self._editar_registro
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            frame_botones,
+            text="🗑 Eliminar seleccionado",
+            command=self._eliminar_registro
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            frame_botones,
+            text="📊 Exportar a Excel",
+            command=self._exportar_excel
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            frame_botones,
             text="Exportar PDF",
             command=self._exportar_pdf
-        ).pack(side="left", padx=10)
+        ).pack(side="left", padx=5)
         
         ttk.Button(
             frame_botones,
             text="Cerrar",
             command=self.ventana.destroy
-        ).pack(side="left", padx=10)
+        ).pack(side="left", padx=5)
         
         self._buscar_labor()
     
     def _buscar_labor(self):
-        """Busca registros según filtros"""
+        """Busca registros según filtros y guarda los índices originales"""
         labor = self.buscar_var.get()
         fecha_inicio = self.fecha_inicio_var.get()
         fecha_fin = self.fecha_fin_var.get()
         
         df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
+        self._df_actual = df.copy()
+        self._indices_originales = list(df.index)
         
         for fila in self.tabla.get_children():
             self.tabla.delete(fila)
         
         for _, row in df.iterrows():
             self.tabla.insert("", "end", values=list(row))
+
+    def _obtener_indice_seleccionado(self):
+        """Devuelve el índice real del DataFrame para la fila seleccionada"""
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Seleccione un registro", parent=self.ventana)
+            return None
+        pos = self.tabla.index(seleccion[0])
+        if pos >= len(self._indices_originales):
+            return None
+        return self._indices_originales[pos]
+
+    def _editar_registro(self):
+        """Abre ventana emergente para editar el registro seleccionado"""
+        indice = self._obtener_indice_seleccionado()
+        if indice is None:
+            return
+
+        seleccion = self.tabla.selection()
+        valores = self.tabla.item(seleccion[0])["values"]
+
+        ventana_editar = tk.Toplevel(self.ventana)
+        ventana_editar.title("Editar Registro")
+        ventana_editar.geometry("500x400")
+        ventana_editar.grab_set()
+
+        campos = ["Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones"]
+        nombres = ["Fecha", "Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones"]
+        entradas = {}
+
+        for i, nombre in enumerate(nombres):
+            ttk.Label(ventana_editar, text=nombre).grid(row=i, column=0, sticky="w", padx=10, pady=4)
+            if nombre == "Fecha":
+                ttk.Label(ventana_editar, text=str(valores[i])).grid(row=i, column=1, sticky="w", padx=10)
+            elif nombre == "Observaciones":
+                txt = tk.Text(ventana_editar, height=4, width=35, font=("Segoe UI", 10))
+                txt.grid(row=i, column=1, sticky="ew", padx=10, pady=4)
+                txt.insert("1.0", str(valores[i]) if str(valores[i]) != "nan" else "")
+                entradas[nombre] = txt
+            else:
+                var = tk.StringVar(value=str(valores[i]) if str(valores[i]) != "nan" else "")
+                ttk.Entry(ventana_editar, textvariable=var, width=35).grid(row=i, column=1, sticky="ew", padx=10, pady=4)
+                entradas[nombre] = var
+
+        ventana_editar.columnconfigure(1, weight=1)
+
+        def _confirmar():
+            nuevos = {}
+            for nombre in campos:
+                if nombre == "Observaciones":
+                    nuevos[nombre] = entradas[nombre].get("1.0", tk.END).strip()
+                else:
+                    nuevos[nombre] = entradas[nombre].get().strip()
+            exito, msg = self.model.editar_registro(indice, nuevos)
+            if exito:
+                messagebox.showinfo("Éxito", msg, parent=ventana_editar)
+                ventana_editar.destroy()
+                self._buscar_labor()
+            else:
+                messagebox.showerror("Error", msg, parent=ventana_editar)
+
+        ttk.Button(ventana_editar, text="Confirmar", command=_confirmar).grid(
+            row=len(nombres), column=0, columnspan=2, pady=10)
+
+    def _eliminar_registro(self):
+        """Elimina el registro seleccionado con confirmación"""
+        indice = self._obtener_indice_seleccionado()
+        if indice is None:
+            return
+
+        confirmar = messagebox.askyesno(
+            "Confirmar eliminación",
+            "¿Está seguro de que desea eliminar este registro?\nEsta acción no se puede deshacer.",
+            parent=self.ventana
+        )
+        if confirmar:
+            exito, msg = self.model.eliminar_registro(indice)
+            if exito:
+                messagebox.showinfo("Éxito", msg, parent=self.ventana)
+                self._buscar_labor()
+            else:
+                messagebox.showerror("Error", msg, parent=self.ventana)
+
+    def _exportar_excel(self):
+        """Exporta el historial filtrado a un archivo Excel"""
+        labor = self.buscar_var.get()
+        fecha_inicio = self.fecha_inicio_var.get()
+        fecha_fin = self.fecha_fin_var.get()
+
+        df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
+
+        if df.empty:
+            messagebox.showinfo("Info", "No hay datos para exportar", parent=self.ventana)
+            return
+
+        nombre_archivo = f"historial_geomecanica_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        exito, mensaje = self.model.exportar_historial_excel(df, nombre_archivo)
+        if exito:
+            messagebox.showinfo("Exportar Excel", f"Archivo exportado:\n{nombre_archivo}", parent=self.ventana)
+        else:
+            messagebox.showerror("Error", mensaje, parent=self.ventana)
     
     def _exportar_pdf(self):
         """Exporta historial a PDF"""
@@ -945,3 +1125,593 @@ class VentanaLabores:
     def _cerrar(self):
         """Cierra la ventana"""
         self.ventana.destroy()
+
+class VentanaSostenimiento(tk.Toplevel):
+    """Ventana para registrar sostenimiento diario por labor y turno"""
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.model = model
+        self.title("Sostenimiento Diario")
+        self.geometry("700x600")
+        self.configure(bg=WINDOW_BG_COLOR)
+        self.resizable(True, True)
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        tk.Label(
+            self, text="Registro de Sostenimiento Diario",
+            font=("Segoe UI", 14, "bold"), bg=WINDOW_BG_COLOR
+        ).pack(pady=8)
+
+        frame = ttk.LabelFrame(self, text="Datos de Sostenimiento", padding=12)
+        frame.pack(fill="x", padx=15, pady=5)
+
+        # Fecha (no editable)
+        ttk.Label(frame, text="Fecha:").grid(row=0, column=0, sticky="w", pady=3)
+        ttk.Label(frame, text=obtener_fecha_actual()).grid(row=0, column=1, sticky="w", pady=3)
+
+        # Turno
+        ttk.Label(frame, text="Turno:").grid(row=1, column=0, sticky="w", pady=3)
+        self.turno_var = tk.StringVar()
+        combo_turno = ttk.Combobox(frame, textvariable=self.turno_var,
+                                   state="readonly", values=TURNOS, width=15)
+        combo_turno.grid(row=1, column=1, sticky="w", pady=3)
+        self.turno_var.set(_obtener_turno_automatico())
+
+        # Labor
+        ttk.Label(frame, text="Labor:").grid(row=2, column=0, sticky="w", pady=3)
+        self.labor_var = tk.StringVar()
+        self.entrada_labor = ttk.Entry(frame, textvariable=self.labor_var, width=30)
+        self.entrada_labor.grid(row=2, column=1, sticky="ew", pady=3)
+        self.lista_labores = self.model.obtener_labores_guardadas()
+        self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
+        self.entrada_labor.bind("<FocusOut>", self._ocultar_lista)
+
+        self.listbox_labor = tk.Listbox(frame, height=4, exportselection=False)
+        self.listbox_labor.grid(row=3, column=1, sticky="ew")
+        self.listbox_labor.bind("<<ListboxSelect>>", self._seleccionar_labor)
+        self.listbox_labor.grid_remove()
+
+        # Campos numéricos
+        campos_num = [
+            ("Shotcrete (m³):", "shotcrete_var"),
+            ("Pernos Helicoidales:", "pernos_var"),
+            ("Splitsets:", "splitsets_var"),
+            ("Mesh Strap:", "mesh_var"),
+            ("Cable Bolting (m):", "cable_var"),
+            ("Marco de Acero:", "marco_var"),
+        ]
+        self._vars_num = {}
+        for i, (etiqueta, nombre) in enumerate(campos_num):
+            row = 4 + i
+            ttk.Label(frame, text=etiqueta).grid(row=row, column=0, sticky="w", pady=2)
+            var = tk.StringVar()
+            self._vars_num[nombre] = var
+            ttk.Entry(frame, textvariable=var, width=12).grid(row=row, column=1, sticky="w", pady=2)
+
+        # Observaciones
+        ttk.Label(frame, text="Observaciones:").grid(row=10, column=0, sticky="nw", pady=3)
+        self.obs_text = tk.Text(frame, height=3, width=35, font=("Segoe UI", 10),
+                                relief="flat", borderwidth=1,
+                                highlightthickness=1, highlightbackground="#cccccc",
+                                highlightcolor="#4a90d9", wrap="word")
+        self.obs_text.grid(row=10, column=1, sticky="ew", pady=3)
+
+        frame.columnconfigure(1, weight=1)
+
+        # Botones
+        frame_botones = ttk.Frame(self)
+        frame_botones.pack(pady=10)
+
+        ttk.Button(frame_botones, text="💾 Guardar Sostenimiento",
+                   command=self._guardar).pack(side="left", padx=8)
+        ttk.Button(frame_botones, text="📋 Ver Historial Sostenimiento",
+                   command=self._abrir_historial).pack(side="left", padx=8)
+        ttk.Button(frame_botones, text="Cerrar", command=self.destroy).pack(side="left", padx=8)
+
+    def _filtrar_labores(self, event):
+        texto = self.labor_var.get()
+        self.listbox_labor.delete(0, tk.END)
+        resultados = [l for l in self.lista_labores if texto.lower() in l.lower()] if texto else self.lista_labores
+        if resultados:
+            for l in resultados:
+                self.listbox_labor.insert(tk.END, l)
+            self.listbox_labor.grid()
+        else:
+            self.listbox_labor.grid_remove()
+
+    def _seleccionar_labor(self, event):
+        sel = self.listbox_labor.curselection()
+        if sel:
+            self.labor_var.set(self.listbox_labor.get(sel[0]))
+            self.listbox_labor.grid_remove()
+
+    def _ocultar_lista(self, event):
+        self.after(150, lambda: self.listbox_labor.grid_remove())
+
+    def _guardar(self):
+        def _num(val, entero=True):
+            try:
+                return int(val) if entero else float(val)
+            except (ValueError, TypeError):
+                return 0
+
+        datos = {
+            "Fecha": obtener_fecha_actual(),
+            "Turno": self.turno_var.get(),
+            "Labor": self.labor_var.get().strip(),
+            "Shotcrete_m3": _num(self._vars_num["shotcrete_var"].get(), entero=False),
+            "Pernos_Helicoidales": _num(self._vars_num["pernos_var"].get()),
+            "Splitsets": _num(self._vars_num["splitsets_var"].get()),
+            "Mesh_Strap": _num(self._vars_num["mesh_var"].get()),
+            "Cable_Bolting": _num(self._vars_num["cable_var"].get(), entero=False),
+            "Marco_Acero": _num(self._vars_num["marco_var"].get()),
+            "Observaciones": self.obs_text.get("1.0", tk.END).strip(),
+        }
+
+        if not datos["Turno"]:
+            messagebox.showwarning("Advertencia", "Seleccione un turno", parent=self)
+            return
+        if not datos["Labor"]:
+            messagebox.showwarning("Advertencia", "Ingrese una labor", parent=self)
+            return
+
+        exito, mensaje = self.model.guardar_sostenimiento(datos)
+        if exito:
+            messagebox.showinfo("Éxito", mensaje, parent=self)
+            self._limpiar()
+        elif "DUPLICADO" in mensaje:
+            confirmar = messagebox.askyesno(
+                "Registro duplicado",
+                "Ya existe un registro de sostenimiento para esta labor en este turno y fecha.\n"
+                "¿Desea guardar de todas formas?",
+                parent=self
+            )
+            if confirmar:
+                exito2, msg2 = self.model.guardar_sostenimiento_forzado(datos)
+                if exito2:
+                    messagebox.showinfo("Éxito", msg2, parent=self)
+                    self._limpiar()
+                else:
+                    messagebox.showerror("Error", msg2, parent=self)
+        else:
+            messagebox.showerror("Error", mensaje, parent=self)
+
+    def _limpiar(self):
+        for var in self._vars_num.values():
+            var.set("")
+        self.obs_text.delete("1.0", tk.END)
+        self.labor_var.set("")
+
+    def _abrir_historial(self):
+        VentanaHistorialSostenimiento(self, self.model)
+
+
+class VentanaHistorialSostenimiento(tk.Toplevel):
+    """Subventana para ver el historial de sostenimiento diario"""
+
+    COLUMNAS = [
+        "Fecha", "Turno", "Labor", "Shotcrete_m3", "Pernos_Helicoidales",
+        "Splitsets", "Mesh_Strap", "Cable_Bolting", "Marco_Acero", "Observaciones"
+    ]
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.model = model
+        self.title("Historial de Sostenimiento")
+        self.geometry("1000x520")
+        self._indices_originales = []
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        frame_filtros = ttk.Frame(self)
+        frame_filtros.pack(fill="x", padx=10, pady=8)
+
+        ttk.Label(frame_filtros, text="Desde:").grid(row=0, column=0, padx=4)
+        self.fecha_inicio = DateEntry(frame_filtros, date_pattern="dd/mm/yyyy", width=11)
+        self.fecha_inicio.grid(row=0, column=1, padx=4)
+
+        ttk.Label(frame_filtros, text="Hasta:").grid(row=0, column=2, padx=4)
+        self.fecha_fin = DateEntry(frame_filtros, date_pattern="dd/mm/yyyy", width=11)
+        self.fecha_fin.grid(row=0, column=3, padx=4)
+
+        ttk.Label(frame_filtros, text="Labor:").grid(row=0, column=4, padx=4)
+        self.labor_filtro = tk.StringVar()
+        ttk.Entry(frame_filtros, textvariable=self.labor_filtro, width=20).grid(row=0, column=5, padx=4)
+
+        ttk.Button(frame_filtros, text="🔍 Filtrar", command=self._cargar).grid(row=0, column=6, padx=8)
+
+        # Tabla
+        self.tabla = ttk.Treeview(self, columns=self.COLUMNAS, show="headings", height=15)
+        anchos = {"Fecha": 80, "Turno": 60, "Labor": 120, "Shotcrete_m3": 80,
+                  "Pernos_Helicoidales": 100, "Splitsets": 70, "Mesh_Strap": 80,
+                  "Cable_Bolting": 90, "Marco_Acero": 80, "Observaciones": 150}
+        for col in self.COLUMNAS:
+            self.tabla.heading(col, text=col.replace("_", " "))
+            self.tabla.column(col, width=anchos.get(col, 80), anchor="center")
+        self.tabla.pack(fill="both", expand=True, padx=10, pady=5)
+
+        sb = ttk.Scrollbar(self.tabla, orient="vertical", command=self.tabla.yview)
+        self.tabla.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+
+        frame_btn = ttk.Frame(self)
+        frame_btn.pack(pady=8)
+        ttk.Button(frame_btn, text="✏ Editar", command=self._editar).pack(side="left", padx=5)
+        ttk.Button(frame_btn, text="🗑 Eliminar", command=self._eliminar).pack(side="left", padx=5)
+        ttk.Button(frame_btn, text="📊 Exportar a Excel", command=self._exportar).pack(side="left", padx=5)
+        ttk.Button(frame_btn, text="Cerrar", command=self.destroy).pack(side="left", padx=5)
+
+        self._cargar()
+
+    def _cargar(self):
+        labor = self.labor_filtro.get().strip() or None
+        df = self.model.obtener_sostenimiento(labor=labor)
+        self._df = df.copy()
+        self._indices_originales = list(df.index)
+
+        for item in self.tabla.get_children():
+            self.tabla.delete(item)
+        for _, row in df.iterrows():
+            self.tabla.insert("", "end", values=[row.get(c, "") for c in self.COLUMNAS])
+
+    def _obtener_indice(self):
+        sel = self.tabla.selection()
+        if not sel:
+            messagebox.showwarning("Advertencia", "Seleccione un registro", parent=self)
+            return None
+        pos = self.tabla.index(sel[0])
+        return self._indices_originales[pos] if pos < len(self._indices_originales) else None
+
+    def _editar(self):
+        indice = self._obtener_indice()
+        if indice is None:
+            return
+        sel = self.tabla.selection()
+        valores = self.tabla.item(sel[0])["values"]
+
+        win = tk.Toplevel(self)
+        win.title("Editar Sostenimiento")
+        win.geometry("420x420")
+        win.grab_set()
+
+        entradas = {}
+        for i, col in enumerate(self.COLUMNAS):
+            ttk.Label(win, text=col.replace("_", " ") + ":").grid(row=i, column=0, sticky="w", padx=10, pady=3)
+            if col == "Fecha":
+                ttk.Label(win, text=str(valores[i])).grid(row=i, column=1, sticky="w", padx=10)
+            elif col == "Observaciones":
+                txt = tk.Text(win, height=3, width=30, font=("Segoe UI", 10))
+                txt.grid(row=i, column=1, sticky="ew", padx=10, pady=3)
+                txt.insert("1.0", str(valores[i]) if str(valores[i]) != "nan" else "")
+                entradas[col] = txt
+            else:
+                var = tk.StringVar(value=str(valores[i]) if str(valores[i]) != "nan" else "")
+                ttk.Entry(win, textvariable=var, width=20).grid(row=i, column=1, sticky="w", padx=10, pady=3)
+                entradas[col] = var
+
+        win.columnconfigure(1, weight=1)
+
+        def _ok():
+            nuevos = {}
+            for col in self.COLUMNAS:
+                if col == "Fecha":
+                    continue
+                elif col == "Observaciones":
+                    nuevos[col] = entradas[col].get("1.0", tk.END).strip()
+                else:
+                    nuevos[col] = entradas[col].get().strip()
+            exito, msg = self.model.editar_sostenimiento(indice, nuevos)
+            if exito:
+                messagebox.showinfo("Éxito", msg, parent=win)
+                win.destroy()
+                self._cargar()
+            else:
+                messagebox.showerror("Error", msg, parent=win)
+
+        ttk.Button(win, text="Confirmar", command=_ok).grid(
+            row=len(self.COLUMNAS), column=0, columnspan=2, pady=10)
+
+    def _eliminar(self):
+        indice = self._obtener_indice()
+        if indice is None:
+            return
+        if messagebox.askyesno("Confirmar", "¿Eliminar este registro?", parent=self):
+            exito, msg = self.model.eliminar_sostenimiento(indice)
+            if exito:
+                messagebox.showinfo("Éxito", msg, parent=self)
+                self._cargar()
+            else:
+                messagebox.showerror("Error", msg, parent=self)
+
+    def _exportar(self):
+        df = self.model.obtener_sostenimiento()
+        if df.empty:
+            messagebox.showinfo("Info", "No hay datos para exportar", parent=self)
+            return
+        nombre = f"sostenimiento_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        exito, msg = self.model.exportar_historial_excel(df, nombre)
+        if exito:
+            messagebox.showinfo("Exportar", f"Archivo guardado:\n{nombre}", parent=self)
+        else:
+            messagebox.showerror("Error", msg, parent=self)
+
+
+class VentanaDashboard(tk.Toplevel):
+    """Dashboard de sostenimiento con 4 gráficos matplotlib"""
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.model = model
+        self.title("Dashboard de Sostenimiento")
+        self.geometry("1000x700")
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        # Filtros superiores
+        frame_filtros = ttk.Frame(self)
+        frame_filtros.pack(fill="x", padx=10, pady=8)
+
+        ttk.Label(frame_filtros, text="Desde:").grid(row=0, column=0, padx=4)
+        self.fecha_inicio = DateEntry(frame_filtros, date_pattern="dd/mm/yyyy", width=11)
+        self.fecha_inicio.grid(row=0, column=1, padx=4)
+
+        ttk.Label(frame_filtros, text="Hasta:").grid(row=0, column=2, padx=4)
+        self.fecha_fin = DateEntry(frame_filtros, date_pattern="dd/mm/yyyy", width=11)
+        self.fecha_fin.grid(row=0, column=3, padx=4)
+
+        ttk.Label(frame_filtros, text="Labor:").grid(row=0, column=4, padx=4)
+        labores = ["Todas"] + self.model.obtener_labores_guardadas()
+        self.labor_var = tk.StringVar(value="Todas")
+        ttk.Combobox(frame_filtros, textvariable=self.labor_var,
+                     values=labores, width=20).grid(row=0, column=5, padx=4)
+
+        ttk.Button(frame_filtros, text="🔄 Actualizar",
+                   command=self._actualizar).grid(row=0, column=6, padx=10)
+
+        # Frame para gráficos (canvas de matplotlib)
+        self.frame_graficos = ttk.Frame(self)
+        self.frame_graficos.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self._actualizar()
+
+    def _actualizar(self):
+        """Genera y actualiza los 4 gráficos"""
+        try:
+            import matplotlib
+            import pandas as pd
+            from matplotlib.figure import Figure
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        except ImportError:
+            tk.Label(self.frame_graficos,
+                     text="matplotlib no está instalado.\nEjecute: pip install matplotlib").pack()
+            return
+
+        # Limpiar canvas anterior
+        for widget in self.frame_graficos.winfo_children():
+            widget.destroy()
+
+        fi_str = self.fecha_inicio.get()
+        ff_str = self.fecha_fin.get()
+        labor_sel = self.labor_var.get()
+        labor_filtro = None if labor_sel == "Todas" else labor_sel
+
+        try:
+            df_totales = self.model.obtener_totales_sostenimiento(
+                fecha_inicio=fi_str, fecha_fin=ff_str, labor=labor_filtro
+            )
+        except Exception:
+            df_totales = None
+
+        try:
+            df_sost = self.model.obtener_sostenimiento(labor=labor_filtro)
+            if not df_sost.empty and "Fecha" in df_sost.columns:
+                df_sost["Fecha_dt"] = pd.to_datetime(df_sost["Fecha"], format="%d/%m/%Y", errors="coerce")
+                inicio = datetime.strptime(fi_str, "%d/%m/%Y")
+                fin = datetime.strptime(ff_str, "%d/%m/%Y")
+                df_sost = df_sost[
+                    (df_sost["Fecha_dt"] >= inicio) & (df_sost["Fecha_dt"] <= fin)
+                ]
+        except Exception:
+            df_sost = None
+
+        try:
+            df_bit = self.model.obtener_bitacora()
+        except Exception:
+            df_bit = None
+
+        fig = Figure(figsize=(12, 8), dpi=90)
+        axes = [fig.add_subplot(2, 2, i + 1) for i in range(4)]
+
+        COLS_NUM = [
+            "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+            "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+        ]
+
+        # Gráfico 1: Barras agrupadas – totales por labor
+        ax1 = axes[0]
+        ax1.set_title("Totales por Labor")
+        if df_totales is not None and not df_totales.empty:
+            cols_presentes = [c for c in COLS_NUM if c in df_totales.columns]
+            df_plot = df_totales.set_index("Labor")[cols_presentes]
+            df_plot.plot(kind="bar", ax=ax1, legend=True)
+            ax1.set_xlabel("Labor")
+            ax1.set_ylabel("Cantidad")
+            ax1.tick_params(axis="x", rotation=30)
+        else:
+            ax1.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                     ha="center", va="center", transform=ax1.transAxes)
+
+        # Gráfico 2: Línea temporal – Shotcrete diario
+        ax2 = axes[1]
+        ax2.set_title("Evolución Diaria de Shotcrete (m³)")
+        if df_sost is not None and not df_sost.empty and "Shotcrete_m3" in df_sost.columns:
+            try:
+                df_sost["Shotcrete_m3"] = pd.to_numeric(df_sost["Shotcrete_m3"], errors="coerce").fillna(0)
+                diario = df_sost.groupby("Fecha_dt")["Shotcrete_m3"].sum().sort_index()
+                ax2.plot(diario.index, diario.values, marker="o")
+                ax2.set_xlabel("Fecha")
+                ax2.set_ylabel("m³")
+                ax2.tick_params(axis="x", rotation=30)
+            except Exception:
+                ax2.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                         ha="center", va="center", transform=ax2.transAxes)
+        else:
+            ax2.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                     ha="center", va="center", transform=ax2.transAxes)
+
+        # Gráfico 3: Pie – distribución de pernos por labor
+        ax3 = axes[2]
+        ax3.set_title("Distribución de Pernos por Labor")
+        if df_totales is not None and not df_totales.empty:
+            try:
+                pernos_cols = [c for c in ["Pernos_Helicoidales", "Splitsets"] if c in df_totales.columns]
+                if pernos_cols:
+                    df_totales["Total_Pernos"] = df_totales[pernos_cols].sum(axis=1)
+                    positivos = df_totales[df_totales["Total_Pernos"] > 0]
+                    if not positivos.empty:
+                        ax3.pie(positivos["Total_Pernos"], labels=positivos["Labor"], autopct="%1.1f%%")
+                    else:
+                        ax3.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                                 ha="center", va="center", transform=ax3.transAxes)
+                else:
+                    ax3.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                             ha="center", va="center", transform=ax3.transAxes)
+            except Exception:
+                ax3.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                         ha="center", va="center", transform=ax3.transAxes)
+        else:
+            ax3.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                     ha="center", va="center", transform=ax3.transAxes)
+
+        # Gráfico 4: Barras – RMR promedio por labor
+        ax4 = axes[3]
+        ax4.set_title("RMR Promedio por Labor")
+        if df_bit is not None and not df_bit.empty and "RMR" in df_bit.columns:
+            try:
+                df_bit["RMR_num"] = pd.to_numeric(df_bit["RMR"], errors="coerce")
+                rmr_prom = df_bit.dropna(subset=["RMR_num"]).groupby("Labor")["RMR_num"].mean()
+                if not rmr_prom.empty:
+                    rmr_prom.plot(kind="bar", ax=ax4, color="steelblue")
+                    ax4.set_xlabel("Labor")
+                    ax4.set_ylabel("RMR Promedio")
+                    ax4.tick_params(axis="x", rotation=30)
+                else:
+                    ax4.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                             ha="center", va="center", transform=ax4.transAxes)
+            except Exception:
+                ax4.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                         ha="center", va="center", transform=ax4.transAxes)
+        else:
+            ax4.text(0.5, 0.5, "Sin datos para el período seleccionado",
+                     ha="center", va="center", transform=ax4.transAxes)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=self.frame_graficos)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+
+class VentanaConfiguracion(tk.Toplevel):
+    """Panel de configuración de la aplicación"""
+
+    def __init__(self, parent, callback_cerrar=None):
+        super().__init__(parent)
+        self.callback_cerrar = callback_cerrar
+        self.title("Configuración")
+        self.geometry("400x500")
+        self.resizable(False, False)
+        self.grab_set()
+        self._guardado = False
+        self._crear_interfaz()
+        self.protocol("WM_DELETE_WINDOW", self._cancelar)
+
+    def _crear_interfaz(self):
+        from utils.config_manager import cargar_config
+        self._config = cargar_config()
+
+        tk.Label(self, text="Configuración", font=("Segoe UI", 14, "bold")).pack(pady=10)
+
+        # Turnos
+        frame_turnos = ttk.LabelFrame(self, text="Turnos disponibles", padding=10)
+        frame_turnos.pack(fill="x", padx=15, pady=5)
+
+        self.listbox_turnos = tk.Listbox(frame_turnos, height=4)
+        for t in self._config.get("turnos", []):
+            self.listbox_turnos.insert(tk.END, t)
+        self.listbox_turnos.pack(fill="x")
+
+        frame_turno_btns = ttk.Frame(frame_turnos)
+        frame_turno_btns.pack(fill="x", pady=5)
+        ttk.Button(frame_turno_btns, text="➕ Agregar turno",
+                   command=self._agregar_turno).pack(side="left", padx=5)
+        ttk.Button(frame_turno_btns, text="🗑 Eliminar seleccionado",
+                   command=self._eliminar_turno).pack(side="left", padx=5)
+
+        # Backup automático
+        frame_backup = ttk.LabelFrame(self, text="Respaldo Automático", padding=10)
+        frame_backup.pack(fill="x", padx=15, pady=5)
+        self.backup_var = tk.BooleanVar(value=self._config.get("backup_automatico", True))
+        ttk.Checkbutton(frame_backup, text="Activar respaldo automático al guardar",
+                        variable=self.backup_var).pack(anchor="w")
+
+        # Color de fondo
+        frame_color = ttk.LabelFrame(self, text="Color de fondo (hex)", padding=10)
+        frame_color.pack(fill="x", padx=15, pady=5)
+        self.color_var = tk.StringVar(value=self._config.get("theme_color", WINDOW_BG_COLOR))
+        ttk.Entry(frame_color, textvariable=self.color_var, width=15).pack(side="left", padx=5)
+        ttk.Button(frame_color, text="Previsualizar",
+                   command=self._previsualizar_color).pack(side="left", padx=5)
+
+        # Botones finales
+        frame_btns = ttk.Frame(self)
+        frame_btns.pack(pady=15)
+        ttk.Button(frame_btns, text="💾 Guardar configuración",
+                   command=self._guardar).pack(side="left", padx=10)
+        ttk.Button(frame_btns, text="Cancelar",
+                   command=self._cancelar).pack(side="left", padx=10)
+
+    def _agregar_turno(self):
+        win = tk.Toplevel(self)
+        win.title("Nuevo turno")
+        win.geometry("280x100")
+        win.grab_set()
+        ttk.Label(win, text="Nombre del turno:").pack(pady=8)
+        var = tk.StringVar()
+        ttk.Entry(win, textvariable=var, width=20).pack()
+        def _ok():
+            nombre = var.get().strip()
+            if nombre:
+                self.listbox_turnos.insert(tk.END, nombre)
+            win.destroy()
+        ttk.Button(win, text="Agregar", command=_ok).pack(pady=5)
+
+    def _eliminar_turno(self):
+        sel = self.listbox_turnos.curselection()
+        if sel:
+            self.listbox_turnos.delete(sel[0])
+
+    def _previsualizar_color(self):
+        try:
+            self.configure(bg=self.color_var.get())
+        except Exception:
+            messagebox.showwarning("Color inválido", "El código de color no es válido.", parent=self)
+
+    def _guardar(self):
+        from utils.config_manager import guardar_config
+        self._config["turnos"] = list(self.listbox_turnos.get(0, tk.END))
+        self._config["backup_automatico"] = self.backup_var.get()
+        self._config["theme_color"] = self.color_var.get()
+        if guardar_config(self._config):
+            self._guardado = True
+            messagebox.showinfo("Configuración", "Configuración guardada correctamente.", parent=self)
+            self.destroy()
+            if self.callback_cerrar:
+                self.callback_cerrar()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
+
+    def _cancelar(self):
+        self.destroy()
