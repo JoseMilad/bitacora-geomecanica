@@ -9,14 +9,33 @@ CONFIG_FILE = DATA_DIR / "config.json"
 
 DEFAULTS = {
     "turnos": ["Día", "Noche"],
-    "elementos_sostenimiento": [
-        "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
-        "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+    "sostenimientos_activos": [
+        {"display": "Shotcrete (m³)", "columna": "Shotcrete_m3", "tipo": "float"},
+        {"display": "Pernos Helicoidales", "columna": "Pernos_Helicoidales", "tipo": "int"},
+        {"display": "Splitsets", "columna": "Splitsets", "tipo": "int"},
+        {"display": "Mesh Straps", "columna": "Mesh_Strap", "tipo": "int"},
+        {"display": "Cable Bolting (m)", "columna": "Cable_Bolting", "tipo": "float"},
+        {"display": "Marco de Acero", "columna": "Marco_Acero", "tipo": "int"},
+    ],
+    "sostenimientos_catalogo": [
+        {"display": "Shotcrete (m³)", "columna": "Shotcrete_m3", "tipo": "float"},
+        {"display": "Pernos Helicoidales", "columna": "Pernos_Helicoidales", "tipo": "int"},
+        {"display": "Splitsets", "columna": "Splitsets", "tipo": "int"},
+        {"display": "Mesh Straps", "columna": "Mesh_Strap", "tipo": "int"},
+        {"display": "Marcos Metálicos", "columna": "Marcos_Metalicos", "tipo": "int"},
+        {"display": "Cimbras", "columna": "Cimbras", "tipo": "int"},
+        {"display": "Pernos Swellex", "columna": "Pernos_Swellex", "tipo": "int"},
+        {"display": "Malla Metálica", "columna": "Malla_Metalica", "tipo": "int"},
+        {"display": "Cuadros de Madera", "columna": "Cuadros_Madera", "tipo": "int"},
+        {"display": "Cable Bolting (m)", "columna": "Cable_Bolting", "tipo": "float"},
+        {"display": "Marco de Acero", "columna": "Marco_Acero", "tipo": "int"},
     ],
     "window_width": 650,
     "window_height": 650,
     "theme_color": "#f2f4f7",
-    "backup_automatico": True
+    "backup_automatico": True,
+    "modo_oscuro": False,
+    "password_edicion": "admin1234",
 }
 
 

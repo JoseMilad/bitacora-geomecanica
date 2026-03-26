@@ -19,6 +19,9 @@ from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
     validar_campos_obligatorios, _obtener_turno_automatico
 )
+from utils.config_manager import cargar_config as _cargar_config
+
+_SECONDS_IN_24H = 86400
 
 
 class BitacoraApp:
@@ -41,6 +44,13 @@ class BitacoraApp:
         # Crear interfaz
         self._crear_interfaz()
         self._actualizar_labores()
+
+        # Aplicar modo oscuro si está configurado
+        from utils.config_manager import cargar_config
+        config = cargar_config()
+        if config.get("modo_oscuro", False):
+            _aplicar_modo_oscuro(self.root, True)
+            self.btn_oscuro.config(text="☀ Modo Claro")
     
     def _crear_interfaz(self):
         """Crea la interfaz gráfica principal"""
@@ -206,6 +216,29 @@ class BitacoraApp:
             command=self._abrir_configuracion,
             width=18
         ).grid(row=2, column=2, padx=4, pady=2)
+
+        ttk.Button(
+            frame_botones,
+            text="🗂 Gestionar Sost.",
+            command=self._abrir_sostenimientos,
+            width=18
+        ).grid(row=2, column=3, padx=4, pady=2)
+
+        # Fila 4: Reporte Período y Modo Oscuro
+        ttk.Button(
+            frame_botones,
+            text="📅 Reporte Período",
+            command=self._abrir_reporte_periodo,
+            width=18
+        ).grid(row=3, column=0, padx=4, pady=2)
+
+        self.btn_oscuro = ttk.Button(
+            frame_botones,
+            text="🌙 Modo Oscuro",
+            command=self._toggle_modo_oscuro,
+            width=18
+        )
+        self.btn_oscuro.grid(row=3, column=1, padx=4, pady=2)
     
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
@@ -468,9 +501,27 @@ class BitacoraApp:
             self.root.configure(bg=color)
 
         VentanaConfiguracion(self.root, _al_cerrar)
+
+    def _abrir_sostenimientos(self):
+        """Abre la ventana de gestión de sostenimientos"""
+        VentanaSostenimientos(self.root)
+
+    def _abrir_reporte_periodo(self):
+        """Abre la ventana de reporte por período"""
+        VentanaReportePeriodo(self.root, self.model)
+
+    def _toggle_modo_oscuro(self):
+        """Alterna entre modo oscuro y claro"""
+        from utils.config_manager import cargar_config, guardar_config
+        config = cargar_config()
+        modo_oscuro = not config.get("modo_oscuro", False)
+        config["modo_oscuro"] = modo_oscuro
+        guardar_config(config)
+        _aplicar_modo_oscuro(self.root, modo_oscuro)
+        self.btn_oscuro.config(text="☀ Modo Claro" if modo_oscuro else "🌙 Modo Oscuro")
     
     def _generar_reporte(self):
-        """Genera reporte PDF del día"""
+        """Genera reporte PDF del día, con vista previa"""
         df = self.model.obtener_bitacora()
         fecha_hoy = obtener_fecha_actual()
         
@@ -479,8 +530,13 @@ class BitacoraApp:
         if df_hoy.empty:
             messagebox.showinfo("Info", "No hay registros hoy")
             return
-        
-        self._generar_pdf_diario(df_hoy, fecha_hoy)
+
+        _mostrar_vista_previa(
+            self.root,
+            df_hoy,
+            titulo=f"Vista Previa — Reporte Diario {fecha_hoy}",
+            callback_confirmar=lambda: self._generar_pdf_diario(df_hoy, fecha_hoy)
+        )
     
     def _generar_pdf_diario(self, df, fecha):
         """Genera PDF con registros del día"""
@@ -541,10 +597,11 @@ class VentanaHistorial:
         self.model = model
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Historial de Labores")
-        self.ventana.geometry("900x560")
+        self.ventana.geometry("900x600")
         self.ventana.configure(bg=WINDOW_BG_COLOR)
         self._df_actual = None
         self._indices_originales = []
+        self._todos_registros = None  # cache para búsqueda global
         
         self._crear_interfaz()
     
@@ -552,7 +609,7 @@ class VentanaHistorial:
         """Crea la interfaz de la ventana de historial"""
         # Frame de búsqueda
         frame_busqueda = ttk.Frame(self.ventana)
-        frame_busqueda.pack(pady=10, padx=10, fill="x")
+        frame_busqueda.pack(pady=5, padx=10, fill="x")
         
         for i in range(6):
             frame_busqueda.columnconfigure(i, weight=1)
@@ -561,32 +618,43 @@ class VentanaHistorial:
         self.buscar_var = tk.StringVar()
         self.fecha_inicio_var = tk.StringVar()
         self.fecha_fin_var = tk.StringVar()
+        self.busqueda_global_var = tk.StringVar()
         
-        # Búsqueda
-        ttk.Label(frame_busqueda, text="Buscar Labor:").grid(row=0, column=0, padx=5, pady=5)
-        entrada_buscar = ttk.Entry(frame_busqueda, textvariable=self.buscar_var, width=25)
-        entrada_buscar.grid(row=0, column=1, padx=5, pady=5)
+        # Búsqueda por labor y fechas
+        ttk.Label(frame_busqueda, text="Buscar Labor:").grid(row=0, column=0, padx=5, pady=4)
+        entrada_buscar = ttk.Entry(frame_busqueda, textvariable=self.buscar_var, width=20)
+        entrada_buscar.grid(row=0, column=1, padx=5, pady=4)
         entrada_buscar.bind("<KeyRelease>", lambda e: self._buscar_labor())
         
-        ttk.Label(frame_busqueda, text="Desde:").grid(row=0, column=2, padx=5, pady=5)
+        ttk.Label(frame_busqueda, text="Desde:").grid(row=0, column=2, padx=5, pady=4)
         entrada_inicio = DateEntry(
             frame_busqueda,
             textvariable=self.fecha_inicio_var,
             date_pattern="dd/mm/yyyy",
             width=12
         )
-        entrada_inicio.grid(row=0, column=3, padx=5, pady=5)
+        entrada_inicio.grid(row=0, column=3, padx=5, pady=4)
         entrada_inicio.bind("<<DateEntrySelected>>", lambda e: self._buscar_labor())
         
-        ttk.Label(frame_busqueda, text="Hasta:").grid(row=0, column=4, padx=5, pady=5)
+        ttk.Label(frame_busqueda, text="Hasta:").grid(row=0, column=4, padx=5, pady=4)
         entrada_fin = DateEntry(
             frame_busqueda,
             textvariable=self.fecha_fin_var,
             date_pattern="dd/mm/yyyy",
             width=12
         )
-        entrada_fin.grid(row=0, column=5, padx=5, pady=5)
+        entrada_fin.grid(row=0, column=5, padx=5, pady=4)
         entrada_fin.bind("<<DateEntrySelected>>", lambda e: self._buscar_labor())
+
+        # Buscador global (fila 1)
+        frame_global = ttk.Frame(self.ventana)
+        frame_global.pack(padx=10, fill="x")
+        ttk.Label(frame_global, text="🔍 Búsqueda global:").pack(side="left", padx=5)
+        entrada_global = ttk.Entry(frame_global, textvariable=self.busqueda_global_var, width=35)
+        entrada_global.pack(side="left", padx=5)
+        entrada_global.bind("<KeyRelease>", lambda e: self._filtrar_global())
+        self.lbl_contador = ttk.Label(frame_global, text="")
+        self.lbl_contador.pack(side="left", padx=10)
         
         # Tabla
         columnas = ["Fecha", "Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones"]
@@ -594,14 +662,14 @@ class VentanaHistorial:
             self.ventana,
             columns=columnas,
             show="headings",
-            height=15
+            height=14
         )
         
         for col in columnas:
             self.tabla.heading(col, text=col)
             self.tabla.column(col, anchor="center")
         
-        self.tabla.pack(fill="both", expand=True, padx=10, pady=10)
+        self.tabla.pack(fill="both", expand=True, padx=10, pady=5)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(self.tabla, orient="vertical", command=self.tabla.yview)
@@ -610,37 +678,50 @@ class VentanaHistorial:
         
         # Botones
         frame_botones = ttk.Frame(self.ventana)
-        frame_botones.pack(pady=10)
+        frame_botones.pack(pady=8)
         
         ttk.Button(
             frame_botones,
             text="✏ Editar seleccionado",
             command=self._editar_registro
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         ttk.Button(
             frame_botones,
             text="🗑 Eliminar seleccionado",
             command=self._eliminar_registro
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         ttk.Button(
             frame_botones,
             text="📊 Exportar a Excel",
             command=self._exportar_excel
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         ttk.Button(
             frame_botones,
             text="Exportar PDF",
             command=self._exportar_pdf
-        ).pack(side="left", padx=5)
-        
+        ).pack(side="left", padx=4)
+
+        self.btn_deshacer = ttk.Button(
+            frame_botones,
+            text="↩ Deshacer",
+            command=self._deshacer
+        )
+        self.btn_deshacer.pack(side="left", padx=4)
+
+        ttk.Button(
+            frame_botones,
+            text="📦 Archivar Período",
+            command=self._archivar_periodo
+        ).pack(side="left", padx=4)
+
         ttk.Button(
             frame_botones,
             text="Cerrar",
             command=self.ventana.destroy
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
         
         self._buscar_labor()
     
@@ -652,6 +733,7 @@ class VentanaHistorial:
         
         df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
         self._df_actual = df.copy()
+        self._todos_registros = df.copy()
         self._indices_originales = list(df.index)
         
         for fila in self.tabla.get_children():
@@ -659,6 +741,36 @@ class VentanaHistorial:
         
         for _, row in df.iterrows():
             self.tabla.insert("", "end", values=list(row))
+
+        total = len(df)
+        self.lbl_contador.config(text=f"Mostrando {total} de {total} registros")
+
+    def _filtrar_global(self):
+        """Filtra todos los registros visibles en tiempo real por texto en todas las columnas."""
+        texto = self.busqueda_global_var.get().strip().lower()
+        if self._todos_registros is None:
+            return
+
+        for fila in self.tabla.get_children():
+            self.tabla.delete(fila)
+
+        if not texto:
+            df_filtrado = self._todos_registros
+        else:
+            mask = self._todos_registros.apply(
+                lambda row: any(texto in str(v).lower() for v in row), axis=1
+            )
+            df_filtrado = self._todos_registros[mask]
+
+        self._df_actual = df_filtrado.copy()
+        self._indices_originales = list(df_filtrado.index)
+
+        for _, row in df_filtrado.iterrows():
+            self.tabla.insert("", "end", values=list(row))
+
+        total_all = len(self._todos_registros)
+        total_vis = len(df_filtrado)
+        self.lbl_contador.config(text=f"Mostrando {total_vis} de {total_all} registros")
 
     def _obtener_indice_seleccionado(self):
         """Devuelve el índice real del DataFrame para la fila seleccionada"""
@@ -679,6 +791,40 @@ class VentanaHistorial:
 
         seleccion = self.tabla.selection()
         valores = self.tabla.item(seleccion[0])["values"]
+
+        # Verificar modo solo lectura (>24 horas)
+        try:
+            from utils.config_manager import cargar_config
+            import pandas as pd
+            fecha_registro = str(valores[0])  # Fecha es la primera columna
+            fecha_dt = pd.to_datetime(fecha_registro, dayfirst=True, errors="coerce")
+            if fecha_dt is not pd.NaT and (datetime.now() - fecha_dt).total_seconds() > _SECONDS_IN_24H:
+                config = cargar_config()
+                pwd_correcta = config.get("password_edicion", "admin1234")
+                win_pwd = tk.Toplevel(self.ventana)
+                win_pwd.title("Acceso restringido")
+                win_pwd.geometry("320x130")
+                win_pwd.grab_set()
+                ttk.Label(win_pwd,
+                          text="Este registro tiene más de 24 horas.\nIngrese la contraseña para editar:",
+                          justify="center").pack(pady=10)
+                pwd_var = tk.StringVar()
+                ttk.Entry(win_pwd, textvariable=pwd_var, show="*", width=20).pack()
+                permitido = [False]
+
+                def _verificar():
+                    if pwd_var.get() == pwd_correcta:
+                        permitido[0] = True
+                        win_pwd.destroy()
+                    else:
+                        messagebox.showerror("Error", "Contraseña incorrecta", parent=win_pwd)
+
+                ttk.Button(win_pwd, text="Aceptar", command=_verificar).pack(pady=8)
+                self.ventana.wait_window(win_pwd)
+                if not permitido[0]:
+                    return
+        except Exception:
+            pass
 
         ventana_editar = tk.Toplevel(self.ventana)
         ventana_editar.title("Editar Registro")
@@ -722,6 +868,70 @@ class VentanaHistorial:
 
         ttk.Button(ventana_editar, text="Confirmar", command=_confirmar).grid(
             row=len(nombres), column=0, columnspan=2, pady=10)
+
+    def _deshacer(self):
+        """Deshace la última acción (undo)"""
+        exito, msg = self.model.deshacer_ultima_accion()
+        if exito:
+            messagebox.showinfo("Deshacer", msg, parent=self.ventana)
+            self._buscar_labor()
+        else:
+            messagebox.showinfo("Deshacer", msg, parent=self.ventana)
+
+    def _archivar_periodo(self):
+        """Abre ventana para archivar un período"""
+        win = tk.Toplevel(self.ventana)
+        win.title("Archivar Período")
+        win.geometry("360x200")
+        win.grab_set()
+
+        ttk.Label(win, text="Seleccione el rango de fechas a archivar:",
+                  font=("Segoe UI", 10)).pack(pady=10)
+
+        frame_f = ttk.Frame(win)
+        frame_f.pack(pady=5)
+        ttk.Label(frame_f, text="Desde:").grid(row=0, column=0, padx=5)
+        fi = DateEntry(frame_f, date_pattern="dd/mm/yyyy", width=12)
+        fi.grid(row=0, column=1, padx=5)
+        ttk.Label(frame_f, text="Hasta:").grid(row=0, column=2, padx=5)
+        ff = DateEntry(frame_f, date_pattern="dd/mm/yyyy", width=12)
+        ff.grid(row=0, column=3, padx=5)
+
+        lbl_info = ttk.Label(win, text="")
+        lbl_info.pack(pady=5)
+
+        def _previsualizar():
+            import pandas as pd
+            try:
+                df = self.model.obtener_bitacora()
+                if df.empty:
+                    lbl_info.config(text="No hay registros")
+                    return
+                df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
+                inicio = datetime.strptime(fi.get(), "%d/%m/%Y")
+                fin = datetime.strptime(ff.get(), "%d/%m/%Y")
+                n = len(df[(df["Fecha_dt"] >= inicio) & (df["Fecha_dt"] <= fin)])
+                lbl_info.config(text=f"Se archivarán {n} registro(s)")
+            except Exception as e:
+                lbl_info.config(text=f"Error: {e}")
+
+        def _confirmar():
+            _previsualizar()
+            if not messagebox.askyesno("Confirmar", "¿Archivar los registros seleccionados?\n"
+                                       "Se moverán al archivo histórico y se eliminarán del principal.",
+                                       parent=win):
+                return
+            exito, msg, _ = self.model.archivar_periodo(fi.get(), ff.get())
+            messagebox.showinfo("Archivar", msg, parent=win)
+            if exito:
+                win.destroy()
+                self._buscar_labor()
+
+        frame_btn = ttk.Frame(win)
+        frame_btn.pack(pady=8)
+        ttk.Button(frame_btn, text="Previsualizar", command=_previsualizar).pack(side="left", padx=5)
+        ttk.Button(frame_btn, text="Archivar", command=_confirmar).pack(side="left", padx=5)
+        ttk.Button(frame_btn, text="Cancelar", command=win.destroy).pack(side="left", padx=5)
 
     def _eliminar_registro(self):
         """Elimina el registro seleccionado con confirmación"""
@@ -1133,10 +1343,26 @@ class VentanaSostenimiento(tk.Toplevel):
         super().__init__(parent)
         self.model = model
         self.title("Sostenimiento Diario")
-        self.geometry("700x600")
+        self.geometry("700x640")
         self.configure(bg=WINDOW_BG_COLOR)
         self.resizable(True, True)
         self._crear_interfaz()
+
+    def _cargar_activos(self):
+        """Carga los sostenimientos activos desde config."""
+        try:
+            from utils.config_manager import cargar_config
+            config = cargar_config()
+            return config.get("sostenimientos_activos", [])
+        except Exception:
+            return [
+                {"display": "Shotcrete (m³)", "columna": "Shotcrete_m3", "tipo": "float"},
+                {"display": "Pernos Helicoidales", "columna": "Pernos_Helicoidales", "tipo": "int"},
+                {"display": "Splitsets", "columna": "Splitsets", "tipo": "int"},
+                {"display": "Mesh Straps", "columna": "Mesh_Strap", "tipo": "int"},
+                {"display": "Cable Bolting (m)", "columna": "Cable_Bolting", "tipo": "float"},
+                {"display": "Marco de Acero", "columna": "Marco_Acero", "tipo": "int"},
+            ]
 
     def _crear_interfaz(self):
         tk.Label(
@@ -1173,30 +1399,27 @@ class VentanaSostenimiento(tk.Toplevel):
         self.listbox_labor.bind("<<ListboxSelect>>", self._seleccionar_labor)
         self.listbox_labor.grid_remove()
 
-        # Campos numéricos
-        campos_num = [
-            ("Shotcrete (m³):", "shotcrete_var"),
-            ("Pernos Helicoidales:", "pernos_var"),
-            ("Splitsets:", "splitsets_var"),
-            ("Mesh Strap:", "mesh_var"),
-            ("Cable Bolting (m):", "cable_var"),
-            ("Marco de Acero:", "marco_var"),
-        ]
-        self._vars_num = {}
-        for i, (etiqueta, nombre) in enumerate(campos_num):
-            row = 4 + i
-            ttk.Label(frame, text=etiqueta).grid(row=row, column=0, sticky="w", pady=2)
+        # Campos numéricos dinámicos desde config
+        self._activos = self._cargar_activos()
+        self._vars_sost = {}  # columna -> (var, tipo)
+        for i, sost in enumerate(self._activos):
+            display = sost.get("display", sost.get("columna", ""))
+            columna = sost.get("columna", "")
+            tipo = sost.get("tipo", "int")
+            row_idx = 4 + i
+            ttk.Label(frame, text=f"{display}:").grid(row=row_idx, column=0, sticky="w", pady=2)
             var = tk.StringVar()
-            self._vars_num[nombre] = var
-            ttk.Entry(frame, textvariable=var, width=12).grid(row=row, column=1, sticky="w", pady=2)
+            self._vars_sost[columna] = (var, tipo)
+            ttk.Entry(frame, textvariable=var, width=12).grid(row=row_idx, column=1, sticky="w", pady=2)
 
+        obs_row = 4 + len(self._activos)
         # Observaciones
-        ttk.Label(frame, text="Observaciones:").grid(row=10, column=0, sticky="nw", pady=3)
+        ttk.Label(frame, text="Observaciones:").grid(row=obs_row, column=0, sticky="nw", pady=3)
         self.obs_text = tk.Text(frame, height=3, width=35, font=("Segoe UI", 10),
                                 relief="flat", borderwidth=1,
                                 highlightthickness=1, highlightbackground="#cccccc",
                                 highlightcolor="#4a90d9", wrap="word")
-        self.obs_text.grid(row=10, column=1, sticky="ew", pady=3)
+        self.obs_text.grid(row=obs_row, column=1, sticky="ew", pady=3)
 
         frame.columnconfigure(1, weight=1)
 
@@ -1231,9 +1454,9 @@ class VentanaSostenimiento(tk.Toplevel):
         self.after(150, lambda: self.listbox_labor.grid_remove())
 
     def _guardar(self):
-        def _num(val, entero=True):
+        def _num(val, tipo="int"):
             try:
-                return int(val) if entero else float(val)
+                return float(val) if tipo == "float" else int(val)
             except (ValueError, TypeError):
                 return 0
 
@@ -1241,14 +1464,10 @@ class VentanaSostenimiento(tk.Toplevel):
             "Fecha": obtener_fecha_actual(),
             "Turno": self.turno_var.get(),
             "Labor": self.labor_var.get().strip(),
-            "Shotcrete_m3": _num(self._vars_num["shotcrete_var"].get(), entero=False),
-            "Pernos_Helicoidales": _num(self._vars_num["pernos_var"].get()),
-            "Splitsets": _num(self._vars_num["splitsets_var"].get()),
-            "Mesh_Strap": _num(self._vars_num["mesh_var"].get()),
-            "Cable_Bolting": _num(self._vars_num["cable_var"].get(), entero=False),
-            "Marco_Acero": _num(self._vars_num["marco_var"].get()),
             "Observaciones": self.obs_text.get("1.0", tk.END).strip(),
         }
+        for columna, (var, tipo) in self._vars_sost.items():
+            datos[columna] = _num(var.get(), tipo)
 
         if not datos["Turno"]:
             messagebox.showwarning("Advertencia", "Seleccione un turno", parent=self)
@@ -1279,7 +1498,7 @@ class VentanaSostenimiento(tk.Toplevel):
             messagebox.showerror("Error", mensaje, parent=self)
 
     def _limpiar(self):
-        for var in self._vars_num.values():
+        for var, _ in self._vars_sost.values():
             var.set("")
         self.obs_text.delete("1.0", tk.END)
         self.labor_var.set("")
@@ -1291,18 +1510,38 @@ class VentanaSostenimiento(tk.Toplevel):
 class VentanaHistorialSostenimiento(tk.Toplevel):
     """Subventana para ver el historial de sostenimiento diario"""
 
-    COLUMNAS = [
-        "Fecha", "Turno", "Labor", "Shotcrete_m3", "Pernos_Helicoidales",
-        "Splitsets", "Mesh_Strap", "Cable_Bolting", "Marco_Acero", "Observaciones"
-    ]
+    _COLS_BASE = ["Fecha", "Turno", "Labor"]
+    _COLS_FIN = ["Observaciones"]
 
     def __init__(self, parent, model):
         super().__init__(parent)
         self.model = model
         self.title("Historial de Sostenimiento")
-        self.geometry("1000x520")
+        self.geometry("1050x520")
         self._indices_originales = []
+        self.COLUMNAS = self._obtener_columnas()
         self._crear_interfaz()
+
+    def _obtener_columnas(self):
+        """Obtiene las columnas a mostrar (base + activas + observaciones)."""
+        try:
+            from utils.config_manager import cargar_config
+            from utils.config import COLUMNAS_SOSTENIMIENTO
+            config = cargar_config()
+            activos = [s["columna"] for s in config.get("sostenimientos_activos", [])
+                       if isinstance(s, dict) and "columna" in s]
+            # Unión de las fijas del Excel y las activas
+            cols_num = list(dict.fromkeys(
+                [c for c in COLUMNAS_SOSTENIMIENTO
+                 if c not in self._COLS_BASE and c not in self._COLS_FIN]
+                + activos
+            ))
+            return self._COLS_BASE + cols_num + self._COLS_FIN
+        except Exception:
+            return [
+                "Fecha", "Turno", "Labor", "Shotcrete_m3", "Pernos_Helicoidales",
+                "Splitsets", "Mesh_Strap", "Cable_Bolting", "Marco_Acero", "Observaciones"
+            ]
 
     def _crear_interfaz(self):
         frame_filtros = ttk.Frame(self)
@@ -1461,20 +1700,38 @@ class VentanaDashboard(tk.Toplevel):
         self.fecha_fin = DateEntry(frame_filtros, date_pattern="dd/mm/yyyy", width=11)
         self.fecha_fin.grid(row=0, column=3, padx=4)
 
-        ttk.Label(frame_filtros, text="Labor:").grid(row=0, column=4, padx=4)
-        labores = ["Todas"] + self.model.obtener_labores_guardadas()
+        ttk.Label(frame_filtros, text="Filtrar labor:").grid(row=0, column=4, padx=4)
+        self._filtro_labor_var = tk.StringVar()
+        self._entry_filtro_labor = ttk.Entry(frame_filtros, textvariable=self._filtro_labor_var, width=14)
+        self._entry_filtro_labor.grid(row=0, column=5, padx=4)
+        self._entry_filtro_labor.bind("<KeyRelease>", self._actualizar_combo_labores)
+
+        ttk.Label(frame_filtros, text="Labor:").grid(row=0, column=6, padx=4)
+        self._todas_labores = ["Todas"] + self.model.obtener_labores_guardadas()
         self.labor_var = tk.StringVar(value="Todas")
-        ttk.Combobox(frame_filtros, textvariable=self.labor_var,
-                     values=labores, width=20).grid(row=0, column=5, padx=4)
+        self._combo_labores = ttk.Combobox(frame_filtros, textvariable=self.labor_var,
+                                           values=self._todas_labores, width=18)
+        self._combo_labores.grid(row=0, column=7, padx=4)
 
         ttk.Button(frame_filtros, text="🔄 Actualizar",
-                   command=self._actualizar).grid(row=0, column=6, padx=10)
+                   command=self._actualizar).grid(row=0, column=8, padx=10)
 
         # Frame para gráficos (canvas de matplotlib)
         self.frame_graficos = ttk.Frame(self)
         self.frame_graficos.pack(fill="both", expand=True, padx=10, pady=5)
 
         self._actualizar()
+
+    def _actualizar_combo_labores(self, event=None):
+        """Filtra el combobox de labores según el texto escrito en el filtro."""
+        texto = self._filtro_labor_var.get().strip().lower()
+        if texto:
+            filtradas = ["Todas"] + [l for l in self._todas_labores if l != "Todas" and texto in l.lower()]
+        else:
+            filtradas = self._todas_labores
+        self._combo_labores["values"] = filtradas
+        if self.labor_var.get() not in filtradas:
+            self.labor_var.set("Todas")
 
     def _actualizar(self):
         """Genera y actualiza los 4 gráficos"""
@@ -1524,10 +1781,12 @@ class VentanaDashboard(tk.Toplevel):
         fig = Figure(figsize=(12, 8), dpi=90)
         axes = [fig.add_subplot(2, 2, i + 1) for i in range(4)]
 
-        COLS_NUM = [
-            "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
-            "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
-        ]
+        COLS_NUM = list(dict.fromkeys(
+            [s["columna"] for s in _cargar_config().get("sostenimientos_activos", [])
+             if isinstance(s, dict) and "columna" in s]
+            + ["Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+               "Mesh_Strap", "Cable_Bolting", "Marco_Acero"]
+        ))
 
         # Gráfico 1: Barras agrupadas – totales por labor
         ax1 = axes[0]
@@ -1713,5 +1972,464 @@ class VentanaConfiguracion(tk.Toplevel):
         else:
             messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
 
+    def _crear_interfaz(self):
+        from utils.config_manager import cargar_config
+        self._config = cargar_config()
+
+        tk.Label(self, text="Configuración", font=("Segoe UI", 14, "bold")).pack(pady=10)
+
+        # Turnos
+        frame_turnos = ttk.LabelFrame(self, text="Turnos disponibles", padding=10)
+        frame_turnos.pack(fill="x", padx=15, pady=5)
+
+        self.listbox_turnos = tk.Listbox(frame_turnos, height=3)
+        for t in self._config.get("turnos", []):
+            self.listbox_turnos.insert(tk.END, t)
+        self.listbox_turnos.pack(fill="x")
+
+        frame_turno_btns = ttk.Frame(frame_turnos)
+        frame_turno_btns.pack(fill="x", pady=4)
+        ttk.Button(frame_turno_btns, text="➕ Agregar turno",
+                   command=self._agregar_turno).pack(side="left", padx=5)
+        ttk.Button(frame_turno_btns, text="🗑 Eliminar seleccionado",
+                   command=self._eliminar_turno).pack(side="left", padx=5)
+
+        # Backup automático
+        frame_backup = ttk.LabelFrame(self, text="Respaldo Automático", padding=8)
+        frame_backup.pack(fill="x", padx=15, pady=4)
+        self.backup_var = tk.BooleanVar(value=self._config.get("backup_automatico", True))
+        ttk.Checkbutton(frame_backup, text="Activar respaldo automático al guardar",
+                        variable=self.backup_var).pack(anchor="w")
+
+        # Color de fondo
+        frame_color = ttk.LabelFrame(self, text="Color de fondo (hex)", padding=8)
+        frame_color.pack(fill="x", padx=15, pady=4)
+        self.color_var = tk.StringVar(value=self._config.get("theme_color", WINDOW_BG_COLOR))
+        ttk.Entry(frame_color, textvariable=self.color_var, width=15).pack(side="left", padx=5)
+        ttk.Button(frame_color, text="Previsualizar",
+                   command=self._previsualizar_color).pack(side="left", padx=5)
+
+        # Contraseña de edición
+        frame_pwd = ttk.LabelFrame(self, text="Contraseña para editar registros >24h", padding=8)
+        frame_pwd.pack(fill="x", padx=15, pady=4)
+        self.pwd_var = tk.StringVar(value=self._config.get("password_edicion", "admin1234"))
+        self._pwd_entry = ttk.Entry(frame_pwd, textvariable=self.pwd_var, width=20, show="*")
+        self._pwd_entry.pack(side="left", padx=5)
+
+        def _toggle_pwd():
+            if self._pwd_entry.cget("show") == "*":
+                self._pwd_entry.config(show="")
+                btn_mostrar.config(text="🙈 Ocultar")
+            else:
+                self._pwd_entry.config(show="*")
+                btn_mostrar.config(text="👁 Mostrar")
+
+        btn_mostrar = ttk.Button(frame_pwd, text="👁 Mostrar", command=_toggle_pwd)
+        btn_mostrar.pack(side="left")
+
+        # Botones finales
+        frame_btns = ttk.Frame(self)
+        frame_btns.pack(pady=12)
+        ttk.Button(frame_btns, text="💾 Guardar configuración",
+                   command=self._guardar).pack(side="left", padx=10)
+        ttk.Button(frame_btns, text="Cancelar",
+                   command=self._cancelar).pack(side="left", padx=10)
+
+    def _agregar_turno(self):
+        win = tk.Toplevel(self)
+        win.title("Nuevo turno")
+        win.geometry("280x100")
+        win.grab_set()
+        ttk.Label(win, text="Nombre del turno:").pack(pady=8)
+        var = tk.StringVar()
+        ttk.Entry(win, textvariable=var, width=20).pack()
+        def _ok():
+            nombre = var.get().strip()
+            if nombre:
+                self.listbox_turnos.insert(tk.END, nombre)
+            win.destroy()
+        ttk.Button(win, text="Agregar", command=_ok).pack(pady=5)
+
+    def _eliminar_turno(self):
+        sel = self.listbox_turnos.curselection()
+        if sel:
+            self.listbox_turnos.delete(sel[0])
+
+    def _previsualizar_color(self):
+        try:
+            self.configure(bg=self.color_var.get())
+        except Exception:
+            messagebox.showwarning("Color inválido", "El código de color no es válido.", parent=self)
+
+    def _guardar(self):
+        from utils.config_manager import guardar_config
+        self._config["turnos"] = list(self.listbox_turnos.get(0, tk.END))
+        self._config["backup_automatico"] = self.backup_var.get()
+        self._config["theme_color"] = self.color_var.get()
+        self._config["password_edicion"] = self.pwd_var.get()
+        if guardar_config(self._config):
+            self._guardado = True
+            messagebox.showinfo("Configuración", "Configuración guardada correctamente.", parent=self)
+            self.destroy()
+            if self.callback_cerrar:
+                self.callback_cerrar()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
+
     def _cancelar(self):
         self.destroy()
+
+
+# ── Funciones auxiliares globales ────────────────────────────────────────────
+
+def _aplicar_modo_oscuro(root, activar: bool):
+    """Aplica o desactiva el modo oscuro en toda la interfaz."""
+    if activar:
+        bg = "#1e1e2e"
+        fg = "#cdd6f4"
+        btn_bg = "#313244"
+        style_name = "Oscuro.TFrame"
+    else:
+        bg = WINDOW_BG_COLOR
+        fg = "#222222"
+        btn_bg = "#e0e0e0"
+        style_name = "Claro.TFrame"
+
+    style = ttk.Style()
+    try:
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=fg)
+        style.configure("TButton", background=btn_bg, foreground=fg)
+        style.configure("TLabelframe", background=bg, foreground=fg)
+        style.configure("TLabelframe.Label", background=bg, foreground=fg)
+        style.configure("TCombobox", fieldbackground=bg, foreground=fg)
+        style.configure("TEntry", fieldbackground=bg, foreground=fg)
+        style.configure("Treeview", background=bg, foreground=fg, fieldbackground=bg)
+        style.configure("Treeview.Heading", background=btn_bg, foreground=fg)
+        style.map("TButton", background=[("active", btn_bg)])
+    except Exception:
+        pass
+
+    try:
+        root.configure(bg=bg)
+        _actualizar_widgets_colores(root, bg, fg)
+    except Exception:
+        pass
+
+
+def _actualizar_widgets_colores(widget, bg, fg):
+    """Recorre widgets de tkinter (no ttk) y actualiza colores."""
+    try:
+        widget_class = widget.winfo_class()
+        if widget_class in ("Label", "Frame", "Listbox", "Text", "Canvas"):
+            try:
+                widget.configure(bg=bg)
+            except Exception:
+                pass
+            try:
+                widget.configure(fg=fg)
+            except Exception:
+                pass
+        for child in widget.winfo_children():
+            _actualizar_widgets_colores(child, bg, fg)
+    except Exception:
+        pass
+
+
+def _mostrar_vista_previa(parent, df, titulo: str, callback_confirmar):
+    """
+    Muestra una ventana de vista previa con los registros del DataFrame.
+    Llama a callback_confirmar() si el usuario confirma.
+    """
+    win = tk.Toplevel(parent)
+    win.title(titulo)
+    win.geometry("860x400")
+    win.grab_set()
+
+    ttk.Label(win, text=titulo, font=("Segoe UI", 11, "bold")).pack(pady=8)
+    ttk.Label(win, text=f"Se incluirán {len(df)} registro(s) en el PDF.").pack()
+
+    cols = list(df.columns)
+    tree = ttk.Treeview(win, columns=cols, show="headings", height=12)
+    for col in cols:
+        tree.heading(col, text=col)
+        tree.column(col, anchor="center", width=max(80, len(col) * 8))
+    tree.pack(fill="both", expand=True, padx=10, pady=8)
+
+    sb = ttk.Scrollbar(tree, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=sb.set)
+    sb.pack(side="right", fill="y")
+
+    for _, row in df.iterrows():
+        tree.insert("", "end", values=list(row))
+
+    frame_btn = ttk.Frame(win)
+    frame_btn.pack(pady=8)
+
+    def _confirmar():
+        win.destroy()
+        callback_confirmar()
+
+    ttk.Button(frame_btn, text="✅ Confirmar y Generar PDF",
+               command=_confirmar).pack(side="left", padx=10)
+    ttk.Button(frame_btn, text="❌ Cancelar",
+               command=win.destroy).pack(side="left", padx=10)
+
+
+# ── Nuevas clases ─────────────────────────────────────────────────────────────
+
+class VentanaSostenimientos(tk.Toplevel):
+    """
+    Ventana para gestionar la lista de sostenimientos activos.
+    Muestra checkboxes de la lista predeterminada + campo para añadir custom.
+    Los activos se guardan en config.json como 'sostenimientos_activos'.
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Gestionar Sostenimientos")
+        self.geometry("480x560")
+        self.resizable(False, False)
+        self.grab_set()
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        from utils.config_manager import cargar_config
+        self._config = cargar_config()
+
+        catalogo = self._config.get("sostenimientos_catalogo", [])
+        activos_columnas = {s["columna"] for s in self._config.get("sostenimientos_activos", [])
+                            if isinstance(s, dict)}
+
+        tk.Label(self, text="Gestionar Sostenimientos",
+                 font=("Segoe UI", 13, "bold")).pack(pady=10)
+
+        frame_lista = ttk.LabelFrame(self, text="Seleccionar sostenimientos activos", padding=10)
+        frame_lista.pack(fill="both", expand=True, padx=15, pady=5)
+
+        canvas = tk.Canvas(frame_lista, height=300)
+        sb = ttk.Scrollbar(frame_lista, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        inner = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        self._check_vars = {}
+        self._catalogo_items = list(catalogo)
+
+        for item in self._catalogo_items:
+            col = item["columna"]
+            var = tk.BooleanVar(value=(col in activos_columnas))
+            self._check_vars[col] = (var, item)
+            ttk.Checkbutton(inner, text=item["display"], variable=var).pack(anchor="w", padx=5, pady=2)
+
+        # Añadir sostenimiento personalizado
+        frame_custom = ttk.LabelFrame(self, text="Añadir sostenimiento personalizado", padding=8)
+        frame_custom.pack(fill="x", padx=15, pady=5)
+
+        ttk.Label(frame_custom, text="Nombre:").grid(row=0, column=0, padx=5)
+        self._custom_display_var = tk.StringVar()
+        ttk.Entry(frame_custom, textvariable=self._custom_display_var, width=22).grid(row=0, column=1, padx=5)
+
+        ttk.Label(frame_custom, text="Tipo:").grid(row=0, column=2, padx=4)
+        self._custom_tipo_var = tk.StringVar(value="int")
+        ttk.Combobox(frame_custom, textvariable=self._custom_tipo_var,
+                     values=["int", "float"], width=6, state="readonly").grid(row=0, column=3, padx=4)
+
+        ttk.Button(frame_custom, text="➕ Añadir",
+                   command=lambda: self._anadir_custom(inner, activos_columnas)).grid(
+            row=1, column=0, columnspan=4, pady=6)
+
+        # Botones
+        frame_btns = ttk.Frame(self)
+        frame_btns.pack(pady=10)
+        ttk.Button(frame_btns, text="💾 Guardar",
+                   command=self._guardar).pack(side="left", padx=10)
+        ttk.Button(frame_btns, text="Cancelar",
+                   command=self.destroy).pack(side="left", padx=10)
+
+        self._inner_frame = inner
+
+    def _anadir_custom(self, inner, activos_columnas):
+        """Añade un sostenimiento personalizado al catálogo y a los checkboxes."""
+        display = self._custom_display_var.get().strip()
+        if not display:
+            messagebox.showwarning("Advertencia", "Ingrese un nombre.", parent=self)
+            return
+        tipo = self._custom_tipo_var.get()
+        # Generar nombre de columna seguro
+        import re
+        col = re.sub(r"[^a-zA-Z0-9]", "_", display)
+        if col in self._check_vars:
+            messagebox.showinfo("Info", "Ese sostenimiento ya existe.", parent=self)
+            return
+        item = {"display": display, "columna": col, "tipo": tipo}
+        self._catalogo_items.append(item)
+        var = tk.BooleanVar(value=True)
+        self._check_vars[col] = (var, item)
+        ttk.Checkbutton(inner, text=display, variable=var).pack(anchor="w", padx=5, pady=2)
+        self._custom_display_var.set("")
+
+    def _guardar(self):
+        from utils.config_manager import guardar_config
+        self._config["sostenimientos_catalogo"] = self._catalogo_items
+        activos = [item for col, (var, item) in self._check_vars.items() if var.get()]
+        self._config["sostenimientos_activos"] = activos
+        if guardar_config(self._config):
+            messagebox.showinfo("Guardado", "Sostenimientos guardados correctamente.\n"
+                                "Reinicie la ventana de Sostenimiento Diario para ver los cambios.",
+                                parent=self)
+            self.destroy()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
+
+
+class VentanaReportePeriodo(tk.Toplevel):
+    """Ventana para generar un reporte PDF consolidado por período."""
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.model = model
+        self.title("Reporte de Período")
+        self.geometry("400x200")
+        self.resizable(False, False)
+        self.grab_set()
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        tk.Label(self, text="Reporte de Período",
+                 font=("Segoe UI", 13, "bold")).pack(pady=10)
+
+        frame_f = ttk.Frame(self)
+        frame_f.pack(pady=5)
+
+        ttk.Label(frame_f, text="Desde:").grid(row=0, column=0, padx=8)
+        self.fi = DateEntry(frame_f, date_pattern="dd/mm/yyyy", width=12)
+        self.fi.grid(row=0, column=1, padx=8)
+
+        ttk.Label(frame_f, text="Hasta:").grid(row=0, column=2, padx=8)
+        self.ff = DateEntry(frame_f, date_pattern="dd/mm/yyyy", width=12)
+        self.ff.grid(row=0, column=3, padx=8)
+
+        frame_btn = ttk.Frame(self)
+        frame_btn.pack(pady=15)
+        ttk.Button(frame_btn, text="🔍 Vista Previa y Generar",
+                   command=self._previsualizar).pack(side="left", padx=8)
+        ttk.Button(frame_btn, text="Cerrar", command=self.destroy).pack(side="left", padx=8)
+
+    def _previsualizar(self):
+        fi_str = self.fi.get()
+        ff_str = self.ff.get()
+        df = self.model.buscar_registros("", fi_str, ff_str)
+        if df.empty:
+            messagebox.showinfo("Info", "No hay registros en el período seleccionado.", parent=self)
+            return
+
+        _mostrar_vista_previa(
+            self,
+            df,
+            titulo=f"Reporte Período {fi_str} — {ff_str}",
+            callback_confirmar=lambda: self._generar_pdf(df, fi_str, ff_str)
+        )
+
+    def _generar_pdf(self, df, fi_str, ff_str):
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+
+        fi_arch = fi_str.replace("/", "-")
+        ff_arch = ff_str.replace("/", "-")
+        nombre = f"reporte_periodo_{fi_arch}_{ff_arch}.pdf"
+
+        try:
+            pdf = SimpleDocTemplate(nombre, pagesize=letter)
+            estilos = getSampleStyleSheet()
+            elementos = []
+
+            elementos.append(Paragraph("REPORTE DE PERÍODO — GEOMECÁNICA", estilos["Title"]))
+            elementos.append(Spacer(1, 6))
+            elementos.append(Paragraph(f"Período: {fi_str} al {ff_str}", estilos["Normal"]))
+            elementos.append(Paragraph(f"Total de registros: {len(df)}", estilos["Normal"]))
+            elementos.append(Spacer(1, 12))
+
+            # Tabla principal
+            datos_tabla = [df.columns.tolist()]
+            for _, row in df.iterrows():
+                fila = []
+                for col in df.columns:
+                    val = str(row[col]) if str(row[col]) != "nan" else ""
+                    if col in ("Soporte", "Observaciones"):
+                        fila.append(Paragraph(val, estilos["Normal"]))
+                    else:
+                        fila.append(val)
+                datos_tabla.append(fila)
+
+            anchos = [60, 50, 80, 40, 40, 120, 130]
+            tabla = Table(datos_tabla, colWidths=anchos[:len(df.columns)])
+            tabla.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ]))
+            elementos.append(tabla)
+            elementos.append(Spacer(1, 16))
+
+            # Estadísticas de sostenimiento
+            elementos.append(Paragraph("Estadísticas del Período", estilos["Heading2"]))
+            elementos.append(Spacer(1, 6))
+
+            try:
+                import pandas as pd
+                # Distribución por turno
+                if "Turno" in df.columns:
+                    turnos = df["Turno"].value_counts()
+                    elementos.append(Paragraph("Distribución por turno:", estilos["Normal"]))
+                    for t, n in turnos.items():
+                        elementos.append(Paragraph(f"  • {t}: {n} registros", estilos["Normal"]))
+                    elementos.append(Spacer(1, 6))
+
+                # Labor con más registros
+                if "Labor" in df.columns:
+                    top = df["Labor"].value_counts().idxmax()
+                    elementos.append(Paragraph(f"Labor con más registros: {top}", estilos["Normal"]))
+                    elementos.append(Spacer(1, 6))
+
+                # Datos de sostenimiento del período
+                df_sost = self.model.buscar_registros("", "", "")
+                if not df_sost.empty:
+                    # Obtener sostenimiento en el mismo período
+                    df_s2 = self.model.obtener_totales_sostenimiento(
+                        fecha_inicio=fi_str, fecha_fin=ff_str
+                    )
+                    if not df_s2.empty:
+                        elementos.append(Paragraph("Totales de Sostenimiento por Labor:", estilos["Heading3"]))
+                        cols_s = list(df_s2.columns)
+                        datos_s = [cols_s]
+                        for _, row in df_s2.iterrows():
+                            datos_s.append([str(row[c]) for c in cols_s])
+                        tabla_s = Table(datos_s)
+                        tabla_s.setStyle(TableStyle([
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.steelblue),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                            ("FONTSIZE", (0, 0), (-1, -1), 7),
+                        ]))
+                        elementos.append(tabla_s)
+            except Exception:
+                pass
+
+            pdf.build(elementos)
+            messagebox.showinfo("PDF generado",
+                                f"Reporte guardado como:\n{nombre}", parent=self)
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo generar el PDF:\n{e}", parent=self)

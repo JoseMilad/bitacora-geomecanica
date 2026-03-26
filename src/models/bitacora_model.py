@@ -11,11 +11,54 @@ from utils.config import (
     COLUMNAS_LABORES, COLUMNAS_SOSTENIMIENTO, BACKUP_DIR
 )
 
+def _safe_concat(df_base: "pd.DataFrame", df_nuevo: "pd.DataFrame") -> "pd.DataFrame":
+    """
+    Concatena df_nuevo a df_base alineando dtypes para evitar FutureWarning.
+    Si df_base tiene datos, convierte las columnas de df_nuevo al mismo dtype
+    que la columna correspondiente en df_base (ignorando errores silenciosamente).
+    """
+    if not df_base.empty:
+        for col in df_nuevo.columns:
+            if col in df_base.columns and not df_base[col].dropna().empty:
+                try:
+                    df_nuevo = df_nuevo.copy()
+                    df_nuevo[col] = df_nuevo[col].astype(df_base[col].dtype)
+                except Exception:
+                    pass
+    return pd.concat([df_base, df_nuevo], ignore_index=True)
+
+
+def _convertir_valor(valor, col_dtype) -> object:
+    """
+    Convierte un valor al dtype de la columna para asignación segura con df.at.
+    Si falla, retorna el valor como string.
+
+    Args:
+        valor: Valor a convertir.
+        col_dtype: dtype de la columna destino.
+
+    Returns:
+        Valor convertido o str del valor original.
+    """
+    try:
+        if pd.api.types.is_integer_dtype(col_dtype):
+            return int(valor) if str(valor).strip() not in ('', 'nan') else pd.NA
+        elif pd.api.types.is_float_dtype(col_dtype):
+            return float(valor) if str(valor).strip() not in ('', 'nan') else pd.NA
+        else:
+            return str(valor)
+    except (ValueError, TypeError):
+        return str(valor)
+
+
 class BitacoraModel:
     """Gestiona la lógica de datos de la bitácora"""
-    
+
+    _UNDO_MAX = 5
+
     def __init__(self, archivo=None):
         self.archivo = archivo or ARCHIVO_BITACORA
+        self._undo_stack: list = []
         self.inicializar_excel()
     
     def _hacer_backup(self):
@@ -42,33 +85,108 @@ class BitacoraModel:
             print(f"Advertencia: no se pudo crear backup: {str(e)}")
 
     def inicializar_excel(self):
-        """Crea el archivo Excel si no existe; añade hojas faltantes si ya existe."""
+        """Crea el archivo Excel si no existe; añade hojas/columnas faltantes si ya existe."""
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
             estandar = pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
             labores = pd.DataFrame(columns=["Labor", "GSI", "RMR", "Soporte", "Tipo"])
-            sostenimiento = pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
-            
+            cols_sost = self._columnas_sostenimiento_actuales()
+            sostenimiento = pd.DataFrame(columns=cols_sost)
+
             with pd.ExcelWriter(self.archivo) as writer:
                 bitacora.to_excel(writer, sheet_name="Bitacora", index=False)
                 estandar.to_excel(writer, sheet_name="Estandar_Sostenimiento", index=False)
                 labores.to_excel(writer, sheet_name="Labores", index=False)
                 sostenimiento.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
         else:
-            # Verificar si falta la hoja Sostenimiento_Diario y añadirla si es el caso
             try:
                 import openpyxl
                 wb = openpyxl.load_workbook(self.archivo)
+                modified = False
                 if "Sostenimiento_Diario" not in wb.sheetnames:
                     wb.close()
-                    sostenimiento = pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
+                    cols_sost = self._columnas_sostenimiento_actuales()
+                    sostenimiento = pd.DataFrame(columns=cols_sost)
                     with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl") as writer:
                         sostenimiento.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
                 else:
                     wb.close()
+                    # Añadir columnas nuevas a Sostenimiento_Diario si faltan
+                    try:
+                        df_sost = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+                        cols_sost = self._columnas_sostenimiento_actuales()
+                        for col in cols_sost:
+                            if col not in df_sost.columns:
+                                df_sost[col] = 0
+                                modified = True
+                        if modified:
+                            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                                if_sheet_exists="replace") as writer:
+                                df_sost.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+                    except Exception:
+                        pass
             except Exception:
                 pass
+
+    def _columnas_sostenimiento_actuales(self) -> list:
+        """Retorna la lista completa de columnas de Sostenimiento_Diario (base + activas)."""
+        base = ["Fecha", "Turno", "Labor"]
+        activos = self._columnas_sostenimiento_activas()
+        fin = ["Observaciones"]
+        # Columnas base de config + activas sin duplicar
+        cols = base[:]
+        for col in COLUMNAS_SOSTENIMIENTO:
+            if col not in base and col not in fin and col not in cols:
+                cols.append(col)
+        for col in activos:
+            if col not in cols and col not in fin:
+                cols.append(col)
+        cols += fin
+        return cols
+
+    def _columnas_sostenimiento_activas(self) -> list:
+        """Retorna las columnas numéricas activas de sostenimiento desde config."""
+        try:
+            from utils.config_manager import cargar_config
+            config = cargar_config()
+            activos = config.get("sostenimientos_activos", [])
+            return [s["columna"] for s in activos if isinstance(s, dict) and "columna" in s]
+        except Exception:
+            return [
+                "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+                "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+            ]
     
+    def _guardar_snapshot(self, sheet: str = "Bitacora"):
+        """Guarda un snapshot del DataFrame en el stack de deshacer (máx 5)."""
+        try:
+            df = pd.read_excel(self.archivo, sheet_name=sheet)
+            if len(self._undo_stack) >= self._UNDO_MAX:
+                self._undo_stack.pop(0)
+            self._undo_stack.append({"sheet": sheet, "data": df.to_dict(orient="list")})
+        except Exception:
+            pass
+
+    def deshacer_ultima_accion(self) -> tuple:
+        """
+        Restaura el último snapshot del stack de deshacer.
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        if not self._undo_stack:
+            return False, "No hay acciones para deshacer"
+        snapshot = self._undo_stack.pop()
+        try:
+            df = pd.DataFrame(snapshot["data"])
+            sheet = snapshot["sheet"]
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df.to_excel(writer, sheet_name=sheet, index=False)
+            return True, "Última acción deshecha correctamente"
+        except Exception as e:
+            return False, f"Error al deshacer: {str(e)}"
+
     def guardar_registro(self, datos):
         """
         Guarda un nuevo registro en la bitácora.
@@ -93,8 +211,9 @@ class BitacoraModel:
                 return False, "DUPLICADO: Ya existe un registro para esta labor en este turno y fecha."
 
             self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
             df_nuevo = pd.DataFrame([datos])
-            df = pd.concat([df, df_nuevo], ignore_index=True)
+            df = _safe_concat(df, df_nuevo)
             
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl", 
                                if_sheet_exists="replace") as writer:
@@ -117,9 +236,10 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
             df = pd.read_excel(self.archivo, sheet_name="Bitacora")
             df_nuevo = pd.DataFrame([datos])
-            df = pd.concat([df, df_nuevo], ignore_index=True)
+            df = _safe_concat(df, df_nuevo)
             
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl", 
                                if_sheet_exists="replace") as writer:
@@ -174,7 +294,7 @@ class BitacoraModel:
                 "Soporte": soporte,
                 "Tipo": tipo
             }])
-            df = pd.concat([df, nueva_fila], ignore_index=True)
+            df = _safe_concat(df, nueva_fila)
             df = df.sort_values("Labor").reset_index(drop=True)
 
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
@@ -380,12 +500,15 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
             df = pd.read_excel(self.archivo, sheet_name="Bitacora")
             if indice < 0 or indice >= len(df):
                 return False, "Índice fuera de rango"
             for campo, valor in datos.items():
                 if campo in df.columns:
-                    df.at[indice, campo] = valor
+                    valor_conv = _convertir_valor(valor, df[campo].dtype)
+                    df[campo] = df[campo].astype(object)
+                    df.at[indice, campo] = valor_conv
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                 if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Bitacora", index=False)
@@ -405,6 +528,7 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
             df = pd.read_excel(self.archivo, sheet_name="Bitacora")
             if indice < 0 or indice >= len(df):
                 return False, "Índice fuera de rango"
@@ -460,8 +584,9 @@ class BitacoraModel:
                 return False, "DUPLICADO"
 
             self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
             df_nuevo = pd.DataFrame([datos])
-            df = pd.concat([df, df_nuevo], ignore_index=True)
+            df = _safe_concat(df, df_nuevo)
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                 if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
@@ -475,9 +600,10 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
             df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
             df_nuevo = pd.DataFrame([datos])
-            df = pd.concat([df, df_nuevo], ignore_index=True)
+            df = _safe_concat(df, df_nuevo)
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                 if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
@@ -519,12 +645,15 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
             df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
             if indice < 0 or indice >= len(df):
                 return False, "Índice fuera de rango"
             for campo, valor in datos.items():
                 if campo in df.columns:
-                    df.at[indice, campo] = valor
+                    valor_conv = _convertir_valor(valor, df[campo].dtype)
+                    df[campo] = df[campo].astype(object)
+                    df.at[indice, campo] = valor_conv
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                 if_sheet_exists="replace") as writer:
                 df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
@@ -544,6 +673,7 @@ class BitacoraModel:
         """
         try:
             self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
             df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
             if indice < 0 or indice >= len(df):
                 return False, "Índice fuera de rango"
@@ -573,10 +703,13 @@ class BitacoraModel:
             if df.empty:
                 return df
 
-            cols_num = [
-                "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
-                "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
-            ]
+            # Usar columnas activas dinámicamente
+            cols_num = self._columnas_sostenimiento_activas()
+            # Incluir también las columnas fijas de la hoja aunque no estén en activas
+            for col in COLUMNAS_SOSTENIMIENTO:
+                if col not in ("Fecha", "Turno", "Labor", "Observaciones") and col not in cols_num:
+                    cols_num.append(col)
+
             for col in cols_num:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -601,3 +734,55 @@ class BitacoraModel:
         except Exception as e:
             print(f"Error al obtener totales: {str(e)}")
             return pd.DataFrame()
+
+    def archivar_periodo(self, fecha_inicio: str, fecha_fin: str) -> tuple:
+        """
+        Mueve registros de un rango de fechas al archivo histórico anual y los elimina del
+        archivo principal.
+
+        Args:
+            fecha_inicio: Fecha inicio en formato dd/mm/yyyy
+            fecha_fin: Fecha fin en formato dd/mm/yyyy
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str, cantidad: int)
+        """
+        from utils.config import DATA_DIR
+        try:
+            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
+            if df.empty:
+                return False, "No hay registros en la bitácora", 0
+
+            df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
+            inicio = datetime.strptime(fecha_inicio, "%d/%m/%Y")
+            fin = datetime.strptime(fecha_fin, "%d/%m/%Y")
+
+            mask_arch = (df["Fecha_dt"] >= inicio) & (df["Fecha_dt"] <= fin)
+            df_archivar = df[mask_arch].drop(columns=["Fecha_dt"])
+            df_restante = df[~mask_arch].drop(columns=["Fecha_dt"]).reset_index(drop=True)
+
+            if df_archivar.empty:
+                return False, "No hay registros en ese período", 0
+
+            anio = inicio.year
+            archivo_hist = DATA_DIR / f"historico_{anio}.xlsx"
+
+            if archivo_hist.exists():
+                df_hist_existente = pd.read_excel(archivo_hist, sheet_name="Bitacora")
+                df_hist_final = _safe_concat(df_hist_existente, df_archivar)
+            else:
+                df_hist_final = df_archivar
+
+            with pd.ExcelWriter(str(archivo_hist), engine="openpyxl") as writer:
+                df_hist_final.to_excel(writer, sheet_name="Bitacora", index=False)
+
+            # Guardar el archivo principal sin los registros archivados
+            self._hacer_backup()
+            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                if_sheet_exists="replace") as writer:
+                df_restante.to_excel(writer, sheet_name="Bitacora", index=False)
+
+            cantidad = len(df_archivar)
+            return True, (f"{cantidad} registro(s) archivado(s) en '{archivo_hist.name}'"), cantidad
+        except Exception as e:
+            return False, f"Error al archivar: {str(e)}", 0
