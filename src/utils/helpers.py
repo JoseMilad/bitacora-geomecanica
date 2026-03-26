@@ -15,11 +15,32 @@ def validar_rmr(valor):
         return None
 
 def validar_gsi(valor):
-    """Valida que GSI sea un número entero válido"""
-    try:
-        return int(valor)
-    except (ValueError, TypeError):
+    """
+    Acepta GSI como texto libre o numérico.
+    Retorna el valor como string si es válido, None si está vacío.
+    """
+    if valor is None:
         return None
+    texto = str(valor).strip()
+    if texto == "" or texto.lower() == "nan":
+        return None
+    return texto
+
+def _obtener_turno_automatico():
+    """
+    Determina el turno según la hora actual.
+    Entre las 06:00 y las 17:59 → 'Día', de lo contrario → 'Noche'.
+    """
+    from utils.config import TURNOS
+    hora = datetime.now().hour
+    if 6 <= hora < 18:
+        turno = "Día"
+    else:
+        turno = "Noche"
+    # Fallback si el turno no está en la lista configurada
+    if turno not in TURNOS:
+        return TURNOS[0] if TURNOS else "Día"
+    return turno
 
 def validar_campos_obligatorios(labor, turno):
     """Valida campos obligatorios"""
