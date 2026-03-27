@@ -13,7 +13,7 @@ from reportlab.lib import colors
 
 from models.bitacora_model import BitacoraModel
 from utils.config import (
-    APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
+    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
 )
 from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
@@ -150,7 +150,7 @@ class BitacoraApp:
 
         self._lbl_header_title = tk.Label(
             self._header_frame,
-            text=f"⛏  BITÁCORA GEOMECÁNICA    v1.0.0",
+            text=f"⛏  BITÁCORA GEOMECÁNICA    v{APP_VERSION}",
             font=("Segoe UI", 13, "bold"),
             bg=PALETTE["sidebar_bg"],
             fg="#ffffff",
@@ -312,7 +312,7 @@ class BitacoraApp:
         if after_id is not None:
             try:
                 self.root.after_cancel(after_id)
-            except Exception:
+            except tk.TclError:
                 pass
         try:
             turno = self.turno_var.get() or "—"
@@ -337,7 +337,7 @@ class BitacoraApp:
         if after_id is not None:
             try:
                 self.root.after_cancel(after_id)
-            except Exception:
+            except tk.TclError:
                 pass
         hora = datetime.datetime.now().strftime("%H:%M")
         archivo = str(ARCHIVO_BITACORA)
@@ -2388,7 +2388,7 @@ class VentanaDashboard(tk.Toplevel):
             try:
                 import matplotlib.pyplot as plt
                 plt.close(prev_fig)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 — plt.close can raise various errors
                 pass
         self._fig_actual = fig
         canvas = FigureCanvasTkAgg(fig, master=self.frame_graficos)

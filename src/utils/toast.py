@@ -43,7 +43,7 @@ def mostrar_toast(root, mensaje, tipo="info", duracion=3000):
     toast.update_idletasks()
     ancho = toast.winfo_reqwidth()
     alto  = toast.winfo_reqheight()
-    x = root.winfo_x() + root.winfo_width()  - ancho - 20
+    x = root.winfo_x() + root.winfo_width() - ancho - 20
     y = root.winfo_y() + root.winfo_height() - alto  - 40
     toast.geometry(f"+{x}+{y}")
 
