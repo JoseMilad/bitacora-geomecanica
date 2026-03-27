@@ -18,8 +18,8 @@ BACKUP_DIR.mkdir(exist_ok=True)
 # Configuración de la aplicación
 APP_NAME = "Bitácora Geomecánica"
 APP_VERSION = "1.0.0"
-WINDOW_WIDTH = 650
-WINDOW_HEIGHT = 650
+WINDOW_WIDTH = 900
+WINDOW_HEIGHT = 700
 WINDOW_BG_COLOR = "#f2f4f7"
 
 # Turnos disponibles
@@ -44,3 +44,24 @@ COLUMNAS_SOSTENIMIENTO = [
     "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
     "Mesh_Strap", "Cable_Bolting", "Marco_Acero", "Observaciones"
 ]
+# ── Paleta de colores del sistema de diseño ──────────────────────────
+PALETTE = {
+    "primary":        "#1a6fc4",   # Azul minería — botones principales
+    "primary_hover":  "#155da0",
+    "secondary":      "#2d8a6e",   # Verde roca — acciones secundarias
+    "secondary_hover":"#256e58",
+    "danger":         "#d94f3d",   # Rojo — eliminar / alertas
+    "danger_hover":   "#b83d2d",
+    "surface":        "#f0f4f8",   # Fondo claro de cards
+    "surface_dark":   "#1e2736",   # Fondo modo oscuro
+    "sidebar_bg":     "#1a2540",   # Sidebar
+    "sidebar_text":   "#c8d6e5",
+    "sidebar_active": "#2563eb",
+    "card_bg":        "#ffffff",
+    "card_border":    "#dde3ec",
+    "text_primary":   "#1a202c",
+    "text_muted":     "#6b7280",
+    "accent":         "#f59e0b",   # Amarillo — destacados / KPI
+    "success":        "#10b981",
+    "warning":        "#f59e0b",
+}
