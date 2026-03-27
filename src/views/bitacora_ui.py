@@ -217,21 +217,6 @@ class BitacoraApp:
             width=18
         ).grid(row=2, column=2, padx=4, pady=2)
 
-        ttk.Button(
-            frame_botones,
-            text="🗂 Gestionar Sost.",
-            command=self._abrir_sostenimientos,
-            width=18
-        ).grid(row=2, column=3, padx=4, pady=2)
-
-        # Fila 4: Reporte Período y Modo Oscuro
-        ttk.Button(
-            frame_botones,
-            text="📅 Reporte Período",
-            command=self._abrir_reporte_periodo,
-            width=18
-        ).grid(row=3, column=0, padx=4, pady=2)
-
         self.btn_oscuro = ttk.Button(
             frame_botones,
             text="🌙 Modo Oscuro",
@@ -1198,7 +1183,7 @@ class VentanaLabores:
         self.soporte_var = tk.StringVar()
         ttk.Entry(frame_agregar, textvariable=self.soporte_var, width=40).grid(row=2, column=1, columnspan=3, sticky="ew", padx=5, pady=3)
 
-        # Fila 3: Fase y Clasificación KPI
+        # Fila 3: Fase (sin campo Clasificación KPI en el formulario)
         ttk.Label(frame_agregar, text="Fase:").grid(row=3, column=0, sticky="w", padx=5, pady=3)
         self.fase_var = tk.StringVar()
         combo_fase = ttk.Combobox(
@@ -1210,16 +1195,6 @@ class VentanaLabores:
         )
         combo_fase.grid(row=3, column=1, sticky="w", padx=5, pady=3)
 
-        ttk.Label(frame_agregar, text="Clasificación KPI:").grid(row=3, column=2, sticky="w", padx=5, pady=3)
-        self.kpi_var = tk.StringVar()
-        self._combo_kpi = ttk.Combobox(
-            frame_agregar,
-            textvariable=self.kpi_var,
-            width=15
-        )
-        self._combo_kpi.grid(row=3, column=3, sticky="ew", padx=5, pady=3)
-        self._actualizar_combo_kpi()
-
         # Conversión automática a mayúsculas para campos de texto
         def _a_mayusculas(var, *args):
             valor = var.get()
@@ -1230,11 +1205,10 @@ class VentanaLabores:
         self.nueva_labor_var.trace_add("write", lambda *a: _a_mayusculas(self.nueva_labor_var))
         self.gsi_var.trace_add("write", lambda *a: _a_mayusculas(self.gsi_var))
         self.soporte_var.trace_add("write", lambda *a: _a_mayusculas(self.soporte_var))
-        self.kpi_var.trace_add("write", lambda *a: _a_mayusculas(self.kpi_var))
 
         frame_agregar.columnconfigure(1, weight=1)
 
-        # Botones Agregar y Gestionar Clasificaciones
+        # Botones: Agregar, Gestionar Clasificaciones de labor, Gestionar KPI
         frame_botones_agregar = ttk.Frame(frame_agregar)
         frame_botones_agregar.grid(row=4, column=0, columnspan=4, pady=8)
 
@@ -1248,6 +1222,12 @@ class VentanaLabores:
             frame_botones_agregar,
             text="⚙ Gestionar Clasificaciones",
             command=self._abrir_clasificaciones
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            frame_botones_agregar,
+            text="📊 Gestionar clasificaciones KPI",
+            command=self._abrir_gestion_kpi
         ).pack(side="left", padx=5)
 
         # Frame para lista de labores
@@ -1301,40 +1281,46 @@ class VentanaLabores:
             pass
 
     def _on_tipo_cambiado(self, event):
-        """Actualiza el combobox de KPI y recalcula soporte al cambiar el tipo."""
-        self._actualizar_combo_kpi()
+        """Recalcula soporte al cambiar el tipo."""
         self._calcular_soporte(event)
 
     def _actualizar_combo_kpi(self):
-        """Actualiza los valores del combobox de clasificación KPI según el tipo seleccionado."""
-        try:
-            from utils.clasificaciones import cargar_clasificaciones
-            clasificaciones = cargar_clasificaciones()
-            tipo = self.tipo_var.get()
-            mapa = clasificaciones.get(tipo, {})
-            valores = list(mapa.keys())
-        except Exception:
-            valores = []
-        self._combo_kpi["values"] = valores
+        """Mantiene compatibilidad; no se usa en el formulario pero puede llamarse internamente."""
+        pass
 
     def _autodetectar_clasificacion(self, event):
-        """Detecta automáticamente la clasificación KPI al escribir el nombre de la labor."""
+        """Detecta automáticamente el tipo, la fase y la clasificación al escribir el nombre."""
+        self._autodetectar_todo(event)
+
+    def _autodetectar_todo(self, event):
+        """
+        Al escribir el nombre de la labor, detecta automáticamente:
+        - El tipo (Temporal/Permanente) según el prefijo.
+        - La fase (Explotación/Preparación/Desarrollo) según la clasificación detectada.
+        """
         try:
             from utils.clasificaciones import cargar_clasificaciones
             nombre = self.nueva_labor_var.get().upper()
             clasificaciones = cargar_clasificaciones()
-            tipo = self.tipo_var.get()
-            mapa = clasificaciones.get(tipo, {})
-            for kpi, prefijo in mapa.items():
-                if nombre.startswith(prefijo.upper()):
-                    self.kpi_var.set(kpi)
-                    return
+            for tipo, clases in clasificaciones.items():
+                for kpi, datos in clases.items():
+                    prefijo = datos.get("prefijo", "") if isinstance(datos, dict) else str(datos)
+                    if prefijo and nombre.startswith(prefijo.upper()):
+                        self.tipo_var.set(tipo)
+                        fase = datos.get("fase", "") if isinstance(datos, dict) else ""
+                        if fase:
+                            self.fase_var.set(fase)
+                        return
         except Exception:
             pass
 
     def _abrir_clasificaciones(self):
+        """Abre la ventana de gestión de clasificaciones de labor (TAJO, VENTANA, etc.)."""
+        VentanaClasificaciones(self.ventana, callback_actualizar=None)
+
+    def _abrir_gestion_kpi(self):
         """Abre la ventana de gestión de clasificaciones KPI."""
-        VentanaClasificaciones(self.ventana, callback_actualizar=self._actualizar_combo_kpi)
+        VentanaGestionKPI(self.ventana)
 
     def _cargar_labores(self):
         """Carga y muestra las labores guardadas en la tabla"""
@@ -1368,11 +1354,10 @@ class VentanaLabores:
         soporte = self.soporte_var.get().strip()
         tipo = self.tipo_var.get()
         fase = self.fase_var.get().strip()
-        clasificacion_kpi = self.kpi_var.get().strip()
 
         exito, mensaje = self.model.agregar_labor(
             nombre, gsi=gsi, rmr=rmr, soporte=soporte, tipo=tipo,
-            fase=fase, clasificacion_kpi=clasificacion_kpi
+            fase=fase, clasificacion_kpi=""
         )
         if exito:
             self.nueva_labor_var.set("")
@@ -1381,7 +1366,6 @@ class VentanaLabores:
             self.soporte_var.set("")
             self.tipo_var.set("Temporal")
             self.fase_var.set("")
-            self.kpi_var.set("")
             self._cargar_labores()
             if self.callback_actualizar:
                 self.callback_actualizar()
@@ -1418,19 +1402,19 @@ class VentanaLabores:
 
 
 class VentanaClasificaciones(tk.Toplevel):
-    """Ventana para gestionar las clasificaciones KPI de labores (Temporal y Permanente)."""
+    """Ventana para gestionar las clasificaciones de labores (Temporal y Permanente)."""
 
     def __init__(self, parent, callback_actualizar=None):
         super().__init__(parent)
         self.callback_actualizar = callback_actualizar
-        self.title("Gestionar Clasificaciones KPI")
-        self.geometry("550x500")
+        self.title("Gestionar Clasificaciones de Labor")
+        self.geometry("600x520")
         self.resizable(True, True)
         self.grab_set()
         self._crear_interfaz()
 
     def _crear_interfaz(self):
-        tk.Label(self, text="Clasificaciones KPI de Labores",
+        tk.Label(self, text="Clasificaciones de Labor",
                  font=("Segoe UI", 13, "bold")).pack(pady=8)
 
         # Frame superior: listas por tipo
@@ -1458,19 +1442,27 @@ class VentanaClasificaciones(tk.Toplevel):
 
         ttk.Label(frame_accion, text="Nombre:").grid(row=0, column=0, sticky="w", padx=4)
         self._nombre_var = tk.StringVar()
-        entrada_nombre = ttk.Entry(frame_accion, textvariable=self._nombre_var, width=15)
+        entrada_nombre = ttk.Entry(frame_accion, textvariable=self._nombre_var, width=12)
         entrada_nombre.grid(row=0, column=1, sticky="ew", padx=4)
 
         ttk.Label(frame_accion, text="Prefijo:").grid(row=0, column=2, sticky="w", padx=4)
         self._prefijo_var = tk.StringVar()
-        ttk.Entry(frame_accion, textvariable=self._prefijo_var, width=8).grid(row=0, column=3, padx=4)
+        ttk.Entry(frame_accion, textvariable=self._prefijo_var, width=7).grid(row=0, column=3, padx=4)
 
-        ttk.Label(frame_accion, text="Tipo:").grid(row=0, column=4, sticky="w", padx=4)
+        ttk.Label(frame_accion, text="Fase:").grid(row=0, column=4, sticky="w", padx=4)
+        self._fase_nueva_var = tk.StringVar()
+        ttk.Combobox(
+            frame_accion, textvariable=self._fase_nueva_var,
+            values=["Explotación", "Desarrollo", "Preparación", ""],
+            state="readonly", width=12
+        ).grid(row=0, column=5, padx=4)
+
+        ttk.Label(frame_accion, text="Tipo:").grid(row=0, column=6, sticky="w", padx=4)
         self._tipo_nuevo_var = tk.StringVar(value="Temporal")
         ttk.Combobox(
             frame_accion, textvariable=self._tipo_nuevo_var,
             values=["Temporal", "Permanente"], state="readonly", width=10
-        ).grid(row=0, column=5, padx=4)
+        ).grid(row=0, column=7, padx=4)
 
         frame_accion.columnconfigure(1, weight=1)
 
@@ -1494,22 +1486,26 @@ class VentanaClasificaciones(tk.Toplevel):
         for tipo in ("Temporal", "Permanente"):
             lb = getattr(self, f"_lb_{tipo.lower()}")
             lb.delete(0, tk.END)
-            for nombre, prefijo in clasificaciones.get(tipo, {}).items():
-                lb.insert(tk.END, f"{nombre}  [{prefijo}]")
+            for nombre, datos in clasificaciones.get(tipo, {}).items():
+                prefijo = datos.get("prefijo", "") if isinstance(datos, dict) else str(datos)
+                fase = datos.get("fase", "") if isinstance(datos, dict) else ""
+                lb.insert(tk.END, f"{nombre}  [{prefijo}]  {fase}")
 
     def _agregar(self):
         from utils.clasificaciones import cargar_clasificaciones, guardar_clasificaciones
         nombre = self._nombre_var.get().strip()
         prefijo = self._prefijo_var.get().strip()
         tipo = self._tipo_nuevo_var.get()
+        fase = self._fase_nueva_var.get()
         if not nombre or not prefijo:
             messagebox.showwarning("Advertencia", "Ingrese nombre y prefijo", parent=self)
             return
         clasificaciones = cargar_clasificaciones()
-        clasificaciones.setdefault(tipo, {})[nombre] = prefijo
+        clasificaciones.setdefault(tipo, {})[nombre] = {"prefijo": prefijo, "fase": fase}
         if guardar_clasificaciones(clasificaciones):
             self._nombre_var.set("")
             self._prefijo_var.set("")
+            self._fase_nueva_var.set("")
             self._recargar_listas()
             if self.callback_actualizar:
                 self.callback_actualizar()
@@ -1545,6 +1541,88 @@ class VentanaClasificaciones(tk.Toplevel):
             messagebox.showerror("Error", "No se pudo guardar los cambios", parent=self)
 
 
+class VentanaGestionKPI(tk.Toplevel):
+    """Ventana simple para gestionar clasificaciones KPI (archivo separado)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Gestionar Clasificaciones KPI")
+        self.geometry("400x380")
+        self.resizable(False, False)
+        self.grab_set()
+        self._crear_interfaz()
+
+    def _crear_interfaz(self):
+        tk.Label(self, text="Clasificaciones KPI",
+                 font=("Segoe UI", 13, "bold")).pack(pady=8)
+        tk.Label(self, text="Ej: Producción, Desarrollo, Exploración…",
+                 font=("Segoe UI", 9), fg="gray").pack()
+
+        frame_lista = ttk.LabelFrame(self, text="Clasificaciones existentes", padding=8)
+        frame_lista.pack(fill="both", expand=True, padx=15, pady=8)
+
+        self._listbox = tk.Listbox(frame_lista, height=10, exportselection=False)
+        sb = ttk.Scrollbar(frame_lista, orient="vertical", command=self._listbox.yview)
+        self._listbox.configure(yscrollcommand=sb.set)
+        self._listbox.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        self._recargar()
+
+        frame_add = ttk.Frame(self)
+        frame_add.pack(fill="x", padx=15, pady=4)
+        ttk.Label(frame_add, text="Nueva clasificación:").pack(side="left", padx=4)
+        self._nueva_var = tk.StringVar()
+        ttk.Entry(frame_add, textvariable=self._nueva_var, width=20).pack(side="left", padx=4)
+
+        frame_btn = ttk.Frame(self)
+        frame_btn.pack(pady=8)
+        ttk.Button(frame_btn, text="➕ Agregar",
+                   command=self._agregar).pack(side="left", padx=6)
+        ttk.Button(frame_btn, text="🗑 Eliminar seleccionada",
+                   command=self._eliminar).pack(side="left", padx=6)
+        ttk.Button(frame_btn, text="Cerrar",
+                   command=self.destroy).pack(side="left", padx=6)
+
+    def _recargar(self):
+        from utils.clasificaciones import cargar_clasificaciones_kpi
+        self._listbox.delete(0, tk.END)
+        for kpi in cargar_clasificaciones_kpi():
+            self._listbox.insert(tk.END, kpi)
+
+    def _agregar(self):
+        from utils.clasificaciones import cargar_clasificaciones_kpi, guardar_clasificaciones_kpi
+        nombre = self._nueva_var.get().strip()
+        if not nombre:
+            messagebox.showwarning("Advertencia", "Ingrese un nombre de clasificación", parent=self)
+            return
+        lista = cargar_clasificaciones_kpi()
+        if nombre in lista:
+            messagebox.showinfo("Info", "Esa clasificación ya existe", parent=self)
+            return
+        lista.append(nombre)
+        if guardar_clasificaciones_kpi(lista):
+            self._nueva_var.set("")
+            self._recargar()
+        else:
+            messagebox.showerror("Error", "No se pudo guardar", parent=self)
+
+    def _eliminar(self):
+        from utils.clasificaciones import cargar_clasificaciones_kpi, guardar_clasificaciones_kpi
+        sel = self._listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Advertencia", "Seleccione una clasificación", parent=self)
+            return
+        nombre = self._listbox.get(sel[0])
+        lista = cargar_clasificaciones_kpi()
+        if nombre in lista:
+            lista.remove(nombre)
+            if guardar_clasificaciones_kpi(lista):
+                self._recargar()
+            else:
+                messagebox.showerror("Error", "No se pudo guardar", parent=self)
+
+
 class VentanaSostenimiento(tk.Toplevel):
     """Ventana para registrar sostenimiento diario por labor y turno"""
 
@@ -1552,7 +1630,7 @@ class VentanaSostenimiento(tk.Toplevel):
         super().__init__(parent)
         self.model = model
         self.title("Sostenimiento Diario")
-        self.geometry("700x640")
+        self.geometry("700x680")
         self.configure(bg=WINDOW_BG_COLOR)
         self.resizable(True, True)
         self._crear_interfaz()
@@ -1579,31 +1657,31 @@ class VentanaSostenimiento(tk.Toplevel):
             font=("Segoe UI", 14, "bold"), bg=WINDOW_BG_COLOR
         ).pack(pady=8)
 
-        frame = ttk.LabelFrame(self, text="Datos de Sostenimiento", padding=12)
-        frame.pack(fill="x", padx=15, pady=5)
+        self._frame_datos = ttk.LabelFrame(self, text="Datos de Sostenimiento", padding=12)
+        self._frame_datos.pack(fill="x", padx=15, pady=5)
 
         # Fecha (no editable)
-        ttk.Label(frame, text="Fecha:").grid(row=0, column=0, sticky="w", pady=3)
-        ttk.Label(frame, text=obtener_fecha_actual()).grid(row=0, column=1, sticky="w", pady=3)
+        ttk.Label(self._frame_datos, text="Fecha:").grid(row=0, column=0, sticky="w", pady=3)
+        ttk.Label(self._frame_datos, text=obtener_fecha_actual()).grid(row=0, column=1, sticky="w", pady=3)
 
         # Turno
-        ttk.Label(frame, text="Turno:").grid(row=1, column=0, sticky="w", pady=3)
+        ttk.Label(self._frame_datos, text="Turno:").grid(row=1, column=0, sticky="w", pady=3)
         self.turno_var = tk.StringVar()
-        combo_turno = ttk.Combobox(frame, textvariable=self.turno_var,
+        combo_turno = ttk.Combobox(self._frame_datos, textvariable=self.turno_var,
                                    state="readonly", values=TURNOS, width=15)
         combo_turno.grid(row=1, column=1, sticky="w", pady=3)
         self.turno_var.set(_obtener_turno_automatico())
 
         # Labor
-        ttk.Label(frame, text="Labor:").grid(row=2, column=0, sticky="w", pady=3)
+        ttk.Label(self._frame_datos, text="Labor:").grid(row=2, column=0, sticky="w", pady=3)
         self.labor_var = tk.StringVar()
-        self.entrada_labor = ttk.Entry(frame, textvariable=self.labor_var, width=30)
+        self.entrada_labor = ttk.Entry(self._frame_datos, textvariable=self.labor_var, width=30)
         self.entrada_labor.grid(row=2, column=1, sticky="ew", pady=3)
         self.lista_labores = self.model.obtener_labores_guardadas()
         self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
         self.entrada_labor.bind("<FocusOut>", self._ocultar_lista)
 
-        self.listbox_labor = tk.Listbox(frame, height=4, exportselection=False)
+        self.listbox_labor = tk.Listbox(self._frame_datos, height=4, exportselection=False)
         self.listbox_labor.grid(row=3, column=1, sticky="ew")
         self.listbox_labor.bind("<<ListboxSelect>>", self._seleccionar_labor)
         self.listbox_labor.grid_remove()
@@ -1624,27 +1702,30 @@ class VentanaSostenimiento(tk.Toplevel):
             columna = sost.get("columna", "")
             tipo = sost.get("tipo", "int")
             row_idx = 4 + i
-            ttk.Label(frame, text=f"{display}:").grid(row=row_idx, column=0, sticky="w", pady=2)
+            ttk.Label(self._frame_datos, text=f"{display}:").grid(
+                row=row_idx, column=0, sticky="w", pady=2)
             var = tk.StringVar()
             self._vars_sost[columna] = (var, tipo)
-            ttk.Entry(frame, textvariable=var, width=12).grid(row=row_idx, column=1, sticky="w", pady=2)
+            ttk.Entry(self._frame_datos, textvariable=var, width=12).grid(
+                row=row_idx, column=1, sticky="w", pady=2)
             # Agregar Combobox de tipo de shotcrete junto al campo Shotcrete_m3
             if columna == "Shotcrete_m3":
                 ttk.Combobox(
-                    frame, textvariable=self._tipo_shotcrete_var,
+                    self._frame_datos, textvariable=self._tipo_shotcrete_var,
                     values=_TIPOS_SHOTCRETE, state="readonly", width=30
                 ).grid(row=row_idx, column=2, sticky="w", padx=6, pady=2)
 
         obs_row = 4 + len(self._activos)
         # Observaciones
-        ttk.Label(frame, text="Observaciones:").grid(row=obs_row, column=0, sticky="nw", pady=3)
-        self.obs_text = tk.Text(frame, height=3, width=35, font=("Segoe UI", 10),
+        ttk.Label(self._frame_datos, text="Observaciones:").grid(
+            row=obs_row, column=0, sticky="nw", pady=3)
+        self.obs_text = tk.Text(self._frame_datos, height=3, width=35, font=("Segoe UI", 10),
                                 relief="flat", borderwidth=1,
                                 highlightthickness=1, highlightbackground="#cccccc",
                                 highlightcolor="#4a90d9", wrap="word")
         self.obs_text.grid(row=obs_row, column=1, sticky="ew", pady=3)
 
-        frame.columnconfigure(1, weight=1)
+        self._frame_datos.columnconfigure(1, weight=1)
 
         # Botones
         frame_botones = ttk.Frame(self)
@@ -1654,7 +1735,19 @@ class VentanaSostenimiento(tk.Toplevel):
                    command=self._guardar).pack(side="left", padx=8)
         ttk.Button(frame_botones, text="📋 Ver Historial Sostenimiento",
                    command=self._abrir_historial).pack(side="left", padx=8)
+        ttk.Button(frame_botones, text="⚙ Gestionar Tipos de Sostenimiento",
+                   command=self._abrir_gestionar_sost).pack(side="left", padx=8)
         ttk.Button(frame_botones, text="Cerrar", command=self.destroy).pack(side="left", padx=8)
+
+    def _abrir_gestionar_sost(self):
+        """Abre la ventana de gestión de sostenimientos con callback de actualización."""
+        VentanaSostenimientos(self, on_actualizar=self._refrescar_formulario)
+
+    def _refrescar_formulario(self):
+        """Destruye y recrea el contenido de la ventana para reflejar cambios en sostenimientos."""
+        for widget in self.winfo_children():
+            widget.destroy()
+        self._crear_interfaz()
 
     def _filtrar_labores(self, event):
         texto = self.labor_var.get()
@@ -1919,7 +2012,7 @@ class VentanaDashboard(tk.Toplevel):
         self._crear_interfaz()
 
     def _crear_interfaz(self):
-        # Filtros superiores
+        # Filtros superiores (fila 0)
         frame_filtros = ttk.Frame(self)
         frame_filtros.pack(fill="x", padx=10, pady=8)
 
@@ -1944,8 +2037,22 @@ class VentanaDashboard(tk.Toplevel):
                                            values=self._todas_labores, width=18)
         self._combo_labores.grid(row=0, column=7, padx=4)
 
+        # Filtro de sostenimiento para el gráfico 1
+        ttk.Label(frame_filtros, text="Sos. (Gráf.1):").grid(row=0, column=8, padx=4)
+        self._sost_filter_var = tk.StringVar(value="Todos")
+        _cols_sost_default = [
+            "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+            "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+        ]
+        self._combo_sost_filter = ttk.Combobox(
+            frame_filtros, textvariable=self._sost_filter_var,
+            values=["Todos"] + _cols_sost_default, width=16
+        )
+        self._combo_sost_filter.grid(row=0, column=9, padx=4)
+        self._combo_sost_filter.bind("<<ComboboxSelected>>", lambda e: self._actualizar())
+
         ttk.Button(frame_filtros, text="🔄 Actualizar",
-                   command=self._actualizar).grid(row=0, column=8, padx=10)
+                   command=self._actualizar).grid(row=0, column=10, padx=10)
 
         # Frame para gráficos (canvas de matplotlib)
         self.frame_graficos = ttk.Frame(self)
@@ -1984,6 +2091,7 @@ class VentanaDashboard(tk.Toplevel):
         ff_str = self.fecha_fin.get()
         labor_sel = self.labor_var.get()
         labor_filtro = None if labor_sel == "Todas" else labor_sel
+        sost_filtro = self._sost_filter_var.get()
 
         try:
             df_totales = self.model.obtener_totales_sostenimiento(
@@ -2019,11 +2127,15 @@ class VentanaDashboard(tk.Toplevel):
                "Mesh_Strap", "Cable_Bolting", "Marco_Acero"]
         ))
 
-        # Gráfico 1: Barras agrupadas – totales por labor
+        # Gráfico 1: Barras agrupadas – totales por labor (con filtro de sostenimiento)
         ax1 = axes[0]
         ax1.set_title("Totales por Labor")
         if df_totales is not None and not df_totales.empty:
-            cols_presentes = [c for c in COLS_NUM if c in df_totales.columns]
+            if sost_filtro != "Todos" and sost_filtro in df_totales.columns:
+                cols_presentes = [sost_filtro]
+                ax1.set_title(f"Totales por Labor — {sost_filtro}")
+            else:
+                cols_presentes = [c for c in COLS_NUM if c in df_totales.columns]
             df_plot = df_totales.set_index("Labor")[cols_presentes]
             df_plot.plot(kind="bar", ax=ax1, legend=True)
             ax1.set_xlabel("Labor")
@@ -2033,28 +2145,29 @@ class VentanaDashboard(tk.Toplevel):
             ax1.text(0.5, 0.5, "Sin datos para el período seleccionado",
                      ha="center", va="center", transform=ax1.transAxes)
 
-        # Gráfico 2: Shotcrete lanzado por labor (barras horizontales) + total global
+        # Gráfico 2: Tarjeta visual con total de shotcrete del período
         ax2 = axes[1]
-        ax2.set_title("Shotcrete Lanzado por Labor (m³)")
+        ax2.axis("off")
+        total_shot = 0.0
         if df_sost is not None and not df_sost.empty and "Shotcrete_m3" in df_sost.columns:
             try:
-                df_sost["Shotcrete_m3"] = pd.to_numeric(df_sost["Shotcrete_m3"], errors="coerce").fillna(0)
-                shot_labor = df_sost.groupby("Labor")["Shotcrete_m3"].sum().sort_values()
-                if not shot_labor.empty:
-                    total_global = shot_labor.sum()
-                    shot_labor.plot(kind="barh", ax=ax2, color="steelblue")
-                    ax2.set_xlabel("m³")
-                    ax2.set_ylabel("Labor")
-                    ax2.set_title(f"Shotcrete Lanzado por Labor (m³)\nTotal: {total_global:.1f} m³")
-                else:
-                    ax2.text(0.5, 0.5, "Sin datos de shotcrete",
-                             ha="center", va="center", transform=ax2.transAxes)
+                total_shot = pd.to_numeric(df_sost["Shotcrete_m3"], errors="coerce").fillna(0).sum()
             except Exception:
-                ax2.text(0.5, 0.5, "Sin datos para el período seleccionado",
-                         ha="center", va="center", transform=ax2.transAxes)
-        else:
-            ax2.text(0.5, 0.5, "Sin datos para el período seleccionado",
-                     ha="center", va="center", transform=ax2.transAxes)
+                total_shot = 0.0
+
+        ax2.text(0.5, 0.82, "🪨  Shotcrete Total", ha="center", va="center",
+                 transform=ax2.transAxes, fontsize=14, fontweight="bold")
+        ax2.text(0.5, 0.55, f"{total_shot:.1f} m³", ha="center", va="center",
+                 transform=ax2.transAxes, fontsize=30, fontweight="bold", color="steelblue")
+        ax2.text(0.5, 0.30, f"Período: {fi_str} –\n         {ff_str}",
+                 ha="center", va="center", transform=ax2.transAxes, fontsize=10, color="gray")
+        # Borde decorativo
+        from matplotlib.patches import FancyBboxPatch
+        ax2.add_patch(FancyBboxPatch((0.05, 0.10), 0.90, 0.82,
+                                     boxstyle="round,pad=0.02",
+                                     linewidth=1.5, edgecolor="steelblue",
+                                     facecolor="#eaf4fb",
+                                     transform=ax2.transAxes, clip_on=False))
 
         # Gráfico 3: Shotcrete por tipo de labor (Temporal vs Permanente)
         ax3 = axes[2]
@@ -2435,8 +2548,9 @@ class VentanaSostenimientos(tk.Toplevel):
     Los activos se guardan en config.json como 'sostenimientos_activos'.
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent, on_actualizar=None):
         super().__init__(parent)
+        self._on_actualizar = on_actualizar
         self.title("Gestionar Sostenimientos")
         self.geometry("480x560")
         self.resizable(False, False)
@@ -2529,10 +2643,11 @@ class VentanaSostenimientos(tk.Toplevel):
         activos = [item for col, (var, item) in self._check_vars.items() if var.get()]
         self._config["sostenimientos_activos"] = activos
         if guardar_config(self._config):
-            messagebox.showinfo("Guardado", "Sostenimientos guardados correctamente.\n"
-                                "Reinicie la ventana de Sostenimiento Diario para ver los cambios.",
+            messagebox.showinfo("Guardado", "Sostenimientos guardados correctamente.",
                                 parent=self)
             self.destroy()
+            if self._on_actualizar:
+                self._on_actualizar()
         else:
             messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
 

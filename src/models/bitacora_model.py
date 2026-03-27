@@ -13,18 +13,34 @@ from utils.config import (
 
 def _safe_concat(df_base: "pd.DataFrame", df_nuevo: "pd.DataFrame") -> "pd.DataFrame":
     """
-    Concatena df_nuevo a df_base alineando dtypes para evitar FutureWarning.
-    Si df_base tiene datos, convierte las columnas de df_nuevo al mismo dtype
-    que la columna correspondiente en df_base (ignorando errores silenciosamente).
+    Concatena df_nuevo a df_base sin FutureWarning alineando columnas y dtypes.
+    Maneja correctamente columnas con todos NA y columnas ausentes en alguno de los DataFrames.
     """
-    if not df_base.empty:
-        for col in df_nuevo.columns:
-            if col in df_base.columns and not df_base[col].dropna().empty:
-                try:
-                    df_nuevo = df_nuevo.copy()
-                    df_nuevo[col] = df_nuevo[col].astype(df_base[col].dtype)
-                except Exception:
-                    pass
+    if df_base.empty:
+        return df_nuevo.copy()
+    if df_nuevo.empty:
+        return df_base.copy()
+
+    # Alinear columnas: agregar columnas faltantes en cada DataFrame con pd.NA
+    for col in df_nuevo.columns:
+        if col not in df_base.columns:
+            df_base = df_base.copy()
+            df_base[col] = pd.NA
+    for col in df_base.columns:
+        if col not in df_nuevo.columns:
+            df_nuevo = df_nuevo.copy()
+            df_nuevo[col] = pd.NA
+
+    # Forzar dtype object en columnas con todos NA para evitar FutureWarning
+    df_nuevo = df_nuevo.copy()
+    for col in df_nuevo.columns:
+        if df_nuevo[col].isna().all():
+            df_nuevo[col] = df_nuevo[col].astype(object)
+    df_base = df_base.copy()
+    for col in df_base.columns:
+        if df_base[col].isna().all():
+            df_base[col] = df_base[col].astype(object)
+
     return pd.concat([df_base, df_nuevo], ignore_index=True)
 
 
