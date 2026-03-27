@@ -13,7 +13,7 @@ from reportlab.lib import colors
 
 from models.bitacora_model import BitacoraModel
 from utils.config import (
-    APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
+    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_BG_COLOR, TURNOS
 )
 from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
@@ -22,6 +22,12 @@ from utils.helpers import (
 from utils.config_manager import cargar_config as _cargar_config
 
 _SECONDS_IN_24H = 86400
+
+
+def aplicar_hover(btn, color_normal, color_hover):
+    """Aplica efecto hover a un botón tkinter cambiando su color de fondo."""
+    btn.bind("<Enter>", lambda e: btn.configure(bg=color_hover))
+    btn.bind("<Leave>", lambda e: btn.configure(bg=color_normal))
 
 
 class BitacoraApp:
@@ -53,178 +59,293 @@ class BitacoraApp:
             self.btn_oscuro.config(text="☀ Modo Claro")
     
     def _crear_interfaz(self):
-        """Crea la interfaz gráfica principal"""
-        # Estilo
+        """Crea la interfaz gráfica principal con sidebar lateral."""
+        from utils.config import PALETTE
+
+        # Estilo base
         style = ttk.Style()
         style.theme_use("clam")
-        
-        # Título
-        titulo = tk.Label(
-            self.root,
-            text=APP_NAME,
-            font=("Segoe UI", 18, "bold"),
-            bg=WINDOW_BG_COLOR
-        )
-        titulo.pack(pady=10)
-        
-        # Subtítulo
-        subtitulo = tk.Label(
-            self.root,
-            text="Registro de condiciones del macizo rocoso",
+
+        # ── Layout principal: sidebar + content ──────────────────────────
+        container = tk.Frame(self.root, bg=PALETTE["sidebar_bg"])
+        container.pack(fill="both", expand=True)
+
+        # ─── Sidebar izquierdo ──────────────────────────────────────────
+        sidebar = tk.Frame(container, bg=PALETTE["sidebar_bg"], width=190)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        # Logo / título en el sidebar
+        tk.Label(
+            sidebar,
+            text="⛏  Bitácora\nGeomecánica",
+            font=("Segoe UI", 12, "bold"),
+            bg=PALETTE["sidebar_bg"],
+            fg="#ffffff",
+            pady=14,
+            justify="center",
+        ).pack(fill="x")
+
+        tk.Frame(sidebar, bg="#2d3a5e", height=1).pack(fill="x", padx=10)
+
+        # Botones del sidebar
+        _nav_btns = []
+
+        def _make_nav_btn(text, command):
+            btn = tk.Button(
+                sidebar,
+                text=text,
+                font=("Segoe UI", 10),
+                bg=PALETTE["sidebar_bg"],
+                fg=PALETTE["sidebar_text"],
+                activebackground=PALETTE["sidebar_active"],
+                activeforeground="#ffffff",
+                relief="flat",
+                anchor="w",
+                padx=14,
+                pady=7,
+                cursor="hand2",
+                command=command,
+            )
+            btn.pack(fill="x", pady=1)
+            aplicar_hover(btn, PALETTE["sidebar_bg"], PALETTE["sidebar_active"])
+            _nav_btns.append(btn)
+            return btn
+
+        _make_nav_btn("📋  Historial",           self._abrir_historial)
+        _make_nav_btn("📊  Dashboard",            self._abrir_dashboard)
+        _make_nav_btn("🏗  Labores",              self._abrir_gestion_labores)
+        _make_nav_btn("🔩  Estándar Sosten.",     self._abrir_estandar)
+        _make_nav_btn("⚙  Configuración",         self._abrir_configuracion)
+        _make_nav_btn("📅  Reporte Período",      self._abrir_reporte_periodo)
+
+        tk.Frame(sidebar, bg="#2d3a5e", height=1).pack(fill="x", padx=10, pady=8)
+
+        self.btn_oscuro = tk.Button(
+            sidebar,
+            text="🌙  Modo Oscuro",
             font=("Segoe UI", 10),
-            bg=WINDOW_BG_COLOR
+            bg=PALETTE["sidebar_bg"],
+            fg=PALETTE["sidebar_text"],
+            activebackground=PALETTE["sidebar_active"],
+            activeforeground="#ffffff",
+            relief="flat",
+            anchor="w",
+            padx=14,
+            pady=7,
+            cursor="hand2",
+            command=self._toggle_modo_oscuro,
         )
-        subtitulo.pack()
-        
-        # Frame principal
-        frame_principal = ttk.Frame(self.root, padding=20)
-        frame_principal.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        # Fecha
-        ttk.Label(frame_principal, text="Fecha").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            frame_principal,
-            text=obtener_fecha_actual()
-        ).grid(row=0, column=1, sticky="w")
-        
-        # Turno
-        ttk.Label(frame_principal, text="Turno").grid(row=1, column=0, sticky="w")
-        combo_turno = ttk.Combobox(
-            frame_principal,
-            textvariable=self.turno_var,
-            state="readonly",
-            values=TURNOS
+        self.btn_oscuro.pack(fill="x", pady=1)
+        aplicar_hover(self.btn_oscuro, PALETTE["sidebar_bg"], PALETTE["sidebar_active"])
+
+        # ─── Panel de contenido derecho ─────────────────────────────────
+        content = tk.Frame(container, bg=PALETTE["surface"])
+        content.pack(side="left", fill="both", expand=True)
+
+        # Header contextual
+        self._header_frame = tk.Frame(content, bg=PALETTE["sidebar_bg"], height=60)
+        self._header_frame.pack(fill="x")
+        self._header_frame.pack_propagate(False)
+
+        self._lbl_header_title = tk.Label(
+            self._header_frame,
+            text=f"⛏  BITÁCORA GEOMECÁNICA    v{APP_VERSION}",
+            font=("Segoe UI", 13, "bold"),
+            bg=PALETTE["sidebar_bg"],
+            fg="#ffffff",
+            anchor="w",
         )
-        combo_turno.grid(row=1, column=1, sticky="ew")
-        self.turno_var.set(_obtener_turno_automatico())
-        
-        # Labor — Entry para buscar/filtrar
-        ttk.Label(frame_principal, text="Labor").grid(row=2, column=0, sticky="w")
-        self.entrada_labor = ttk.Entry(frame_principal, textvariable=self.labor_var)
-        self.entrada_labor.grid(row=2, column=1, sticky="ew")
-        self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
-        self.entrada_labor.bind("<FocusIn>", self._filtrar_labores)
-        self.entrada_labor.bind("<FocusOut>", self._ocultar_lista)
+        self._lbl_header_title.pack(side="left", padx=16, pady=8)
 
-        # Listbox desplegable para mostrar sugerencias filtradas
-        self.lista_filtrada = tk.Listbox(frame_principal, height=5, exportselection=False)
-        self.lista_filtrada.grid(row=3, column=1, sticky="ew")
-        self.lista_filtrada.bind("<<ListboxSelect>>", self._seleccionar_labor_lista)
-        self.lista_filtrada.grid_remove()  # Oculta por defecto
-
-        # Último registro / info de labor
-        self.label_ultimo = ttk.Label(
-            frame_principal,
+        self._lbl_header_info = tk.Label(
+            self._header_frame,
             text="",
-            foreground="gray"
+            font=("Segoe UI", 9),
+            bg=PALETTE["sidebar_bg"],
+            fg="#a0b4cc",
+            anchor="e",
         )
-        self.label_ultimo.grid(row=3, column=0, sticky="w", pady=2)
+        self._lbl_header_info.pack(side="right", padx=16, pady=8)
+        self._actualizar_header()
 
-        # GSI
-        ttk.Label(frame_principal, text="GSI").grid(row=4, column=0, sticky="w")
-        self.entrada_gsi = ttk.Entry(frame_principal)
-        self.entrada_gsi.grid(row=4, column=1, sticky="ew")
+        # Scrollable form area
+        form_outer = tk.Frame(content, bg=PALETTE["surface"])
+        form_outer.pack(fill="both", expand=True, padx=16, pady=12)
 
-        # RMR
-        ttk.Label(frame_principal, text="RMR").grid(row=5, column=0, sticky="w")
-        self.entrada_rmr = ttk.Entry(frame_principal)
-        self.entrada_rmr.grid(row=5, column=1, sticky="ew")
+        # ─── Card helper ─────────────────────────────────────────────────
+        def _make_card(parent, title):
+            """Crea un frame estilo 'card' con borde y título."""
+            outer = tk.Frame(parent, bg=PALETTE["card_border"], padx=1, pady=1)
+            outer.pack(fill="x", pady=6)
+            inner = tk.Frame(outer, bg=PALETTE["card_bg"], padx=12, pady=10)
+            inner.pack(fill="both", expand=True)
+            tk.Label(
+                inner,
+                text=title,
+                font=("Segoe UI", 9, "bold"),
+                bg=PALETTE["card_bg"],
+                fg=PALETTE["primary"],
+            ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            return inner
+
+        # ── Card 1: Identificación ────────────────────────────────────────
+        card1 = _make_card(form_outer, "Identificación")
+        tk.Label(card1, text="Fecha", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                 fg=PALETTE["text_primary"]).grid(row=1, column=0, sticky="w", padx=(0,8))
+        tk.Label(card1, text=obtener_fecha_actual(), font=("Segoe UI", 9, "bold"),
+                 bg=PALETTE["card_bg"], fg=PALETTE["text_primary"]).grid(row=1, column=1, sticky="w")
+
+        tk.Label(card1, text="Turno", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                 fg=PALETTE["text_primary"]).grid(row=2, column=0, sticky="w", padx=(0,8), pady=(4,0))
+        combo_turno = ttk.Combobox(card1, textvariable=self.turno_var, state="readonly",
+                                    values=TURNOS, width=18)
+        combo_turno.grid(row=2, column=1, sticky="ew", pady=(4,0))
+        self.turno_var.set(_obtener_turno_automatico())
+        card1.columnconfigure(1, weight=1)
+
+        # ── Card 2: Labor ─────────────────────────────────────────────────
+        card2 = _make_card(form_outer, "Labor")
+        tk.Label(card2, text="Labor", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                 fg=PALETTE["text_primary"]).grid(row=1, column=0, sticky="w", padx=(0,8))
+        self.entrada_labor = ttk.Entry(card2, textvariable=self.labor_var, width=28)
+        self.entrada_labor.grid(row=1, column=1, sticky="ew")
+        self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
+        self.entrada_labor.bind("<FocusIn>",    self._filtrar_labores)
+        self.entrada_labor.bind("<FocusOut>",   self._ocultar_lista)
+
+        self.lista_filtrada = tk.Listbox(card2, height=5, exportselection=False)
+        self.lista_filtrada.grid(row=2, column=1, sticky="ew")
+        self.lista_filtrada.bind("<<ListboxSelect>>", self._seleccionar_labor_lista)
+        self.lista_filtrada.grid_remove()
+
+        self.label_ultimo = tk.Label(card2, text="", font=("Segoe UI", 8),
+                                     bg=PALETTE["card_bg"], fg=PALETTE["text_muted"])
+        self.label_ultimo.grid(row=2, column=0, sticky="w", pady=2)
+        card2.columnconfigure(1, weight=1)
+
+        # ── Card 3: Geomecánica ───────────────────────────────────────────
+        card3 = _make_card(form_outer, "Geomecánica")
+        tk.Label(card3, text="GSI", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                 fg=PALETTE["text_primary"]).grid(row=1, column=0, sticky="w", padx=(0,8))
+        self.entrada_gsi = ttk.Entry(card3, width=18)
+        self.entrada_gsi.grid(row=1, column=1, sticky="ew")
+
+        tk.Label(card3, text="RMR", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                 fg=PALETTE["text_primary"]).grid(row=2, column=0, sticky="w", padx=(0,8), pady=(4,0))
+        self.entrada_rmr = ttk.Entry(card3, width=18)
+        self.entrada_rmr.grid(row=2, column=1, sticky="ew", pady=(4,0))
         self.entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
 
-        # Soporte recomendado
-        ttk.Label(frame_principal, text="Soporte recomendado").grid(row=6, column=0, sticky="w")
-        self.entrada_soporte = ttk.Entry(frame_principal)
-        self.entrada_soporte.grid(row=6, column=1, sticky="ew")
+        tk.Label(card3, text="Soporte recomendado", font=("Segoe UI", 9),
+                 bg=PALETTE["card_bg"], fg=PALETTE["text_primary"]).grid(row=3, column=0, sticky="w", padx=(0,8), pady=(4,0))
+        self.entrada_soporte = ttk.Entry(card3, width=18)
+        self.entrada_soporte.grid(row=3, column=1, sticky="ew", pady=(4,0))
+        card3.columnconfigure(1, weight=1)
 
-        # Observaciones
-        ttk.Label(frame_principal, text="Observaciones").grid(row=7, column=0, sticky="nw")
+        # ── Card 4: Observaciones ─────────────────────────────────────────
+        card4 = _make_card(form_outer, "Observaciones")
         self.entrada_obs = tk.Text(
-            frame_principal,
-            height=5,
-            width=30,
+            card4, height=4, width=30,
             font=("Segoe UI", 10),
-            relief="flat",
-            borderwidth=1,
+            relief="flat", borderwidth=1,
             highlightthickness=1,
-            highlightbackground="#cccccc",
-            highlightcolor="#4a90d9",
-            wrap="word"
+            highlightbackground=PALETTE["card_border"],
+            highlightcolor=PALETTE["primary"],
+            wrap="word",
         )
-        self.entrada_obs.grid(row=7, column=1, sticky="ew")
-        
-        frame_principal.columnconfigure(1, weight=1)
-        
-        # Frame de botones: fila 0 (guardar), fila 1 (4 botones), fila 2 (3 botones)
-        frame_botones = ttk.Frame(self.root)
-        frame_botones.pack(pady=(5, 10))
+        self.entrada_obs.grid(row=1, column=0, sticky="ew")
+        card4.columnconfigure(0, weight=1)
 
-        # Fila 1: Botón principal de guardar
-        ttk.Button(
-            frame_botones,
+        # ── Botón principal guardar ──────────────────────────────────────
+        btn_frame = tk.Frame(content, bg=PALETTE["surface"])
+        btn_frame.pack(fill="x", padx=16, pady=(0, 8))
+
+        self._btn_guardar = tk.Button(
+            btn_frame,
             text="💾  Guardar Registro",
+            font=("Segoe UI", 11, "bold"),
+            bg=PALETTE["primary"],
+            fg="#ffffff",
+            activebackground=PALETTE["primary_hover"],
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=20,
+            pady=8,
+            cursor="hand2",
             command=self._guardar_datos,
-            width=25
-        ).grid(row=0, column=0, columnspan=4, pady=(0, 8), padx=5)
-
-        # Fila 2: 4 botones secundarios
-        ttk.Button(
-            frame_botones,
-            text="📋 Ver Historial",
-            command=self._abrir_historial,
-            width=18
-        ).grid(row=1, column=0, padx=4, pady=2)
-
-        ttk.Button(
-            frame_botones,
-            text="📄 Reporte PDF",
-            command=self._generar_reporte,
-            width=18
-        ).grid(row=1, column=1, padx=4, pady=2)
-
-        ttk.Button(
-            frame_botones,
-            text="🔩 Estándar Sosten.",
-            command=self._abrir_estandar,
-            width=18
-        ).grid(row=1, column=2, padx=4, pady=2)
-
-        ttk.Button(
-            frame_botones,
-            text="🏗 Gestionar Labores",
-            command=self._abrir_gestion_labores,
-            width=18
-        ).grid(row=1, column=3, padx=4, pady=2)
-
-        # Fila 3: Nuevos botones
-        ttk.Button(
-            frame_botones,
-            text="🪨 Sostenimiento Diario",
-            command=self._abrir_sostenimiento,
-            width=18
-        ).grid(row=2, column=0, padx=4, pady=2)
-
-        ttk.Button(
-            frame_botones,
-            text="📊 Dashboard",
-            command=self._abrir_dashboard,
-            width=18
-        ).grid(row=2, column=1, padx=4, pady=2)
-
-        ttk.Button(
-            frame_botones,
-            text="⚙ Configuración",
-            command=self._abrir_configuracion,
-            width=18
-        ).grid(row=2, column=2, padx=4, pady=2)
-
-        self.btn_oscuro = ttk.Button(
-            frame_botones,
-            text="🌙 Modo Oscuro",
-            command=self._toggle_modo_oscuro,
-            width=18
         )
-        self.btn_oscuro.grid(row=3, column=1, padx=4, pady=2)
-    
+        self._btn_guardar.pack(fill="x")
+        aplicar_hover(self._btn_guardar, PALETTE["primary"], PALETTE["primary_hover"])
+
+        # ── Status bar inferior ──────────────────────────────────────────
+        status_bar = tk.Frame(self.root, bg="#e8edf2", height=24)
+        status_bar.pack(fill="x", side="bottom")
+        status_bar.pack_propagate(False)
+
+        self._lbl_status_file = tk.Label(
+            status_bar,
+            text="",
+            font=("Segoe UI", 8),
+            bg="#e8edf2",
+            fg=PALETTE["text_muted"],
+            anchor="w",
+        )
+        self._lbl_status_file.pack(side="left", padx=8)
+
+        self._lbl_status_time = tk.Label(
+            status_bar,
+            text="",
+            font=("Segoe UI", 8),
+            bg="#e8edf2",
+            fg=PALETTE["text_muted"],
+            anchor="e",
+        )
+        self._lbl_status_time.pack(side="right", padx=8)
+        self._actualizar_status_bar()
+
+    def _actualizar_header(self):
+        """Actualiza el header contextual con fecha, turno y registros."""
+        from utils.helpers import obtener_fecha_actual
+        # Cancel any previous scheduled callback to avoid accumulation
+        after_id = getattr(self, "_after_header", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        try:
+            turno = self.turno_var.get() or "—"
+        except Exception:
+            turno = "—"
+        try:
+            n = len(self.model.obtener_bitacora())
+        except Exception:
+            n = 0
+        fecha = obtener_fecha_actual()
+        self._lbl_header_info.config(
+            text=f"📅 {fecha}  |  Turno: {turno}  |  Registros: {n}"
+        )
+        self._after_header = self.root.after(60000, self._actualizar_header)
+
+    def _actualizar_status_bar(self):
+        """Actualiza la barra de estado inferior."""
+        from utils.config import ARCHIVO_BITACORA
+        import datetime
+        # Cancel any previous scheduled callback to avoid accumulation
+        after_id = getattr(self, "_after_status", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        hora = datetime.datetime.now().strftime("%H:%M")
+        archivo = str(ARCHIVO_BITACORA)
+        self._lbl_status_file.config(text=f"Archivo: {archivo}")
+        self._lbl_status_time.config(text=f"🕐 {hora}")
+        self._after_status = self.root.after(60000, self._actualizar_status_bar)
+
+
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
         from utils.validators import ValidadorBitacora
@@ -255,7 +376,11 @@ class BitacoraApp:
         
             if exito:
                 LoggerBitacora.registrar_guardar_registro(datos)
-                messagebox.showinfo("Resultado", mensaje)
+                try:
+                    from utils.toast import mostrar_toast
+                    mostrar_toast(self.root, mensaje, tipo="success")
+                except Exception:
+                    messagebox.showinfo("Resultado", mensaje)
                 self._limpiar_campos()
                 self._actualizar_labores()
             elif "DUPLICADO" in mensaje:
@@ -268,7 +393,11 @@ class BitacoraApp:
                     exito2, msg2 = self.model.guardar_registro_forzado(datos)
                     if exito2:
                         LoggerBitacora.registrar_guardar_registro(datos)
-                        messagebox.showinfo("Resultado", msg2)
+                        try:
+                            from utils.toast import mostrar_toast
+                            mostrar_toast(self.root, msg2, tipo="success")
+                        except Exception:
+                            messagebox.showinfo("Resultado", msg2)
                         self._limpiar_campos()
                         self._actualizar_labores()
                     else:
@@ -286,6 +415,11 @@ class BitacoraApp:
         self.entrada_rmr.delete(0, tk.END)
         self.entrada_soporte.delete(0, tk.END)
         self.entrada_obs.delete("1.0", tk.END)
+        # Refrescar header
+        try:
+            self._actualizar_header()
+        except Exception:
+            pass
     
     def _actualizar_labores(self):
         """Actualiza la lista de labores disponibles"""
@@ -2053,6 +2187,8 @@ class VentanaDashboard(tk.Toplevel):
 
         ttk.Button(frame_filtros, text="🔄 Actualizar",
                    command=self._actualizar).grid(row=0, column=10, padx=10)
+        ttk.Button(frame_filtros, text="Exportar PNG",
+                   command=self._exportar_png).grid(row=0, column=11, padx=5)
 
         # Frame para gráficos (canvas de matplotlib)
         self.frame_graficos = ttk.Frame(self)
@@ -2074,10 +2210,13 @@ class VentanaDashboard(tk.Toplevel):
     def _actualizar(self):
         """Genera y actualiza los 4 gráficos"""
         try:
+            import warnings
             import matplotlib
             import pandas as pd
             from matplotlib.figure import Figure
             from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+            matplotlib.rcParams['axes.unicode_minus'] = False
+            warnings.filterwarnings("ignore", message="Glyph.*missing from font")
         except ImportError:
             tk.Label(self.frame_graficos,
                      text="matplotlib no está instalado.\nEjecute: pip install matplotlib").pack()
@@ -2117,7 +2256,19 @@ class VentanaDashboard(tk.Toplevel):
         except Exception:
             df_bit = None
 
-        fig = Figure(figsize=(12, 8), dpi=90)
+        matplotlib.rcParams.update({
+            'font.size': 9,
+            'axes.titlesize': 10,
+            'axes.titleweight': 'bold',
+            'axes.spines.top': False,
+            'axes.spines.right': False,
+            'axes.grid': True,
+            'grid.alpha': 0.3,
+            'figure.facecolor': '#f8fafc',
+            'axes.facecolor': '#ffffff',
+        })
+        _DASHBOARD_COLORS = ["#1a6fc4", "#2d8a6e", "#f59e0b", "#d94f3d", "#8b5cf6", "#06b6d4"]
+        fig = Figure(figsize=(12, 8), dpi=90, facecolor='#f8fafc')
         axes = [fig.add_subplot(2, 2, i + 1) for i in range(4)]
 
         COLS_NUM = list(dict.fromkeys(
@@ -2155,7 +2306,7 @@ class VentanaDashboard(tk.Toplevel):
             except Exception:
                 total_shot = 0.0
 
-        ax2.text(0.5, 0.82, "🪨  Shotcrete Total", ha="center", va="center",
+        ax2.text(0.5, 0.82, "Shotcrete Total", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=14, fontweight="bold")
         ax2.text(0.5, 0.55, f"{total_shot:.1f} m³", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=30, fontweight="bold", color="steelblue")
@@ -2231,9 +2382,36 @@ class VentanaDashboard(tk.Toplevel):
 
         fig.tight_layout()
 
+        # Close previous figure to free memory before storing the new one
+        prev_fig = getattr(self, "_fig_actual", None)
+        if prev_fig is not None:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(prev_fig)
+            except Exception as exc:  # noqa: BLE001 — plt.close can raise various errors
+                pass
+        self._fig_actual = fig
         canvas = FigureCanvasTkAgg(fig, master=self.frame_graficos)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _exportar_png(self):
+        """Exporta el gráfico actual como archivo PNG."""
+        fig = getattr(self, "_fig_actual", None)
+        if fig is None:
+            from tkinter import messagebox
+            messagebox.showinfo("Sin gráfico", "Primero genere el gráfico con 'Actualizar'.")
+            return
+        from tkinter import filedialog
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG Image", "*.png")],
+            title="Exportar gráfico como PNG",
+        )
+        if ruta:
+            fig.savefig(ruta, dpi=200, bbox_inches="tight")
+            from tkinter import messagebox
+            messagebox.showinfo("Exportado", f"Gráfico guardado en:\n{ruta}")
 
 
 class VentanaConfiguracion(tk.Toplevel):
