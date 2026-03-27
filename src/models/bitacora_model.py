@@ -89,7 +89,7 @@ class BitacoraModel:
         if not os.path.exists(self.archivo):
             bitacora = pd.DataFrame(columns=COLUMNAS_BITACORA)
             estandar = pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
-            labores = pd.DataFrame(columns=["Labor", "GSI", "RMR", "Soporte", "Tipo"])
+            labores = pd.DataFrame(columns=COLUMNAS_LABORES)
             cols_sost = self._columnas_sostenimiento_actuales()
             sostenimiento = pd.DataFrame(columns=cols_sost)
 
@@ -102,27 +102,48 @@ class BitacoraModel:
             try:
                 import openpyxl
                 wb = openpyxl.load_workbook(self.archivo)
-                modified = False
-                if "Sostenimiento_Diario" not in wb.sheetnames:
-                    wb.close()
+                sheetnames = wb.sheetnames
+                wb.close()
+
+                # ── Sostenimiento_Diario ──────────────────────────────────────
+                if "Sostenimiento_Diario" not in sheetnames:
                     cols_sost = self._columnas_sostenimiento_actuales()
                     sostenimiento = pd.DataFrame(columns=cols_sost)
                     with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl") as writer:
                         sostenimiento.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
                 else:
-                    wb.close()
-                    # Añadir columnas nuevas a Sostenimiento_Diario si faltan
                     try:
                         df_sost = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
                         cols_sost = self._columnas_sostenimiento_actuales()
+                        modified = False
                         for col in cols_sost:
                             if col not in df_sost.columns:
-                                df_sost[col] = 0
+                                df_sost[col] = "" if col in ("Observaciones", "Tipo_Shotcrete") else 0
                                 modified = True
+                        # Añadir Tipo_Shotcrete si falta (retrocompatibilidad)
+                        if "Tipo_Shotcrete" not in df_sost.columns:
+                            df_sost["Tipo_Shotcrete"] = ""
+                            modified = True
                         if modified:
                             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                                 if_sheet_exists="replace") as writer:
                                 df_sost.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+                    except Exception:
+                        pass
+
+                # ── Labores ───────────────────────────────────────────────────
+                if "Labores" in sheetnames:
+                    try:
+                        df_lab = pd.read_excel(self.archivo, sheet_name="Labores")
+                        lab_modified = False
+                        for col in ("Fase", "Clasificacion_KPI"):
+                            if col not in df_lab.columns:
+                                df_lab[col] = ""
+                                lab_modified = True
+                        if lab_modified:
+                            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                                if_sheet_exists="replace") as writer:
+                                df_lab.to_excel(writer, sheet_name="Labores", index=False)
                     except Exception:
                         pass
             except Exception:
@@ -272,7 +293,8 @@ class BitacoraModel:
         except Exception:
             return pd.DataFrame(columns=COLUMNAS_LABORES)
 
-    def agregar_labor(self, nombre_labor, gsi="", rmr="", soporte="", tipo="Temporal"):
+    def agregar_labor(self, nombre_labor, gsi="", rmr="", soporte="", tipo="Temporal",
+                      fase="", clasificacion_kpi=""):
         """
         Agrega una nueva labor a la hoja Labores con sus datos técnicos.
         Returns: tuple (éxito: bool, mensaje: str)
@@ -292,7 +314,9 @@ class BitacoraModel:
                 "GSI": gsi,
                 "RMR": rmr,
                 "Soporte": soporte,
-                "Tipo": tipo
+                "Tipo": tipo,
+                "Fase": fase,
+                "Clasificacion_KPI": clasificacion_kpi,
             }])
             df = _safe_concat(df, nueva_fila)
             df = df.sort_values("Labor").reset_index(drop=True)
