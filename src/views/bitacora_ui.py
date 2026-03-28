@@ -30,6 +30,36 @@ def aplicar_hover(btn, color_normal, color_hover):
     btn.bind("<Leave>", lambda e: btn.configure(bg=color_normal))
 
 
+def _make_styled_btn(parent, text, command, style="primary", padx=12, pady=5):
+    """Creates a styled tk.Button with PALETTE colors and hover effect."""
+    colors_map = {
+        "primary":   (PALETTE["primary"],   PALETTE["primary_hover"]),
+        "secondary": (PALETTE["secondary"], PALETTE["secondary_hover"]),
+        "danger":    (PALETTE["danger"],    PALETTE["danger_hover"]),
+    }
+    bg, hover = colors_map.get(style, colors_map["primary"])
+    b = tk.Button(parent, text=text, command=command,
+                  bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
+                  relief="flat", cursor="hand2", padx=padx, pady=pady,
+                  activebackground=hover, activeforeground="#ffffff")
+    b.bind("<Enter>", lambda e: b.configure(bg=hover))
+    b.bind("<Leave>", lambda e: b.configure(bg=bg))
+    return b
+
+
+def _aplicar_estilo_treeview():
+    """Applies the Custom.Treeview style (dark heading + clean rows)."""
+    style = ttk.Style()
+    style.configure("Custom.Treeview.Heading",
+        background=PALETTE["sidebar_bg"], foreground="#ffffff",
+        font=("Segoe UI", 9, "bold"), relief="flat")
+    style.configure("Custom.Treeview",
+        rowheight=24, font=("Segoe UI", 9),
+        background="#ffffff", fieldbackground="#ffffff")
+    style.map("Custom.Treeview",
+        background=[("selected", PALETTE["primary"])])
+
+
 class BitacoraApp:
     """Aplicación principal de la Bitácora Geomecánica"""
     
@@ -737,15 +767,7 @@ class VentanaHistorial:
                  bg=PALETTE["sidebar_bg"]).pack(fill="x", pady=12, padx=16)
 
         # Custom Treeview style
-        _tv_style = ttk.Style()
-        _tv_style.configure("Custom.Treeview.Heading",
-            background=PALETTE["sidebar_bg"], foreground="#ffffff",
-            font=("Segoe UI", 9, "bold"), relief="flat")
-        _tv_style.configure("Custom.Treeview",
-            rowheight=24, font=("Segoe UI", 9),
-            background="#ffffff", fieldbackground="#ffffff")
-        _tv_style.map("Custom.Treeview",
-            background=[("selected", PALETTE["primary"])])
+        _aplicar_estilo_treeview()
 
         # Frame de búsqueda
         frame_busqueda = tk.Frame(self.ventana, bg=PALETTE["surface"])
@@ -823,29 +845,18 @@ class VentanaHistorial:
         frame_botones = tk.Frame(self.ventana, bg=PALETTE["surface"])
         frame_botones.pack(pady=8)
 
-        def _btn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-                "secondary": (PALETTE["secondary"], PALETTE["secondary_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=10, pady=4,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _place(text, command, style="primary"):
+            b = _make_styled_btn(frame_botones, text, command, style=style, padx=10, pady=4)
             b.pack(side="left", padx=4)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _btn(frame_botones, "✏ Editar",        self._editar_registro,  "primary")
-        _btn(frame_botones, "🗑 Eliminar",      self._eliminar_registro, "danger")
-        _btn(frame_botones, "📊 Excel",         self._exportar_excel,    "secondary")
-        _btn(frame_botones, "📄 PDF",           self._exportar_pdf,      "secondary")
-        self.btn_deshacer = _btn(frame_botones, "↩ Deshacer", self._deshacer, "primary")
-        _btn(frame_botones, "📦 Archivar",      self._archivar_periodo,  "primary")
-        _btn(frame_botones, "✕ Cerrar",         self.ventana.destroy,    "danger")
+        _place("✏ Editar",        self._editar_registro,  "primary")
+        _place("🗑 Eliminar",      self._eliminar_registro, "danger")
+        _place("📊 Excel",         self._exportar_excel,    "secondary")
+        _place("📄 PDF",           self._exportar_pdf,      "secondary")
+        self.btn_deshacer = _place("↩ Deshacer", self._deshacer, "primary")
+        _place("📦 Archivar",      self._archivar_periodo,  "primary")
+        _place("✕ Cerrar",         self.ventana.destroy,    "danger")
         
         self._buscar_labor()
     
@@ -1229,24 +1240,14 @@ class VentanaEstandar:
         frame_botones = tk.Frame(self.ventana, bg=PALETTE["surface"])
         frame_botones.pack(pady=10)
 
-        def _ebtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=12, pady=5,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _eplace(text, command, style="primary"):
+            b = _make_styled_btn(frame_botones, text, command, style=style)
             b.pack(side="left", padx=5)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _ebtn(frame_botones, "➕ Agregar Fila",    self._agregar_fila,   "primary")
-        _ebtn(frame_botones, "🗑 Eliminar Fila",   self._eliminar_fila,  "danger")
-        _ebtn(frame_botones, "💾 Guardar",         self._guardar_estandar, "primary")
+        _eplace("➕ Agregar Fila",    self._agregar_fila,     "primary")
+        _eplace("🗑 Eliminar Fila",   self._eliminar_fila,    "danger")
+        _eplace("💾 Guardar",         self._guardar_estandar, "primary")
     
     def _agregar_fila(self):
         """Agrega una fila a la tabla"""
@@ -1378,25 +1379,14 @@ class VentanaLabores:
         frame_botones_agregar = ttk.Frame(frame_agregar)
         frame_botones_agregar.grid(row=4, column=0, columnspan=4, pady=8)
 
-        def _lbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "secondary": (PALETTE["secondary"], PALETTE["secondary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=12, pady=5,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _lplace(parent, text, command, style="primary"):
+            b = _make_styled_btn(parent, text, command, style=style)
             b.pack(side="left", padx=5)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _lbtn(frame_botones_agregar, "➕ Agregar Labor",              self._agregar_labor,        "primary")
-        _lbtn(frame_botones_agregar, "⚙ Gestionar Clasificaciones",   self._abrir_clasificaciones, "secondary")
-        _lbtn(frame_botones_agregar, "📊 Gestionar KPI",              self._abrir_gestion_kpi,     "secondary")
+        _lplace(frame_botones_agregar, "➕ Agregar Labor",             self._agregar_labor,         "primary")
+        _lplace(frame_botones_agregar, "⚙ Gestionar Clasificaciones",  self._abrir_clasificaciones,  "secondary")
+        _lplace(frame_botones_agregar, "📊 Gestionar KPI",             self._abrir_gestion_kpi,      "secondary")
 
         # Frame para lista de labores
         frame_lista = ttk.LabelFrame(self.ventana, text="Labores Registradas", padding=10)
@@ -1420,23 +1410,13 @@ class VentanaLabores:
         frame_botones = tk.Frame(self.ventana, bg=PALETTE["surface"])
         frame_botones.pack(pady=10)
 
-        def _lbtn2(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=12, pady=5,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _lplace2(text, command, style="primary"):
+            b = _make_styled_btn(frame_botones, text, command, style=style)
             b.pack(side="left", padx=5)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _lbtn2(frame_botones, "🗑 Eliminar Seleccionada", self._eliminar_labor, "danger")
-        _lbtn2(frame_botones, "✕ Cerrar",                self._cerrar,         "danger")
+        _lplace2("🗑 Eliminar Seleccionada", self._eliminar_labor, "danger")
+        _lplace2("✕ Cerrar",                self._cerrar,         "danger")
 
         self._cargar_labores()
 
@@ -1908,26 +1888,15 @@ class VentanaSostenimiento(tk.Toplevel):
         frame_botones = tk.Frame(self, bg=PALETTE["surface"])
         frame_botones.pack(pady=10)
 
-        def _sbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "secondary": (PALETTE["secondary"], PALETTE["secondary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=12, pady=5,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _splace(text, command, style="primary"):
+            b = _make_styled_btn(frame_botones, text, command, style=style)
             b.pack(side="left", padx=6)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _sbtn(frame_botones, "💾 Guardar Sostenimiento",         self._guardar,             "primary")
-        _sbtn(frame_botones, "📋 Ver Historial",                 self._abrir_historial,     "secondary")
-        _sbtn(frame_botones, "⚙ Gestionar Tipos",               self._abrir_gestionar_sost,"secondary")
-        _sbtn(frame_botones, "✕ Cerrar",                        self.destroy,              "danger")
+        _splace("💾 Guardar Sostenimiento",  self._guardar,              "primary")
+        _splace("📋 Ver Historial",          self._abrir_historial,      "secondary")
+        _splace("⚙ Gestionar Tipos",        self._abrir_gestionar_sost, "secondary")
+        _splace("✕ Cerrar",                 self.destroy,               "danger")
 
     def _abrir_gestionar_sost(self):
         """Abre la ventana de gestión de sostenimientos con callback de actualización."""
@@ -2067,16 +2036,8 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
                  font=("Segoe UI", 13, "bold"), fg="#ffffff",
                  bg=PALETTE["sidebar_bg"]).pack(fill="x", pady=12, padx=16)
 
-        # Custom Treeview style
-        _hs_style = ttk.Style()
-        _hs_style.configure("Custom.Treeview.Heading",
-            background=PALETTE["sidebar_bg"], foreground="#ffffff",
-            font=("Segoe UI", 9, "bold"), relief="flat")
-        _hs_style.configure("Custom.Treeview",
-            rowheight=24, font=("Segoe UI", 9),
-            background="#ffffff", fieldbackground="#ffffff")
-        _hs_style.map("Custom.Treeview",
-            background=[("selected", PALETTE["primary"])])
+        # Custom Treeview style (shared helper)
+        _aplicar_estilo_treeview()
 
         frame_filtros = tk.Frame(self, bg=PALETTE["surface"])
         frame_filtros.pack(fill="x", padx=10, pady=8)
@@ -2093,10 +2054,8 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
         self.labor_filtro = tk.StringVar()
         ttk.Entry(frame_filtros, textvariable=self.labor_filtro, width=20).grid(row=0, column=5, padx=4)
 
-        _filt_btn = tk.Button(frame_filtros, text="🔍 Filtrar", command=self._cargar,
-                              bg=PALETTE["primary"], fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                              relief="flat", cursor="hand2", padx=10, pady=3,
-                              activebackground=PALETTE["primary_hover"], activeforeground="#ffffff")
+        _filt_btn = _make_styled_btn(frame_filtros, "🔍 Filtrar", self._cargar,
+                                    style="primary", padx=10, pady=3)
         _filt_btn.grid(row=0, column=6, padx=8)
 
         # Tabla
@@ -2119,26 +2078,15 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
         frame_btn = tk.Frame(self, bg=PALETTE["surface"])
         frame_btn.pack(pady=8)
 
-        def _hsbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "secondary": (PALETTE["secondary"], PALETTE["secondary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=10, pady=4,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _hsplace(text, command, style="primary"):
+            b = _make_styled_btn(frame_btn, text, command, style=style, padx=10, pady=4)
             b.pack(side="left", padx=5)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _hsbtn(frame_btn, "✏ Editar",          self._editar,   "primary")
-        _hsbtn(frame_btn, "🗑 Eliminar",        self._eliminar, "danger")
-        _hsbtn(frame_btn, "📊 Exportar Excel",  self._exportar, "secondary")
-        _hsbtn(frame_btn, "✕ Cerrar",           self.destroy,   "danger")
+        _hsplace("✏ Editar",          self._editar,   "primary")
+        _hsplace("🗑 Eliminar",        self._eliminar, "danger")
+        _hsplace("📊 Exportar Excel",  self._exportar, "secondary")
+        _hsplace("✕ Cerrar",           self.destroy,   "danger")
 
         self._cargar()
 
@@ -2295,21 +2243,11 @@ class VentanaDashboard(tk.Toplevel):
         self._combo_sost_filter.grid(row=0, column=9, padx=4)
         self._combo_sost_filter.bind("<<ComboboxSelected>>", lambda e: self._actualizar())
 
-        _act_btn = tk.Button(frame_filtros, text="🔄 Actualizar",
-                             command=self._actualizar,
-                             bg=PALETTE["primary"], fg="#ffffff",
-                             font=("Segoe UI", 9, "bold"), relief="flat",
-                             cursor="hand2", padx=10, pady=3,
-                             activebackground=PALETTE["primary_hover"],
-                             activeforeground="#ffffff")
+        _act_btn = _make_styled_btn(frame_filtros, "🔄 Actualizar", self._actualizar,
+                                   style="primary", padx=10, pady=3)
         _act_btn.grid(row=0, column=10, padx=10)
-        _exp_btn = tk.Button(frame_filtros, text="🖼 Exportar PNG",
-                             command=self._exportar_png,
-                             bg=PALETTE["secondary"], fg="#ffffff",
-                             font=("Segoe UI", 9, "bold"), relief="flat",
-                             cursor="hand2", padx=10, pady=3,
-                             activebackground=PALETTE["secondary_hover"],
-                             activeforeground="#ffffff")
+        _exp_btn = _make_styled_btn(frame_filtros, "🖼 Exportar PNG", self._exportar_png,
+                                    style="secondary", padx=10, pady=3)
         _exp_btn.grid(row=0, column=11, padx=5)
 
         # Frame para gráficos (canvas de matplotlib)
@@ -2701,23 +2639,13 @@ class VentanaConfiguracion(tk.Toplevel):
         frame_btns = tk.Frame(self, bg=PALETTE["surface"])
         frame_btns.pack(pady=12)
 
-        def _cfgbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=14, pady=6,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _cfgplace(text, command, style="primary"):
+            b = _make_styled_btn(frame_btns, text, command, style=style, padx=14, pady=6)
             b.pack(side="left", padx=10)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _cfgbtn(frame_btns, "💾 Guardar configuración", self._guardar,   "primary")
-        _cfgbtn(frame_btns, "✕ Cancelar",               self._cancelar, "danger")
+        _cfgplace("💾 Guardar configuración", self._guardar,   "primary")
+        _cfgplace("✕ Cancelar",               self._cancelar, "danger")
 
     def _agregar_turno(self):
         win = tk.Toplevel(self)
@@ -2938,23 +2866,13 @@ class VentanaSostenimientos(tk.Toplevel):
         frame_btns = tk.Frame(self, bg=PALETTE["surface"])
         frame_btns.pack(pady=10)
 
-        def _sostbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=14, pady=6,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _sostplace(text, command, style="primary"):
+            b = _make_styled_btn(frame_btns, text, command, style=style, padx=14, pady=6)
             b.pack(side="left", padx=10)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _sostbtn(frame_btns, "💾 Guardar",  self._guardar, "primary")
-        _sostbtn(frame_btns, "✕ Cancelar", self.destroy,   "danger")
+        _sostplace("💾 Guardar",  self._guardar, "primary")
+        _sostplace("✕ Cancelar", self.destroy,   "danger")
 
         self._inner_frame = inner
 
@@ -3029,23 +2947,13 @@ class VentanaReportePeriodo(tk.Toplevel):
         frame_btn = tk.Frame(self, bg=PALETTE["surface"])
         frame_btn.pack(pady=12)
 
-        def _rpbtn(parent, text, command, style="primary"):
-            colors_map = {
-                "primary": (PALETTE["primary"], PALETTE["primary_hover"]),
-                "danger":  (PALETTE["danger"],  PALETTE["danger_hover"]),
-            }
-            bg, hover = colors_map.get(style, colors_map["primary"])
-            b = tk.Button(parent, text=text, command=command,
-                          bg=bg, fg="#ffffff", font=("Segoe UI", 9, "bold"),
-                          relief="flat", cursor="hand2", padx=14, pady=6,
-                          activebackground=hover, activeforeground="#ffffff")
+        def _rpplace(text, command, style="primary"):
+            b = _make_styled_btn(frame_btn, text, command, style=style, padx=14, pady=6)
             b.pack(side="left", padx=8)
-            b.bind("<Enter>", lambda e: b.configure(bg=hover))
-            b.bind("<Leave>", lambda e: b.configure(bg=bg))
             return b
 
-        _rpbtn(frame_btn, "🔍 Vista Previa y Generar", self._previsualizar, "primary")
-        _rpbtn(frame_btn, "✕ Cerrar",                  self.destroy,        "danger")
+        _rpplace("🔍 Vista Previa y Generar", self._previsualizar, "primary")
+        _rpplace("✕ Cerrar",                  self.destroy,        "danger")
 
     def _previsualizar(self):
         fi_str = self.fi.get()
