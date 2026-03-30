@@ -417,26 +417,35 @@ class BitacoraModel:
         except Exception:
             return None
     
-    def obtener_estandar_sostenimiento(self):
-        """Obtiene los estándares de sostenimiento"""
+    def obtener_estandar_sostenimiento(self, sistema="RMR"):
+        """Obtiene los estándares de sostenimiento para un sistema de clasificación."""
+        from utils.config_manager import nombre_hoja_estandar, columnas_estandar
+        hoja = nombre_hoja_estandar(sistema)
+        cols = columnas_estandar(sistema)
         try:
-            return pd.read_excel(self.archivo, sheet_name="Estandar_Sostenimiento")
+            return pd.read_excel(self.archivo, sheet_name=hoja)
         except Exception:
-            return pd.DataFrame(columns=COLUMNAS_ESTANDAR)
+            return pd.DataFrame(columns=cols)
     
-    def recomendar_soporte(self, rmr, tipo="Temporal"):
+    def recomendar_soporte(self, valor, tipo="Temporal", sistema="RMR"):
         """
-        Recomienda soporte según el valor de RMR y el tipo de labor.
+        Recomienda soporte según el valor de clasificación y el tipo de labor.
 
         Args:
-            rmr (int): Valor de Rock Mass Rating
+            valor (float): Valor de la clasificación (RMR, Q, GSI, etc.)
             tipo (str): Tipo de labor ("Temporal" o "Permanente")
+            sistema (str): Sistema de clasificación ("RMR", "Q", "GSI", etc.)
 
         Returns:
             str: Recomendación de soporte o vacío
         """
         try:
-            df = self.obtener_estandar_sostenimiento()
+            from utils.config_manager import columnas_estandar
+            cols = columnas_estandar(sistema)
+            col_min = cols[0]
+            col_max = cols[1]
+
+            df = self.obtener_estandar_sostenimiento(sistema)
 
             # Filtrar por tipo si la columna existe
             if "Tipo" in df.columns:
@@ -448,28 +457,31 @@ class BitacoraModel:
                 df_tipo = df
 
             for _, row in df_tipo.iterrows():
-                rmr_min = int(row["RMR_min"])
-                rmr_max = int(row["RMR_max"])
-                if rmr_min <= rmr <= rmr_max:
+                v_min = float(row[col_min])
+                v_max = float(row[col_max])
+                if v_min <= valor <= v_max:
                     return str(row["Soporte"])
 
             return ""
         except Exception:
             return ""
     
-    def guardar_estandar_sostenimiento(self, datos):
+    def guardar_estandar_sostenimiento(self, datos, sistema="RMR"):
         """
-        Guarda los estándares de sostenimiento
+        Guarda los estándares de sostenimiento para un sistema de clasificación.
         
         Args:
             datos (list): Lista de diccionarios con los estándares
+            sistema (str): Sistema de clasificación ("RMR", "Q", "GSI", etc.)
         
         Returns:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
+            from utils.config_manager import nombre_hoja_estandar, columnas_estandar
             self._hacer_backup()
-            cols = ["RMR_min", "RMR_max", "Tipo", "Soporte"]
+            hoja = nombre_hoja_estandar(sistema)
+            cols = columnas_estandar(sistema)
             if datos:
                 df = pd.DataFrame(datos)
                 # Ensure column order and add missing columns with empty values
@@ -482,7 +494,7 @@ class BitacoraModel:
             
             with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Estandar_Sostenimiento", index=False)
+                df.to_excel(writer, sheet_name=hoja, index=False)
             
             return True, "Estándar guardado correctamente"
         except Exception as e:

@@ -7,6 +7,12 @@ from utils.config import DATA_DIR
 
 CONFIG_FILE = DATA_DIR / "config.json"
 
+CLASIFICACIONES_PREDEFINIDAS = [
+    {"id": "RMR", "nombre": "RMR (Rock Mass Rating)", "predefinida": True},
+    {"id": "Q", "nombre": "Q de Barton", "predefinida": True},
+    {"id": "GSI", "nombre": "GSI (Geological Strength Index)", "predefinida": True},
+]
+
 DEFAULTS = {
     "turnos": ["Día", "Noche"],
     "sostenimientos_activos": [
@@ -30,6 +36,8 @@ DEFAULTS = {
         {"display": "Cable Bolting (m)", "columna": "Cable_Bolting", "tipo": "float"},
         {"display": "Marco de Acero", "columna": "Marco_Acero", "tipo": "int"},
     ],
+    "clasificaciones_activas": ["RMR"],
+    "clasificaciones_personalizadas": [],
     "window_width": 650,
     "window_height": 650,
     "theme_color": "#f2f4f7",
@@ -69,3 +77,41 @@ def guardar_config(config: dict) -> bool:
         return True
     except Exception:
         return False
+
+
+def obtener_clasificaciones_disponibles() -> list:
+    """
+    Devuelve la lista combinada de clasificaciones predefinidas y personalizadas.
+    Cada elemento es un dict con 'id', 'nombre' y 'predefinida'.
+    """
+    config = cargar_config()
+    personalizadas = config.get("clasificaciones_personalizadas", [])
+    return list(CLASIFICACIONES_PREDEFINIDAS) + [
+        {"id": c["id"], "nombre": c["nombre"], "predefinida": False}
+        for c in personalizadas if isinstance(c, dict) and "id" in c and "nombre" in c
+    ]
+
+
+def obtener_clasificaciones_activas() -> list:
+    """Devuelve la lista de IDs de clasificaciones activas."""
+    config = cargar_config()
+    return config.get("clasificaciones_activas", ["RMR"])
+
+
+def nombre_hoja_estandar(sistema: str) -> str:
+    """Devuelve el nombre de la hoja Excel para un sistema de clasificación."""
+    if sistema == "RMR":
+        return "Estandar_Sostenimiento"
+    return f"Estandar_{sistema}"
+
+
+def columnas_estandar(sistema: str) -> list:
+    """Devuelve las columnas del estándar según el sistema de clasificación."""
+    if sistema == "RMR":
+        return ["RMR_min", "RMR_max", "Tipo", "Soporte"]
+    elif sistema == "Q":
+        return ["Q_min", "Q_max", "Tipo", "Soporte"]
+    elif sistema == "GSI":
+        return ["GSI_min", "GSI_max", "Tipo", "Soporte"]
+    else:
+        return [f"{sistema}_min", f"{sistema}_max", "Tipo", "Soporte"]

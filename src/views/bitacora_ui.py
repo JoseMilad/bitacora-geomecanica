@@ -599,8 +599,10 @@ class BitacoraApp:
         VentanaLabores(self.root, self.model, self._actualizar_labores)
     
     def _calcular_soporte(self, event):
-        """Calcula automáticamente el soporte según RMR"""
+        """Calcula automáticamente el soporte según clasificaciones activas"""
         try:
+            from utils.config_manager import obtener_clasificaciones_activas
+
             rmr = validar_rmr(self.entrada_rmr.get())
             if rmr is None:
                 return
@@ -620,7 +622,16 @@ class BitacoraApp:
                     if tipo_es_valido:
                         tipo = str(tipo_raw)
 
-            soporte = self.model.recomendar_soporte(rmr, tipo=tipo)
+            # Intentar cada clasificación activa hasta encontrar recomendación
+            activas = obtener_clasificaciones_activas()
+            partes = []
+            for sistema in activas:
+                if sistema == "RMR" and rmr is not None:
+                    rec = self.model.recomendar_soporte(rmr, tipo=tipo, sistema="RMR")
+                    if rec:
+                        partes.append(rec)
+            # Si hay resultado, usar el primero encontrado
+            soporte = partes[0] if partes else ""
             self.entrada_soporte.delete(0, tk.END)
             self.entrada_soporte.insert(0, soporte)
         except Exception:
@@ -1170,19 +1181,25 @@ class VentanaHistorial:
 
 
 class VentanaEstandar:
-    """Ventana para editar estándares de sostenimiento"""
+    """Ventana para editar estándares de sostenimiento con soporte multi-clasificación"""
     
     def __init__(self, parent, model):
         self.model = model
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Estándar de Sostenimiento")
-        self.ventana.geometry("700x430")
+        self.ventana.geometry("750x500")
         self.ventana.configure(bg=PALETTE["surface"])
         
         self._crear_interfaz()
     
     def _crear_interfaz(self):
-        """Crea la interfaz de la ventana de estándar"""
+        """Crea la interfaz de la ventana de estándar con pestañas por sistema"""
+        from utils.config_manager import (
+            obtener_clasificaciones_activas,
+            obtener_clasificaciones_disponibles,
+            columnas_estandar,
+        )
+
         # Header
         header = tk.Frame(self.ventana, bg=PALETTE["sidebar_bg"], height=48)
         header.pack(fill="x")
@@ -1191,101 +1208,135 @@ class VentanaEstandar:
                  font=("Segoe UI", 13, "bold"), fg="#ffffff",
                  bg=PALETTE["sidebar_bg"]).pack(fill="x", pady=12, padx=16)
 
-        columnas = ["RMR_min", "RMR_max", "Tipo", "Soporte"]
+        activas = obtener_clasificaciones_activas()
+        disponibles = {c["id"]: c["nombre"] for c in obtener_clasificaciones_disponibles()}
 
-        self.tabla = ttk.Treeview(self.ventana, columns=columnas, show="headings")
+        # Notebook (pestañas)
+        self.notebook = ttk.Notebook(self.ventana)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
-        anchos = {"RMR_min": 80, "RMR_max": 80, "Tipo": 120, "Soporte": 250}
-        for col in columnas:
-            self.tabla.heading(col, text=col)
-            self.tabla.column(col, width=anchos.get(col, 100), anchor="center")
+        self._tabs = {}
 
-        self.tabla.pack(pady=10, fill="both", expand=True, padx=10)
+        for sistema_id in activas:
+            nombre = disponibles.get(sistema_id, sistema_id)
+            cols = columnas_estandar(sistema_id)
+            frame = ttk.Frame(self.notebook)
+            self.notebook.add(frame, text=nombre)
 
-        # Cargar datos existentes
-        df = self.model.obtener_estandar_sostenimiento()
-        for _, row in df.iterrows():
-            tipo_val = row.get("Tipo", "") if "Tipo" in df.columns else ""
-            self.tabla.insert("", "end", values=(
-                row["RMR_min"], row["RMR_max"], tipo_val, row["Soporte"]
-            ))
+            tabla = ttk.Treeview(frame, columns=cols, show="headings")
+            col_min, col_max = cols[0], cols[1]
+            anchos = {col_min: 80, col_max: 80, "Tipo": 120, "Soporte": 250}
+            for col in cols:
+                tabla.heading(col, text=col)
+                tabla.column(col, width=anchos.get(col, 100), anchor="center")
+            tabla.pack(pady=5, fill="both", expand=True, padx=5)
 
-        # Frame de inputs
-        frame_inputs = tk.Frame(self.ventana)
-        frame_inputs.pack(pady=10)
+            # Cargar datos existentes
+            df = self.model.obtener_estandar_sostenimiento(sistema_id)
+            for _, row in df.iterrows():
+                tipo_val = row.get("Tipo", "") if "Tipo" in df.columns else ""
+                tabla.insert("", "end", values=(
+                    row.get(col_min, ""), row.get(col_max, ""), tipo_val,
+                    row.get("Soporte", "")
+                ))
 
-        tk.Label(frame_inputs, text="RMR min").grid(row=0, column=0, padx=5)
-        self.entrada_min = tk.Entry(frame_inputs, width=8)
-        self.entrada_min.grid(row=0, column=1, padx=5)
+            # Frame de inputs
+            frame_inputs = tk.Frame(frame)
+            frame_inputs.pack(pady=5)
 
-        tk.Label(frame_inputs, text="RMR max").grid(row=0, column=2, padx=5)
-        self.entrada_max = tk.Entry(frame_inputs, width=8)
-        self.entrada_max.grid(row=0, column=3, padx=5)
+            tk.Label(frame_inputs, text=f"{col_min}").grid(row=0, column=0, padx=5)
+            entrada_min = tk.Entry(frame_inputs, width=8)
+            entrada_min.grid(row=0, column=1, padx=5)
 
-        tk.Label(frame_inputs, text="Tipo").grid(row=0, column=4, padx=5)
-        self.tipo_estandar_var = tk.StringVar(value="Temporal")
-        ttk.Combobox(
-            frame_inputs,
-            textvariable=self.tipo_estandar_var,
-            values=["Temporal", "Permanente"],
-            state="readonly",
-            width=12
-        ).grid(row=0, column=5, padx=5)
+            tk.Label(frame_inputs, text=f"{col_max}").grid(row=0, column=2, padx=5)
+            entrada_max = tk.Entry(frame_inputs, width=8)
+            entrada_max.grid(row=0, column=3, padx=5)
 
-        tk.Label(frame_inputs, text="Soporte").grid(row=0, column=6, padx=5)
-        self.entrada_soporte = tk.Entry(frame_inputs, width=25)
-        self.entrada_soporte.grid(row=0, column=7, padx=5)
+            tk.Label(frame_inputs, text="Tipo").grid(row=0, column=4, padx=5)
+            tipo_var = tk.StringVar(value="Temporal")
+            ttk.Combobox(
+                frame_inputs,
+                textvariable=tipo_var,
+                values=["Temporal", "Permanente"],
+                state="readonly",
+                width=12
+            ).grid(row=0, column=5, padx=5)
 
-        # Frame de botones
-        frame_botones = tk.Frame(self.ventana, bg=PALETTE["surface"])
-        frame_botones.pack(pady=10)
+            tk.Label(frame_inputs, text="Soporte").grid(row=0, column=6, padx=5)
+            entrada_soporte = tk.Entry(frame_inputs, width=25)
+            entrada_soporte.grid(row=0, column=7, padx=5)
 
-        def _eplace(text, command, style="primary"):
-            b = _make_styled_btn(frame_botones, text, command, style=style)
-            b.pack(side="left", padx=5)
-            return b
+            # Frame de botones
+            frame_botones = tk.Frame(frame, bg=PALETTE["surface"])
+            frame_botones.pack(pady=5)
 
-        _eplace("➕ Agregar Fila",    self._agregar_fila,     "primary")
-        _eplace("🗑 Eliminar Fila",   self._eliminar_fila,    "danger")
-        _eplace("💾 Guardar",         self._guardar_estandar, "primary")
+            tab_data = {
+                "sistema": sistema_id,
+                "tabla": tabla,
+                "entrada_min": entrada_min,
+                "entrada_max": entrada_max,
+                "tipo_var": tipo_var,
+                "entrada_soporte": entrada_soporte,
+                "cols": cols,
+            }
+            self._tabs[sistema_id] = tab_data
+
+            def _make_agregar(td=tab_data):
+                return lambda: self._agregar_fila(td)
+            def _make_eliminar(td=tab_data):
+                return lambda: self._eliminar_fila(td)
+            def _make_guardar(td=tab_data):
+                return lambda: self._guardar_estandar(td)
+
+            def _eplace(text, command, style="primary", parent_frame=frame_botones):
+                b = _make_styled_btn(parent_frame, text, command, style=style)
+                b.pack(side="left", padx=5)
+                return b
+
+            _eplace("➕ Agregar Fila",    _make_agregar(),     "primary", frame_botones)
+            _eplace("🗑 Eliminar Fila",   _make_eliminar(),    "danger",  frame_botones)
+            _eplace("💾 Guardar",         _make_guardar(),     "primary", frame_botones)
     
-    def _agregar_fila(self):
-        """Agrega una fila a la tabla"""
-        rmr_min = self.entrada_min.get()
-        rmr_max = self.entrada_max.get()
-        tipo = self.tipo_estandar_var.get()
-        soporte = self.entrada_soporte.get()
+    def _agregar_fila(self, tab_data):
+        """Agrega una fila a la tabla del sistema activo"""
+        val_min = tab_data["entrada_min"].get()
+        val_max = tab_data["entrada_max"].get()
+        tipo = tab_data["tipo_var"].get()
+        soporte = tab_data["entrada_soporte"].get()
 
-        if not rmr_min or not rmr_max or not soporte:
+        if not val_min or not val_max or not soporte:
             messagebox.showwarning("Error", "Complete todos los campos")
             return
 
-        self.tabla.insert("", "end", values=(rmr_min, rmr_max, tipo, soporte))
+        tab_data["tabla"].insert("", "end", values=(val_min, val_max, tipo, soporte))
 
-        self.entrada_min.delete(0, tk.END)
-        self.entrada_max.delete(0, tk.END)
-        self.entrada_soporte.delete(0, tk.END)
-        self.tipo_estandar_var.set("Temporal")
+        tab_data["entrada_min"].delete(0, tk.END)
+        tab_data["entrada_max"].delete(0, tk.END)
+        tab_data["entrada_soporte"].delete(0, tk.END)
+        tab_data["tipo_var"].set("Temporal")
     
-    def _eliminar_fila(self):
+    def _eliminar_fila(self, tab_data):
         """Elimina la fila seleccionada"""
-        seleccionado = self.tabla.selection()
+        seleccionado = tab_data["tabla"].selection()
         if seleccionado:
-            self.tabla.delete(seleccionado)
+            tab_data["tabla"].delete(seleccionado)
     
-    def _guardar_estandar(self):
-        """Guarda los estándares"""
+    def _guardar_estandar(self, tab_data):
+        """Guarda los estándares del sistema activo"""
+        cols = tab_data["cols"]
         datos = []
-        for fila in self.tabla.get_children():
-            valores = self.tabla.item(fila)["values"]
+        for fila in tab_data["tabla"].get_children():
+            valores = tab_data["tabla"].item(fila)["values"]
             datos.append({
-                "RMR_min": valores[0],
-                "RMR_max": valores[1],
+                cols[0]: valores[0],
+                cols[1]: valores[1],
                 "Tipo": valores[2],
                 "Soporte": valores[3]
             })
 
-        exito, mensaje = self.model.guardar_estandar_sostenimiento(datos)
+        exito, mensaje = self.model.guardar_estandar_sostenimiento(
+            datos, sistema=tab_data["sistema"]
+        )
         messagebox.showinfo("Resultado", mensaje)
 
 
@@ -2481,8 +2532,8 @@ class VentanaConfiguracion(tk.Toplevel):
         super().__init__(parent)
         self.callback_cerrar = callback_cerrar
         self.title("Configuración")
-        self.geometry("400x530")
-        self.resizable(False, False)
+        self.geometry("480x700")
+        self.resizable(False, True)
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._guardado = False
@@ -2490,92 +2541,9 @@ class VentanaConfiguracion(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._cancelar)
 
     def _crear_interfaz(self):
-        from utils.config_manager import cargar_config
-        self._config = cargar_config()
-
-        tk.Label(self, text="Configuración", font=("Segoe UI", 14, "bold")).pack(pady=10)
-
-        # Turnos
-        frame_turnos = ttk.LabelFrame(self, text="Turnos disponibles", padding=10)
-        frame_turnos.pack(fill="x", padx=15, pady=5)
-
-        self.listbox_turnos = tk.Listbox(frame_turnos, height=4)
-        for t in self._config.get("turnos", []):
-            self.listbox_turnos.insert(tk.END, t)
-        self.listbox_turnos.pack(fill="x")
-
-        frame_turno_btns = ttk.Frame(frame_turnos)
-        frame_turno_btns.pack(fill="x", pady=5)
-        ttk.Button(frame_turno_btns, text="➕ Agregar turno",
-                   command=self._agregar_turno).pack(side="left", padx=5)
-        ttk.Button(frame_turno_btns, text="🗑 Eliminar seleccionado",
-                   command=self._eliminar_turno).pack(side="left", padx=5)
-
-        # Backup automático
-        frame_backup = ttk.LabelFrame(self, text="Respaldo Automático", padding=10)
-        frame_backup.pack(fill="x", padx=15, pady=5)
-        self.backup_var = tk.BooleanVar(value=self._config.get("backup_automatico", True))
-        ttk.Checkbutton(frame_backup, text="Activar respaldo automático al guardar",
-                        variable=self.backup_var).pack(anchor="w")
-
-        # Color de fondo
-        frame_color = ttk.LabelFrame(self, text="Color de fondo (hex)", padding=10)
-        frame_color.pack(fill="x", padx=15, pady=5)
-        self.color_var = tk.StringVar(value=self._config.get("theme_color", WINDOW_BG_COLOR))
-        ttk.Entry(frame_color, textvariable=self.color_var, width=15).pack(side="left", padx=5)
-        ttk.Button(frame_color, text="Previsualizar",
-                   command=self._previsualizar_color).pack(side="left", padx=5)
-
-        # Botones finales
-        frame_btns = ttk.Frame(self)
-        frame_btns.pack(pady=15)
-        ttk.Button(frame_btns, text="💾 Guardar configuración",
-                   command=self._guardar).pack(side="left", padx=10)
-        ttk.Button(frame_btns, text="Cancelar",
-                   command=self._cancelar).pack(side="left", padx=10)
-
-    def _agregar_turno(self):
-        win = tk.Toplevel(self)
-        win.title("Nuevo turno")
-        win.geometry("280x100")
-        win.grab_set()
-        ttk.Label(win, text="Nombre del turno:").pack(pady=8)
-        var = tk.StringVar()
-        ttk.Entry(win, textvariable=var, width=20).pack()
-        def _ok():
-            nombre = var.get().strip()
-            if nombre:
-                self.listbox_turnos.insert(tk.END, nombre)
-            win.destroy()
-        ttk.Button(win, text="Agregar", command=_ok).pack(pady=5)
-
-    def _eliminar_turno(self):
-        sel = self.listbox_turnos.curselection()
-        if sel:
-            self.listbox_turnos.delete(sel[0])
-
-    def _previsualizar_color(self):
-        try:
-            self.configure(bg=self.color_var.get())
-        except Exception:
-            messagebox.showwarning("Color inválido", "El código de color no es válido.", parent=self)
-
-    def _guardar(self):
-        from utils.config_manager import guardar_config
-        self._config["turnos"] = list(self.listbox_turnos.get(0, tk.END))
-        self._config["backup_automatico"] = self.backup_var.get()
-        self._config["theme_color"] = self.color_var.get()
-        if guardar_config(self._config):
-            self._guardado = True
-            messagebox.showinfo("Configuración", "Configuración guardada correctamente.", parent=self)
-            self.destroy()
-            if self.callback_cerrar:
-                self.callback_cerrar()
-        else:
-            messagebox.showerror("Error", "No se pudo guardar la configuración.", parent=self)
-
-    def _crear_interfaz(self):
-        from utils.config_manager import cargar_config
+        from utils.config_manager import (
+            cargar_config, CLASIFICACIONES_PREDEFINIDAS,
+        )
         self._config = cargar_config()
 
         # Header
@@ -2586,8 +2554,18 @@ class VentanaConfiguracion(tk.Toplevel):
                  font=("Segoe UI", 13, "bold"), fg="#ffffff",
                  bg=PALETTE["sidebar_bg"]).pack(fill="x", pady=12, padx=16)
 
-        # Turnos
-        frame_turnos = ttk.LabelFrame(self, text="Turnos disponibles", padding=10)
+        # Scrollable content
+        canvas = tk.Canvas(self, bg=PALETTE["surface"], highlightthickness=0)
+        sb = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        content = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=content, anchor="nw")
+        content.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        # ── Turnos ──────────────────────────────────────────────────────
+        frame_turnos = ttk.LabelFrame(content, text="Turnos disponibles", padding=10)
         frame_turnos.pack(fill="x", padx=15, pady=5)
 
         self.listbox_turnos = tk.Listbox(frame_turnos, height=3)
@@ -2602,23 +2580,58 @@ class VentanaConfiguracion(tk.Toplevel):
         ttk.Button(frame_turno_btns, text="🗑 Eliminar seleccionado",
                    command=self._eliminar_turno).pack(side="left", padx=5)
 
-        # Backup automático
-        frame_backup = ttk.LabelFrame(self, text="Respaldo Automático", padding=8)
+        # ── Clasificaciones activas ─────────────────────────────────────
+        frame_clasif = ttk.LabelFrame(content, text="Clasificaciones de sostenimiento", padding=10)
+        frame_clasif.pack(fill="x", padx=15, pady=5)
+
+        ttk.Label(frame_clasif, text="Seleccione los sistemas de clasificación activos:").pack(
+            anchor="w", pady=(0, 5))
+
+        activas = set(self._config.get("clasificaciones_activas", ["RMR"]))
+        personalizadas = self._config.get("clasificaciones_personalizadas", [])
+        todas = list(CLASIFICACIONES_PREDEFINIDAS) + [
+            {"id": c["id"], "nombre": c["nombre"], "predefinida": False}
+            for c in personalizadas if isinstance(c, dict) and "id" in c
+        ]
+
+        self._clasif_vars = {}
+        for clas in todas:
+            var = tk.BooleanVar(value=(clas["id"] in activas))
+            self._clasif_vars[clas["id"]] = var
+            ttk.Checkbutton(frame_clasif, text=clas["nombre"], variable=var).pack(
+                anchor="w", padx=10, pady=1)
+
+        # Añadir clasificación personalizada
+        frame_custom_clasif = ttk.Frame(frame_clasif)
+        frame_custom_clasif.pack(fill="x", pady=5)
+        ttk.Label(frame_custom_clasif, text="Nueva:").pack(side="left", padx=2)
+        self._nueva_clasif_id = tk.StringVar()
+        ttk.Entry(frame_custom_clasif, textvariable=self._nueva_clasif_id, width=10).pack(
+            side="left", padx=2)
+        ttk.Label(frame_custom_clasif, text="Nombre:").pack(side="left", padx=2)
+        self._nueva_clasif_nombre = tk.StringVar()
+        ttk.Entry(frame_custom_clasif, textvariable=self._nueva_clasif_nombre, width=18).pack(
+            side="left", padx=2)
+        ttk.Button(frame_custom_clasif, text="➕",
+                   command=lambda: self._agregar_clasificacion(frame_clasif)).pack(side="left", padx=4)
+
+        # ── Backup automático ───────────────────────────────────────────
+        frame_backup = ttk.LabelFrame(content, text="Respaldo Automático", padding=8)
         frame_backup.pack(fill="x", padx=15, pady=4)
         self.backup_var = tk.BooleanVar(value=self._config.get("backup_automatico", True))
         ttk.Checkbutton(frame_backup, text="Activar respaldo automático al guardar",
                         variable=self.backup_var).pack(anchor="w")
 
-        # Color de fondo
-        frame_color = ttk.LabelFrame(self, text="Color de fondo (hex)", padding=8)
+        # ── Color de fondo ──────────────────────────────────────────────
+        frame_color = ttk.LabelFrame(content, text="Color de fondo (hex)", padding=8)
         frame_color.pack(fill="x", padx=15, pady=4)
         self.color_var = tk.StringVar(value=self._config.get("theme_color", WINDOW_BG_COLOR))
         ttk.Entry(frame_color, textvariable=self.color_var, width=15).pack(side="left", padx=5)
         ttk.Button(frame_color, text="Previsualizar",
                    command=self._previsualizar_color).pack(side="left", padx=5)
 
-        # Contraseña de edición
-        frame_pwd = ttk.LabelFrame(self, text="Contraseña para editar registros >24h", padding=8)
+        # ── Contraseña de edición ───────────────────────────────────────
+        frame_pwd = ttk.LabelFrame(content, text="Contraseña para editar registros >24h", padding=8)
         frame_pwd.pack(fill="x", padx=15, pady=4)
         self.pwd_var = tk.StringVar(value=self._config.get("password_edicion", "admin1234"))
         self._pwd_entry = ttk.Entry(frame_pwd, textvariable=self.pwd_var, width=20, show="*")
@@ -2635,8 +2648,8 @@ class VentanaConfiguracion(tk.Toplevel):
         btn_mostrar = ttk.Button(frame_pwd, text="👁 Mostrar", command=_toggle_pwd)
         btn_mostrar.pack(side="left")
 
-        # Botones finales
-        frame_btns = tk.Frame(self, bg=PALETTE["surface"])
+        # ── Botones finales ─────────────────────────────────────────────
+        frame_btns = tk.Frame(content, bg=PALETTE["surface"])
         frame_btns.pack(pady=12)
 
         def _cfgplace(text, command, style="primary"):
@@ -2646,6 +2659,37 @@ class VentanaConfiguracion(tk.Toplevel):
 
         _cfgplace("💾 Guardar configuración", self._guardar,   "primary")
         _cfgplace("✕ Cancelar",               self._cancelar, "danger")
+
+    def _agregar_clasificacion(self, parent_frame):
+        """Añade una clasificación personalizada"""
+        import re
+        from utils.config_manager import CLASIFICACIONES_PREDEFINIDAS
+        cid = self._nueva_clasif_id.get().strip()
+        nombre = self._nueva_clasif_nombre.get().strip()
+        if not cid or not nombre:
+            messagebox.showwarning("Advertencia", "Ingrese ID y nombre.", parent=self)
+            return
+        cid = re.sub(r"[^a-zA-Z0-9_]", "_", cid).upper()
+        # Validar que no colisione con predefinidas o existentes
+        ids_predefinidas = {c["id"] for c in CLASIFICACIONES_PREDEFINIDAS}
+        if cid in ids_predefinidas:
+            messagebox.showwarning("Advertencia",
+                                   f"'{cid}' es una clasificación predefinida.", parent=self)
+            return
+        if cid in self._clasif_vars:
+            messagebox.showinfo("Info", "Esa clasificación ya existe.", parent=self)
+            return
+        # Añadir a personalizadas en config
+        personalizadas = self._config.get("clasificaciones_personalizadas", [])
+        personalizadas.append({"id": cid, "nombre": nombre})
+        self._config["clasificaciones_personalizadas"] = personalizadas
+        # Añadir checkbox
+        var = tk.BooleanVar(value=True)
+        self._clasif_vars[cid] = var
+        ttk.Checkbutton(parent_frame, text=nombre, variable=var).pack(
+            anchor="w", padx=10, pady=1)
+        self._nueva_clasif_id.set("")
+        self._nueva_clasif_nombre.set("")
 
     def _agregar_turno(self):
         win = tk.Toplevel(self)
@@ -2679,6 +2723,10 @@ class VentanaConfiguracion(tk.Toplevel):
         self._config["backup_automatico"] = self.backup_var.get()
         self._config["theme_color"] = self.color_var.get()
         self._config["password_edicion"] = self.pwd_var.get()
+        # Guardar clasificaciones activas
+        self._config["clasificaciones_activas"] = [
+            cid for cid, var in self._clasif_vars.items() if var.get()
+        ]
         if guardar_config(self._config):
             self._guardado = True
             messagebox.showinfo("Configuración", "Configuración guardada correctamente.", parent=self)
