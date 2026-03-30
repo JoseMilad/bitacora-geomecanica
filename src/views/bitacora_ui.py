@@ -2663,12 +2663,19 @@ class VentanaConfiguracion(tk.Toplevel):
     def _agregar_clasificacion(self, parent_frame):
         """Añade una clasificación personalizada"""
         import re
+        from utils.config_manager import CLASIFICACIONES_PREDEFINIDAS
         cid = self._nueva_clasif_id.get().strip()
         nombre = self._nueva_clasif_nombre.get().strip()
         if not cid or not nombre:
             messagebox.showwarning("Advertencia", "Ingrese ID y nombre.", parent=self)
             return
         cid = re.sub(r"[^a-zA-Z0-9_]", "_", cid).upper()
+        # Validar que no colisione con predefinidas o existentes
+        ids_predefinidas = {c["id"] for c in CLASIFICACIONES_PREDEFINIDAS}
+        if cid in ids_predefinidas:
+            messagebox.showwarning("Advertencia",
+                                   f"'{cid}' es una clasificación predefinida.", parent=self)
+            return
         if cid in self._clasif_vars:
             messagebox.showinfo("Info", "Esa clasificación ya existe.", parent=self)
             return
