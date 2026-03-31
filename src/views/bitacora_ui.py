@@ -6,10 +6,15 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
 from tkcalendar import DateEntry
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    HRFlowable, KeepTogether
+)
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 from models.bitacora_model import BitacoraModel
 from utils.config import (
@@ -22,6 +27,137 @@ from utils.helpers import (
 from utils.config_manager import cargar_config as _cargar_config
 
 _SECONDS_IN_24H = 86400
+
+# ── Colores para PDFs (alineados con la paleta de la app) ──────────────────
+_PDF_HEADER_BG   = colors.HexColor("#1a2540")   # sidebar_bg
+_PDF_HEADER_FG   = colors.white
+_PDF_ACCENT      = colors.HexColor("#1a6fc4")   # primary
+_PDF_ROW_ODD     = colors.HexColor("#f0f4f8")   # surface
+_PDF_ROW_EVEN    = colors.white
+_PDF_GRID        = colors.HexColor("#dde3ec")   # card_border
+_PDF_SUBHEADER   = colors.HexColor("#2d8a6e")   # secondary
+
+
+def _crear_estilos_pdf():
+    """Retorna estilos customizados de párrafo para PDFs."""
+    base = getSampleStyleSheet()
+    estilos = {}
+
+    estilos["titulo"] = ParagraphStyle(
+        "PdfTitulo",
+        parent=base["Title"],
+        fontSize=16,
+        textColor=_PDF_HEADER_BG,
+        spaceAfter=4,
+        alignment=TA_LEFT,
+        fontName="Helvetica-Bold",
+    )
+    estilos["subtitulo"] = ParagraphStyle(
+        "PdfSubtitulo",
+        parent=base["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#6b7280"),
+        spaceAfter=2,
+        alignment=TA_LEFT,
+    )
+    estilos["seccion"] = ParagraphStyle(
+        "PdfSeccion",
+        parent=base["Heading2"],
+        fontSize=10,
+        textColor=_PDF_ACCENT,
+        spaceBefore=8,
+        spaceAfter=4,
+        fontName="Helvetica-Bold",
+    )
+    estilos["normal"] = ParagraphStyle(
+        "PdfNormal",
+        parent=base["Normal"],
+        fontSize=8,
+        leading=11,
+    )
+    estilos["pie"] = ParagraphStyle(
+        "PdfPie",
+        parent=base["Normal"],
+        fontSize=7,
+        textColor=colors.HexColor("#9ca3af"),
+        alignment=TA_CENTER,
+    )
+    return estilos
+
+
+def _tabla_estilo_principal(col_widths, header_cols):
+    """Retorna el TableStyle estándar para las tablas de datos del PDF."""
+    n = len(header_cols) - 1
+    style = TableStyle([
+        # Encabezado
+        ("BACKGROUND",  (0, 0), (n, 0), _PDF_HEADER_BG),
+        ("TEXTCOLOR",   (0, 0), (n, 0), _PDF_HEADER_FG),
+        ("FONTNAME",    (0, 0), (n, 0), "Helvetica-Bold"),
+        ("FONTSIZE",    (0, 0), (n, 0), 8),
+        ("ALIGN",       (0, 0), (n, 0), "CENTER"),
+        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (n, 0), 7),
+        ("TOPPADDING",  (0, 0), (n, 0), 7),
+        # Filas de datos
+        ("FONTSIZE",    (0, 1), (-1, -1), 7),
+        ("ALIGN",       (0, 1), (-1, -1), "CENTER"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_PDF_ROW_EVEN, _PDF_ROW_ODD]),
+        # Bordes
+        ("GRID",        (0, 0), (-1, -1), 0.4, _PDF_GRID),
+        ("LINEBELOW",   (0, 0), (n, 0), 1.5, _PDF_ACCENT),
+        # Padding
+        ("TOPPADDING",  (0, 1), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+    ])
+    return style
+
+
+def _construir_bloque_header_pdf(estilos, titulo_principal, lineas_info):
+    """
+    Construye el bloque de encabezado estándar del PDF:
+    barra azul con título + líneas de metadatos + separador.
+    Devuelve una lista de elementos Platypus.
+    """
+    elementos = []
+
+    # Recuadro de título con fondo oscuro usando una tabla de 1 celda
+    estilos_banner = ParagraphStyle(
+        "Banner", parent=estilos["titulo"],
+        textColor=colors.white, fontSize=14
+    )
+    tabla_titulo = Table(
+        [[Paragraph(titulo_principal, estilos_banner)]],
+        colWidths=["100%"]
+    )
+    tabla_titulo.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _PDF_HEADER_BG),
+        ("TOPPADDING",    (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 14),
+    ]))
+    elementos.append(tabla_titulo)
+    elementos.append(Spacer(1, 6))
+
+    # Metadatos
+    for linea in lineas_info:
+        elementos.append(Paragraph(linea, estilos["subtitulo"]))
+
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=_PDF_ACCENT))
+    elementos.append(Spacer(1, 10))
+    return elementos
+
+
+def _pie_pagina(canvas, doc):
+    """Función de pie de página que imprime número de página y timestamp."""
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(colors.HexColor("#9ca3af"))
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    page_text = f"Página {doc.page}  ·  {APP_NAME} {APP_VERSION}  ·  Generado: {now}"
+    canvas.drawCentredString(doc.width / 2 + doc.leftMargin, 20, page_text)
+    canvas.restoreState()
 
 
 def aplicar_hover(btn, color_normal, color_hover):
@@ -257,23 +393,34 @@ class BitacoraApp:
         card2.columnconfigure(1, weight=1)
 
         # ── Card 3: Geomecánica ───────────────────────────────────────────
-        card3 = _make_card(form_outer, "Geomecánica")
-        tk.Label(card3, text="GSI", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
-                 fg=PALETTE["text_primary"]).grid(row=1, column=0, sticky="w", padx=(0,8))
-        self.entrada_gsi = ttk.Entry(card3, width=18)
+        self._card3 = _make_card(form_outer, "Geomecánica")
+
+        # GSI entry (always created; shown/hidden by _actualizar_campos_clasificacion)
+        self._lbl_gsi = tk.Label(self._card3, text="GSI", font=("Segoe UI", 9),
+                                 bg=PALETTE["card_bg"], fg=PALETTE["text_primary"])
+        self._lbl_gsi.grid(row=1, column=0, sticky="w", padx=(0, 8))
+        self.entrada_gsi = ttk.Entry(self._card3, width=18)
         self.entrada_gsi.grid(row=1, column=1, sticky="ew")
 
-        tk.Label(card3, text="RMR", font=("Segoe UI", 9), bg=PALETTE["card_bg"],
-                 fg=PALETTE["text_primary"]).grid(row=2, column=0, sticky="w", padx=(0,8), pady=(4,0))
-        self.entrada_rmr = ttk.Entry(card3, width=18)
-        self.entrada_rmr.grid(row=2, column=1, sticky="ew", pady=(4,0))
+        # RMR entry (always created; shown/hidden by _actualizar_campos_clasificacion)
+        self._lbl_rmr = tk.Label(self._card3, text="RMR", font=("Segoe UI", 9),
+                                 bg=PALETTE["card_bg"], fg=PALETTE["text_primary"])
+        self._lbl_rmr.grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
+        self.entrada_rmr = ttk.Entry(self._card3, width=18)
+        self.entrada_rmr.grid(row=2, column=1, sticky="ew", pady=(4, 0))
         self.entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
 
-        tk.Label(card3, text="Soporte recomendado", font=("Segoe UI", 9),
-                 bg=PALETTE["card_bg"], fg=PALETTE["text_primary"]).grid(row=3, column=0, sticky="w", padx=(0,8), pady=(4,0))
-        self.entrada_soporte = ttk.Entry(card3, width=18)
-        self.entrada_soporte.grid(row=3, column=1, sticky="ew", pady=(4,0))
-        card3.columnconfigure(1, weight=1)
+        # Soporte recomendado (always shown)
+        self._lbl_soporte = tk.Label(self._card3, text="Soporte recomendado",
+                                     font=("Segoe UI", 9), bg=PALETTE["card_bg"],
+                                     fg=PALETTE["text_primary"])
+        self._lbl_soporte.grid(row=3, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
+        self.entrada_soporte = ttk.Entry(self._card3, width=18)
+        self.entrada_soporte.grid(row=3, column=1, sticky="ew", pady=(4, 0))
+        self._card3.columnconfigure(1, weight=1)
+
+        # Apply visibility based on current config
+        self._actualizar_campos_clasificacion()
 
         # ── Card 4: Observaciones ─────────────────────────────────────────
         card4 = _make_card(form_outer, "Observaciones")
@@ -377,6 +524,31 @@ class BitacoraApp:
         self._lbl_status_time.config(text=f"🕐 {hora}")
         self._after_status = self.root.after(60000, self._actualizar_status_bar)
 
+    def _actualizar_campos_clasificacion(self):
+        """Muestra u oculta los campos de clasificación según la configuración activa."""
+        from utils.config_manager import obtener_clasificaciones_activas
+        activas = obtener_clasificaciones_activas()
+
+        gsi_visible = "GSI" in activas
+        rmr_visible = "RMR" in activas
+
+        if hasattr(self, "_lbl_gsi") and hasattr(self, "entrada_gsi"):
+            if gsi_visible:
+                self._lbl_gsi.grid()
+                self.entrada_gsi.grid()
+            else:
+                self._lbl_gsi.grid_remove()
+                self.entrada_gsi.grid_remove()
+                self.entrada_gsi.delete(0, tk.END)
+
+        if hasattr(self, "_lbl_rmr") and hasattr(self, "entrada_rmr"):
+            if rmr_visible:
+                self._lbl_rmr.grid()
+                self.entrada_rmr.grid()
+            else:
+                self._lbl_rmr.grid_remove()
+                self.entrada_rmr.grid_remove()
+                self.entrada_rmr.delete(0, tk.END)
 
     def _guardar_datos(self):
         """Guarda un nuevo registro"""
@@ -661,6 +833,8 @@ class BitacoraApp:
             config = cargar_config()
             color = config.get("theme_color", WINDOW_BG_COLOR)
             self.root.configure(bg=color)
+            # Actualizar campos de clasificación según nueva configuración
+            self._actualizar_campos_clasificacion()
 
         VentanaConfiguracion(self.root, _al_cerrar)
 
@@ -701,55 +875,106 @@ class BitacoraApp:
         )
     
     def _generar_pdf_diario(self, df, fecha):
-        """Genera PDF con registros del día"""
+        """Genera PDF con registros del día – con diseño visual mejorado."""
+        from utils.config_manager import obtener_clasificaciones_activas
         fecha_archivo = datetime.now().strftime("%d-%m-%Y")
         nombre_archivo = f"reporte_geomecanica_{fecha_archivo}.pdf"
-        
-        pdf = SimpleDocTemplate(nombre_archivo, pagesize=letter)
-        estilos = getSampleStyleSheet()
+
+        estilos = _crear_estilos_pdf()
+        activas = obtener_clasificaciones_activas()
+
+        # Columnas a incluir: base + clasificaciones activas + resto
+        cols_clasificacion = [c for c in ["GSI", "RMR"] if c in activas and c in df.columns]
+        cols_mostrar = ["Fecha", "Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
+        cols_mostrar = [c for c in cols_mostrar if c in df.columns]
+
+        # Anchos de columna (ajustados al tamaño de hoja carta apaisada)
+        ancho_base = {"Fecha": 62, "Turno": 44, "Labor": 90,
+                      "GSI": 36, "RMR": 36,
+                      "Soporte": 130, "Observaciones": 130}
+        col_widths = [ancho_base.get(c, 60) for c in cols_mostrar]
+
+        pdf = SimpleDocTemplate(
+            nombre_archivo,
+            pagesize=landscape(letter),
+            leftMargin=2*cm, rightMargin=2*cm,
+            topMargin=2*cm, bottomMargin=2*cm,
+        )
         elementos = []
-        
-        # Título
-        titulo = Paragraph("REPORTE DIARIO GEOMECÁNICA", estilos['Title'])
-        elementos.append(titulo)
-        elementos.append(Spacer(1, 10))
-        
-        # Tabla
-        datos = [df.columns.tolist()]
+
+        # ── Encabezado ───────────────────────────────────────────────────
+        clasificaciones_texto = " · ".join(activas) if activas else "Sin clasificación"
+        lineas_info = [
+            f"<b>Fecha del reporte:</b> {fecha}",
+            f"<b>Turno:</b> {df['Turno'].iloc[0] if 'Turno' in df.columns and not df.empty else '—'}  "
+            f"<b>Total de registros:</b> {len(df)}",
+            f"<b>Clasificaciones activas:</b> {clasificaciones_texto}",
+        ]
+        elementos += _construir_bloque_header_pdf(estilos, "⛏  REPORTE DIARIO GEOMECÁNICA", lineas_info)
+
+        # ── Tabla principal ──────────────────────────────────────────────
+        encabezado = cols_mostrar[:]
+        datos = [encabezado]
         for _, row in df.iterrows():
-            fila = [
-                row["Fecha"], row["Turno"], row["Labor"],
-                row["GSI"], row["RMR"],
-                Paragraph(str(row["Soporte"]), estilos["Normal"]),
-                Paragraph(str(row["Observaciones"]), estilos["Normal"])
-            ]
+            fila = []
+            for col in cols_mostrar:
+                val = str(row[col]) if str(row[col]) != "nan" else ""
+                if col in ("Soporte", "Observaciones"):
+                    fila.append(Paragraph(val, estilos["normal"]))
+                else:
+                    fila.append(val)
             datos.append(fila)
-        
-        tabla = Table(datos, colWidths=[60, 50, 80, 40, 40, 120, 130])
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
-            ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
-            ("GRID", (0, 0), (-1, -1), 1, colors.grey)
-        ]))
-        
+
+        tabla = Table(datos, colWidths=col_widths, repeatRows=1)
+        tabla.setStyle(_tabla_estilo_principal(col_widths, encabezado))
         elementos.append(tabla)
-        elementos.append(Spacer(1, 40))
-        
-        # Firmas
-        firma_tabla = Table([
-            ["_______________________", "_______________________"],
-            ["Geomecánica", "Supervisor"]
-        ])
-        firma_tabla.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+        elementos.append(Spacer(1, 28))
+
+        # ── Resumen estadístico ──────────────────────────────────────────
+        elementos.append(Paragraph("Resumen del día", estilos["seccion"]))
+        elementos.append(HRFlowable(width="100%", thickness=0.5, color=_PDF_GRID))
+        elementos.append(Spacer(1, 6))
+
+        if "Turno" in df.columns:
+            by_turno = df["Turno"].value_counts()
+            resumen_rows = [["Turno", "Registros"]]
+            for t, n in by_turno.items():
+                resumen_rows.append([str(t), str(n)])
+            tbl_res = Table(resumen_rows, colWidths=[100, 60])
+            tbl_res.setStyle(TableStyle([
+                ("BACKGROUND",  (0, 0), (-1, 0), _PDF_SUBHEADER),
+                ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+                ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE",    (0, 0), (-1, -1), 8),
+                ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_PDF_ROW_EVEN, _PDF_ROW_ODD]),
+                ("GRID",        (0, 0), (-1, -1), 0.4, _PDF_GRID),
+                ("TOPPADDING",  (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            elementos.append(tbl_res)
+            elementos.append(Spacer(1, 20))
+
+        # ── Firmas ───────────────────────────────────────────────────────
+        firma_style = ParagraphStyle("Firma", fontSize=8, alignment=TA_CENTER,
+                                     textColor=colors.HexColor("#374151"))
+        firma_linea = HRFlowable(width="40%", thickness=0.8, color=colors.HexColor("#374151"))
+        firma_tabla = Table(
+            [
+                [firma_linea, firma_linea],
+                [Paragraph("Geomecánica", firma_style), Paragraph("Supervisor", firma_style)],
+            ],
+            colWidths=["45%", "45%"],
+            hAlign="CENTER",
+        )
+        firma_tabla.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ]))
         elementos.append(firma_tabla)
-        
-        pdf.build(elementos)
-        messagebox.showinfo("PDF", f"Reporte diario generado: {nombre_archivo}")
+
+        pdf.build(elementos, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
+        messagebox.showinfo("PDF", f"Reporte diario generado:\n{nombre_archivo}")
 
 
 class VentanaHistorial:
@@ -1120,63 +1345,122 @@ class VentanaHistorial:
             messagebox.showerror("Error", mensaje, parent=self.ventana)
     
     def _exportar_pdf(self):
-        """Exporta historial a PDF"""
+        """Exporta historial a PDF – con diseño visual mejorado."""
+        from utils.config_manager import obtener_clasificaciones_activas
         labor = self.buscar_var.get()
         fecha_inicio = self.fecha_inicio_var.get()
         fecha_fin = self.fecha_fin_var.get()
-        
+
         df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
-        
+
         if df.empty:
             messagebox.showinfo("Info", "No hay datos para exportar")
             return
-        
-        labor_real = df["Labor"].iloc[0]
+
+        activas = obtener_clasificaciones_activas()
+        labor_real = df["Labor"].iloc[0] if not df.empty else (labor or "general")
         nombre = f"historial_labor_{labor_real}.pdf".replace(" ", "_")
-        
-        pdf = SimpleDocTemplate(nombre, pagesize=letter)
-        estilos = getSampleStyleSheet()
-        elementos = []
-        
-        titulo = Paragraph("HISTORIAL DE LABORES - GEOMECÁNICA", estilos["Title"])
-        elementos.append(titulo)
-        elementos.append(Spacer(1, 10))
-        
-        fecha_texto = Paragraph(
-            f"Fecha de exportación: {obtener_fecha_actual()}",
-            estilos['Normal']
+
+        estilos = _crear_estilos_pdf()
+
+        # Columnas a incluir según clasificaciones activas
+        cols_clasificacion = [c for c in ["GSI", "RMR"] if c in activas and c in df.columns]
+        cols_mostrar = ["Fecha", "Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
+        cols_mostrar = [c for c in cols_mostrar if c in df.columns]
+
+        ancho_base = {"Fecha": 60, "Turno": 42, "Labor": 85,
+                      "GSI": 34, "RMR": 34,
+                      "Soporte": 125, "Observaciones": 125}
+        col_widths = [ancho_base.get(c, 60) for c in cols_mostrar]
+
+        periodo_txt = ""
+        if fecha_inicio and fecha_fin:
+            periodo_txt = f"{fecha_inicio} al {fecha_fin}"
+        elif fecha_inicio:
+            periodo_txt = f"desde {fecha_inicio}"
+        elif fecha_fin:
+            periodo_txt = f"hasta {fecha_fin}"
+
+        clasificaciones_texto = " · ".join(activas) if activas else "Sin clasificación"
+        labores_unicas = df["Labor"].unique().tolist() if "Labor" in df.columns else []
+        labores_txt = ", ".join(str(l) for l in labores_unicas[:5])
+        if len(labores_unicas) > 5:
+            labores_txt += f" (+{len(labores_unicas)-5} más)"
+
+        lineas_info = [
+            f"<b>Labor(es):</b> {labores_txt or labor_real}",
+        ]
+        if periodo_txt:
+            lineas_info.append(f"<b>Período:</b> {periodo_txt}")
+        lineas_info += [
+            f"<b>Total de registros:</b> {len(df)}",
+            f"<b>Clasificaciones activas:</b> {clasificaciones_texto}",
+            f"<b>Exportado:</b> {obtener_fecha_actual()}",
+        ]
+
+        pdf = SimpleDocTemplate(
+            nombre,
+            pagesize=landscape(letter),
+            leftMargin=2*cm, rightMargin=2*cm,
+            topMargin=2*cm, bottomMargin=2*cm,
         )
-        elementos.append(fecha_texto)
-        elementos.append(Spacer(1, 20))
-        
-        subtitulo = Paragraph(f"Labor: {labor_real}", estilos["Heading2"])
-        elementos.append(subtitulo)
-        elementos.append(Spacer(1, 20))
-        
-        datos = [df.columns.tolist()]
+        elementos = []
+
+        elementos += _construir_bloque_header_pdf(
+            estilos, "📋  HISTORIAL DE LABORES — GEOMECÁNICA", lineas_info
+        )
+
+        # Tabla de datos
+        encabezado = cols_mostrar[:]
+        datos = [encabezado]
         for _, row in df.iterrows():
-            fila = [
-                row["Fecha"], row["Turno"], row["Labor"],
-                row["GSI"], row["RMR"],
-                Paragraph(str(row["Soporte"]), estilos["Normal"]),
-                Paragraph(str(row["Observaciones"]), estilos["Normal"])
-            ]
+            fila = []
+            for col in cols_mostrar:
+                val = str(row[col]) if str(row[col]) != "nan" else ""
+                if col in ("Soporte", "Observaciones"):
+                    fila.append(Paragraph(val, estilos["normal"]))
+                else:
+                    fila.append(val)
             datos.append(fila)
-        
-        tabla = Table(datos, colWidths=[60, 50, 80, 40, 40, 120, 130])
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-            ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke)
-        ]))
-        
+
+        tabla = Table(datos, colWidths=col_widths, repeatRows=1)
+        tabla.setStyle(_tabla_estilo_principal(col_widths, encabezado))
         elementos.append(tabla)
-        pdf.build(elementos)
-        
+        elementos.append(Spacer(1, 18))
+
+        # Bloque de estadísticas
+        elementos.append(Paragraph("Estadísticas del historial", estilos["seccion"]))
+        elementos.append(HRFlowable(width="100%", thickness=0.5, color=_PDF_GRID))
+        elementos.append(Spacer(1, 6))
+
+        try:
+            import pandas as pd
+            stat_rows = []
+            if "Labor" in df.columns:
+                top_labor = df["Labor"].value_counts().idxmax()
+                stat_rows.append(["Labor con más registros", str(top_labor)])
+            if "Turno" in df.columns:
+                for t, n in df["Turno"].value_counts().items():
+                    stat_rows.append([f"Registros turno {t}", str(n)])
+            if stat_rows:
+                tbl_stat = Table([["Indicador", "Valor"]] + stat_rows, colWidths=[200, 120])
+                tbl_stat.setStyle(TableStyle([
+                    ("BACKGROUND",  (0, 0), (-1, 0), _PDF_SUBHEADER),
+                    ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE",    (0, 0), (-1, -1), 8),
+                    ("ALIGN",       (0, 1), (-1, -1), "CENTER"),
+                    ("ALIGN",       (0, 0), (0, -1), "LEFT"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_PDF_ROW_EVEN, _PDF_ROW_ODD]),
+                    ("GRID",        (0, 0), (-1, -1), 0.4, _PDF_GRID),
+                    ("TOPPADDING",  (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]))
+                elementos.append(tbl_stat)
+        except Exception:
+            pass
+
+        pdf.build(elementos, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
         messagebox.showinfo("PDF", f"Historial exportado:\n{nombre}")
 
 
@@ -3019,100 +3303,135 @@ class VentanaReportePeriodo(tk.Toplevel):
         )
 
     def _generar_pdf(self, df, fi_str, ff_str):
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib import colors
+        """Genera PDF del período con diseño visual mejorado."""
+        from utils.config_manager import obtener_clasificaciones_activas
 
         fi_arch = fi_str.replace("/", "-")
         ff_arch = ff_str.replace("/", "-")
         nombre = f"reporte_periodo_{fi_arch}_{ff_arch}.pdf"
 
         try:
-            pdf = SimpleDocTemplate(nombre, pagesize=letter)
-            estilos = getSampleStyleSheet()
+            activas = obtener_clasificaciones_activas()
+            estilos = _crear_estilos_pdf()
+
+            # Columnas a mostrar según clasificaciones activas
+            cols_clasificacion = [c for c in ["GSI", "RMR"] if c in activas and c in df.columns]
+            cols_mostrar = ["Fecha", "Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
+            cols_mostrar = [c for c in cols_mostrar if c in df.columns]
+
+            ancho_base = {"Fecha": 60, "Turno": 42, "Labor": 85,
+                          "GSI": 34, "RMR": 34,
+                          "Soporte": 125, "Observaciones": 125}
+            col_widths = [ancho_base.get(c, 60) for c in cols_mostrar]
+
+            clasificaciones_texto = " · ".join(activas) if activas else "Sin clasificación"
+            lineas_info = [
+                f"<b>Período:</b> {fi_str} al {ff_str}",
+                f"<b>Total de registros:</b> {len(df)}",
+                f"<b>Clasificaciones activas:</b> {clasificaciones_texto}",
+                f"<b>Generado:</b> {obtener_fecha_actual()}",
+            ]
+
+            pdf = SimpleDocTemplate(
+                nombre,
+                pagesize=landscape(letter),
+                leftMargin=2*cm, rightMargin=2*cm,
+                topMargin=2*cm, bottomMargin=2*cm,
+            )
             elementos = []
 
-            elementos.append(Paragraph("REPORTE DE PERÍODO — GEOMECÁNICA", estilos["Title"]))
-            elementos.append(Spacer(1, 6))
-            elementos.append(Paragraph(f"Período: {fi_str} al {ff_str}", estilos["Normal"]))
-            elementos.append(Paragraph(f"Total de registros: {len(df)}", estilos["Normal"]))
-            elementos.append(Spacer(1, 12))
+            # Encabezado
+            elementos += _construir_bloque_header_pdf(
+                estilos, "📅  REPORTE DE PERÍODO — GEOMECÁNICA", lineas_info
+            )
 
-            # Tabla principal
-            datos_tabla = [df.columns.tolist()]
+            # Tabla principal de registros
+            encabezado = cols_mostrar[:]
+            datos_tabla = [encabezado]
             for _, row in df.iterrows():
                 fila = []
-                for col in df.columns:
+                for col in cols_mostrar:
                     val = str(row[col]) if str(row[col]) != "nan" else ""
                     if col in ("Soporte", "Observaciones"):
-                        fila.append(Paragraph(val, estilos["Normal"]))
+                        fila.append(Paragraph(val, estilos["normal"]))
                     else:
                         fila.append(val)
                 datos_tabla.append(fila)
 
-            anchos = [60, 50, 80, 40, 40, 120, 130]
-            tabla = Table(datos_tabla, colWidths=anchos[:len(df.columns)])
-            tabla.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
-                ("FONTSIZE", (0, 0), (-1, -1), 7),
-            ]))
+            tabla = Table(datos_tabla, colWidths=col_widths, repeatRows=1)
+            tabla.setStyle(_tabla_estilo_principal(col_widths, encabezado))
             elementos.append(tabla)
-            elementos.append(Spacer(1, 16))
+            elementos.append(Spacer(1, 18))
 
-            # Estadísticas de sostenimiento
-            elementos.append(Paragraph("Estadísticas del Período", estilos["Heading2"]))
+            # Sección de estadísticas
+            elementos.append(Paragraph("Estadísticas del Período", estilos["seccion"]))
+            elementos.append(HRFlowable(width="100%", thickness=0.5, color=_PDF_GRID))
             elementos.append(Spacer(1, 6))
 
             try:
                 import pandas as pd
-                # Distribución por turno
-                if "Turno" in df.columns:
-                    turnos = df["Turno"].value_counts()
-                    elementos.append(Paragraph("Distribución por turno:", estilos["Normal"]))
-                    for t, n in turnos.items():
-                        elementos.append(Paragraph(f"  • {t}: {n} registros", estilos["Normal"]))
-                    elementos.append(Spacer(1, 6))
+                stat_rows = [["Indicador", "Valor"]]
 
-                # Labor con más registros
-                if "Labor" in df.columns:
+                if "Labor" in df.columns and not df["Labor"].empty:
                     top = df["Labor"].value_counts().idxmax()
-                    elementos.append(Paragraph(f"Labor con más registros: {top}", estilos["Normal"]))
-                    elementos.append(Spacer(1, 6))
+                    stat_rows.append(["Labor con más registros", str(top)])
 
-                # Datos de sostenimiento del período
-                df_sost = self.model.buscar_registros("", "", "")
-                if not df_sost.empty:
-                    # Obtener sostenimiento en el mismo período
-                    df_s2 = self.model.obtener_totales_sostenimiento(
-                        fecha_inicio=fi_str, fecha_fin=ff_str
-                    )
-                    if not df_s2.empty:
-                        elementos.append(Paragraph("Totales de Sostenimiento por Labor:", estilos["Heading3"]))
-                        cols_s = list(df_s2.columns)
-                        datos_s = [cols_s]
-                        for _, row in df_s2.iterrows():
-                            datos_s.append([str(row[c]) for c in cols_s])
-                        tabla_s = Table(datos_s)
-                        tabla_s.setStyle(TableStyle([
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.steelblue),
-                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                            ("FONTSIZE", (0, 0), (-1, -1), 7),
-                        ]))
-                        elementos.append(tabla_s)
+                if "Turno" in df.columns:
+                    for t, n in df["Turno"].value_counts().items():
+                        stat_rows.append([f"Registros turno {t}", str(n)])
+
+                if len(stat_rows) > 1:
+                    tbl_stat = Table(stat_rows, colWidths=[200, 120])
+                    tbl_stat.setStyle(TableStyle([
+                        ("BACKGROUND",  (0, 0), (-1, 0), _PDF_SUBHEADER),
+                        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE",    (0, 0), (-1, -1), 8),
+                        ("ALIGN",       (0, 1), (-1, -1), "CENTER"),
+                        ("ALIGN",       (0, 0), (0, -1), "LEFT"),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_PDF_ROW_EVEN, _PDF_ROW_ODD]),
+                        ("GRID",        (0, 0), (-1, -1), 0.4, _PDF_GRID),
+                        ("TOPPADDING",  (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ]))
+                    elementos.append(tbl_stat)
+                    elementos.append(Spacer(1, 14))
+
+                # Totales de sostenimiento
+                df_s2 = self.model.obtener_totales_sostenimiento(
+                    fecha_inicio=fi_str, fecha_fin=ff_str
+                )
+                if not df_s2.empty:
+                    elementos.append(Paragraph("Totales de Sostenimiento por Labor", estilos["seccion"]))
+                    elementos.append(HRFlowable(width="100%", thickness=0.5, color=_PDF_GRID))
+                    elementos.append(Spacer(1, 6))
+                    cols_s = list(df_s2.columns)
+                    datos_s = [cols_s]
+                    for _, row in df_s2.iterrows():
+                        datos_s.append([str(row[c]) if str(row[c]) != "nan" else "" for c in cols_s])
+                    # Distribute widths evenly
+                    total_w = sum(col_widths)
+                    w_per = max(50, total_w // max(len(cols_s), 1))
+                    tabla_s = Table(datos_s, colWidths=[w_per] * len(cols_s), repeatRows=1)
+                    tabla_s.setStyle(TableStyle([
+                        ("BACKGROUND",  (0, 0), (-1, 0), _PDF_ACCENT),
+                        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE",    (0, 0), (-1, -1), 7),
+                        ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_PDF_ROW_EVEN, _PDF_ROW_ODD]),
+                        ("GRID",        (0, 0), (-1, -1), 0.4, _PDF_GRID),
+                        ("TOPPADDING",  (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ]))
+                    elementos.append(tabla_s)
             except Exception:
                 pass
 
-            pdf.build(elementos)
+            pdf.build(elementos, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
             messagebox.showinfo("PDF generado",
                                 f"Reporte guardado como:\n{nombre}", parent=self)
             self.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el PDF:\n{e}", parent=self)
+
