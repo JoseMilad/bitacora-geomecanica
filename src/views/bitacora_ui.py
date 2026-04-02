@@ -22,7 +22,8 @@ from utils.config import (
 )
 from utils.helpers import (
     obtener_fecha_actual, validar_rmr, validar_gsi,
-    validar_campos_obligatorios, _obtener_turno_automatico
+    validar_campos_obligatorios, _obtener_turno_automatico,
+    ordenar_df_por_labor,
 )
 from utils.config_manager import cargar_config as _cargar_config
 
@@ -203,6 +204,7 @@ class BitacoraApp:
         self.root = root
         self.root.title(APP_NAME)
         self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        self.root.minsize(800, 600)
         self.root.configure(bg=WINDOW_BG_COLOR)
         
         # Inicializar modelo
@@ -883,15 +885,18 @@ class BitacoraApp:
         estilos = _crear_estilos_pdf()
         activas = obtener_clasificaciones_activas()
 
-        # Columnas a incluir: base + clasificaciones activas + resto
+        # Ordenar por labor numéricamente
+        df = ordenar_df_por_labor(df)
+
+        # Columnas a incluir: Fecha ya está en el encabezado, no repetir en tabla
         cols_clasificacion = [c for c in ["GSI", "RMR"] if c in activas and c in df.columns]
-        cols_mostrar = ["Fecha", "Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
+        cols_mostrar = ["Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
         cols_mostrar = [c for c in cols_mostrar if c in df.columns]
 
         # Anchos de columna (ajustados al tamaño de hoja carta apaisada)
-        ancho_base = {"Fecha": 62, "Turno": 44, "Labor": 90,
+        ancho_base = {"Turno": 44, "Labor": 100,
                       "GSI": 36, "RMR": 36,
-                      "Soporte": 130, "Observaciones": 130}
+                      "Soporte": 145, "Observaciones": 145}
         col_widths = [ancho_base.get(c, 60) for c in cols_mostrar]
 
         pdf = SimpleDocTemplate(
@@ -985,6 +990,7 @@ class VentanaHistorial:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Historial de Labores")
         self.ventana.geometry("900x600")
+        self.ventana.minsize(750, 450)
         self.ventana.configure(bg=PALETTE["surface"])
         self._df_actual = None
         self._indices_originales = []
@@ -1337,6 +1343,9 @@ class VentanaHistorial:
             messagebox.showinfo("Info", "No hay datos para exportar", parent=self.ventana)
             return
 
+        # Ordenar por labor numéricamente
+        df = ordenar_df_por_labor(df)
+
         nombre_archivo = f"historial_geomecanica_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         exito, mensaje = self.model.exportar_historial_excel(df, nombre_archivo)
         if exito:
@@ -1356,6 +1365,9 @@ class VentanaHistorial:
         if df.empty:
             messagebox.showinfo("Info", "No hay datos para exportar")
             return
+
+        # Ordenar por labor numéricamente
+        df = ordenar_df_por_labor(df)
 
         activas = obtener_clasificaciones_activas()
         labor_real = df["Labor"].iloc[0] if not df.empty else (labor or "general")
@@ -1472,6 +1484,7 @@ class VentanaEstandar:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Estándar de Sostenimiento")
         self.ventana.geometry("750x500")
+        self.ventana.minsize(650, 400)
         self.ventana.configure(bg=PALETTE["surface"])
         
         self._crear_interfaz()
@@ -1567,6 +1580,8 @@ class VentanaEstandar:
 
             def _make_agregar(td=tab_data):
                 return lambda: self._agregar_fila(td)
+            def _make_editar(td=tab_data):
+                return lambda: self._editar_fila(td)
             def _make_eliminar(td=tab_data):
                 return lambda: self._eliminar_fila(td)
             def _make_guardar(td=tab_data):
@@ -1578,6 +1593,7 @@ class VentanaEstandar:
                 return b
 
             _eplace("➕ Agregar Fila",    _make_agregar(),     "primary", frame_botones)
+            _eplace("✏ Editar Fila",     _make_editar(),      "secondary", frame_botones)
             _eplace("🗑 Eliminar Fila",   _make_eliminar(),    "danger",  frame_botones)
             _eplace("💾 Guardar",         _make_guardar(),     "primary", frame_botones)
     
@@ -1598,6 +1614,69 @@ class VentanaEstandar:
         tab_data["entrada_max"].delete(0, tk.END)
         tab_data["entrada_soporte"].delete(0, tk.END)
         tab_data["tipo_var"].set("Temporal")
+
+    def _editar_fila(self, tab_data):
+        """Carga la fila seleccionada en los campos de entrada para edición."""
+        seleccionado = tab_data["tabla"].selection()
+        if not seleccionado:
+            messagebox.showwarning("Advertencia", "Seleccione una fila para editar")
+            return
+        item_id = seleccionado[0]
+        valores = tab_data["tabla"].item(item_id)["values"]
+
+        # Abrir diálogo de edición
+        win = tk.Toplevel(self.ventana)
+        win.title("Editar Fila")
+        win.geometry("460x200")
+        win.grab_set()
+        win.resizable(False, False)
+        win.configure(bg=PALETTE["surface"])
+
+        cols = tab_data["cols"]
+        col_min, col_max = cols[0], cols[1]
+
+        frame_ed = tk.Frame(win, bg=PALETTE["surface"])
+        frame_ed.pack(padx=15, pady=15, fill="x")
+
+        tk.Label(frame_ed, text=f"{col_min}:", bg=PALETTE["surface"]).grid(row=0, column=0, padx=5, pady=4, sticky="e")
+        ed_min = tk.Entry(frame_ed, width=10)
+        ed_min.grid(row=0, column=1, padx=5, pady=4)
+        ed_min.insert(0, str(valores[0]))
+
+        tk.Label(frame_ed, text=f"{col_max}:", bg=PALETTE["surface"]).grid(row=0, column=2, padx=5, pady=4, sticky="e")
+        ed_max = tk.Entry(frame_ed, width=10)
+        ed_max.grid(row=0, column=3, padx=5, pady=4)
+        ed_max.insert(0, str(valores[1]))
+
+        tk.Label(frame_ed, text="Tipo:", bg=PALETTE["surface"]).grid(row=1, column=0, padx=5, pady=4, sticky="e")
+        tipo_var = tk.StringVar(value=str(valores[2]))
+        ttk.Combobox(frame_ed, textvariable=tipo_var,
+                     values=["Temporal", "Permanente"], state="readonly",
+                     width=12).grid(row=1, column=1, padx=5, pady=4)
+
+        tk.Label(frame_ed, text="Soporte:", bg=PALETTE["surface"]).grid(row=2, column=0, padx=5, pady=4, sticky="e")
+        ed_soporte = tk.Entry(frame_ed, width=35)
+        ed_soporte.grid(row=2, column=1, columnspan=3, padx=5, pady=4, sticky="ew")
+        ed_soporte.insert(0, str(valores[3]))
+
+        frame_ed.columnconfigure(3, weight=1)
+
+        def _confirmar():
+            new_min = ed_min.get().strip()
+            new_max = ed_max.get().strip()
+            new_soporte = ed_soporte.get().strip()
+            if not new_min or not new_max or not new_soporte:
+                messagebox.showwarning("Error", "Complete todos los campos", parent=win)
+                return
+            tab_data["tabla"].item(item_id, values=(
+                new_min, new_max, tipo_var.get(), new_soporte
+            ))
+            win.destroy()
+
+        frame_btn = tk.Frame(win, bg=PALETTE["surface"])
+        frame_btn.pack(pady=8)
+        _make_styled_btn(frame_btn, "✅ Confirmar", _confirmar, style="primary").pack(side="left", padx=8)
+        _make_styled_btn(frame_btn, "✕ Cancelar", win.destroy, style="danger").pack(side="left", padx=8)
     
     def _eliminar_fila(self, tab_data):
         """Elimina la fila seleccionada"""
@@ -1633,6 +1712,7 @@ class VentanaLabores:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Gestión de Labores")
         self.ventana.geometry("750x580")
+        self.ventana.minsize(650, 450)
         self.ventana.configure(bg=PALETTE["surface"])
         self.ventana.resizable(True, True)
         self._crear_interfaz()
@@ -1898,6 +1978,7 @@ class VentanaClasificaciones(tk.Toplevel):
         self.callback_actualizar = callback_actualizar
         self.title("Gestionar Clasificaciones de Labor")
         self.geometry("600x520")
+        self.minsize(500, 400)
         self.resizable(True, True)
         self.grab_set()
         self._crear_interfaz()
@@ -2037,7 +2118,8 @@ class VentanaGestionKPI(tk.Toplevel):
         super().__init__(parent)
         self.title("Gestionar Clasificaciones KPI")
         self.geometry("400x380")
-        self.resizable(False, False)
+        self.minsize(350, 300)
+        self.resizable(True, True)
         self.grab_set()
         self._crear_interfaz()
 
@@ -2120,6 +2202,7 @@ class VentanaSostenimiento(tk.Toplevel):
         self.model = model
         self.title("Sostenimiento Diario")
         self.geometry("700x720")
+        self.minsize(600, 550)
         self.configure(bg=PALETTE["surface"])
         self.resizable(True, True)
         self._crear_interfaz()
@@ -2336,6 +2419,7 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
         self.model = model
         self.title("Historial de Sostenimiento")
         self.geometry("1050x560")
+        self.minsize(850, 450)
         self.configure(bg=PALETTE["surface"])
         self._indices_originales = []
         self.COLUMNAS = self._obtener_columnas()
@@ -2511,6 +2595,8 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
         if df.empty:
             messagebox.showinfo("Info", "No hay datos para exportar", parent=self)
             return
+        # Ordenar por labor numéricamente
+        df = ordenar_df_por_labor(df)
         nombre = f"sostenimiento_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         exito, msg = self.model.exportar_historial_excel(df, nombre)
         if exito:
@@ -2527,6 +2613,7 @@ class VentanaDashboard(tk.Toplevel):
         self.model = model
         self.title("Dashboard de Sostenimiento")
         self.geometry("1000x740")
+        self.minsize(900, 600)
         self.configure(bg=PALETTE["surface"])
         self._crear_interfaz()
 
@@ -2564,16 +2651,22 @@ class VentanaDashboard(tk.Toplevel):
                                            values=self._todas_labores, width=18)
         self._combo_labores.grid(row=0, column=7, padx=4)
 
-        # Filtro de sostenimiento para el gráfico 1
-        ttk.Label(frame_filtros, text="Sos. (Gráf.1):").grid(row=0, column=8, padx=4)
+        # Filtro de sostenimiento (aplica a todas las gráficas)
+        ttk.Label(frame_filtros, text="Sostenimiento:").grid(row=0, column=8, padx=4)
         self._sost_filter_var = tk.StringVar(value="Todos")
-        _cols_sost_default = [
-            "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
-            "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+        _cols_sost_config = [
+            s["columna"] for s in _cargar_config().get("sostenimientos_activos", [])
+            if isinstance(s, dict) and "columna" in s
         ]
+        if not _cols_sost_config:
+            _cols_sost_config = [
+                "Shotcrete_m3", "Pernos_Helicoidales", "Splitsets",
+                "Mesh_Strap", "Cable_Bolting", "Marco_Acero"
+            ]
+        self._cols_sost_config = _cols_sost_config
         self._combo_sost_filter = ttk.Combobox(
             frame_filtros, textvariable=self._sost_filter_var,
-            values=["Todos"] + _cols_sost_default, width=16
+            values=["Todos"] + _cols_sost_config, width=16
         )
         self._combo_sost_filter.grid(row=0, column=9, padx=4)
         self._combo_sost_filter.bind("<<ComboboxSelected>>", lambda e: self._actualizar())
@@ -2581,9 +2674,29 @@ class VentanaDashboard(tk.Toplevel):
         _act_btn = _make_styled_btn(frame_filtros, "🔄 Actualizar", self._actualizar,
                                    style="primary", padx=10, pady=3)
         _act_btn.grid(row=0, column=10, padx=10)
-        _exp_btn = _make_styled_btn(frame_filtros, "🖼 Exportar PNG", self._exportar_png,
-                                    style="secondary", padx=10, pady=3)
-        _exp_btn.grid(row=0, column=11, padx=5)
+
+        # Segunda fila: exportación individual o todas
+        frame_export = tk.Frame(self, bg=PALETTE["surface"])
+        frame_export.pack(fill="x", padx=10, pady=(0, 4))
+
+        _exp_all_btn = _make_styled_btn(frame_export, "🖼 Exportar Todas", self._exportar_png,
+                                        style="secondary", padx=10, pady=3)
+        _exp_all_btn.pack(side="left", padx=5)
+
+        ttk.Label(frame_export, text="Gráfica:").pack(side="left", padx=(12, 4))
+        self._export_graph_var = tk.StringVar(value="1 — Totales por Labor")
+        _graph_options = [
+            "1 — Totales por Labor",
+            "2 — Tarjeta Sostenimiento",
+            "3 — Sost. por Tipo de Labor",
+            "4 — Sost. por Fase de Labor",
+        ]
+        ttk.Combobox(frame_export, textvariable=self._export_graph_var,
+                     values=_graph_options, state="readonly", width=25).pack(side="left", padx=4)
+        _exp_single_btn = _make_styled_btn(frame_export, "📷 Exportar Gráfica",
+                                           self._exportar_grafica_individual,
+                                           style="secondary", padx=10, pady=3)
+        _exp_single_btn.pack(side="left", padx=5)
 
         # Frame para gráficos (canvas de matplotlib)
         self.frame_graficos = ttk.Frame(self)
@@ -2691,19 +2804,27 @@ class VentanaDashboard(tk.Toplevel):
             ax1.text(0.5, 0.5, "Sin datos para el período seleccionado",
                      ha="center", va="center", transform=ax1.transAxes)
 
-        # Gráfico 2: Tarjeta visual con total de shotcrete del período
+        # Determinar columna de sostenimiento para gráficos 2, 3, 4
+        if sost_filtro != "Todos" and sost_filtro in (df_sost.columns if df_sost is not None else []):
+            _sost_col = sost_filtro
+            _sost_label = sost_filtro.replace("_", " ")
+        else:
+            _sost_col = "Shotcrete_m3"
+            _sost_label = "Shotcrete (m³)"
+
+        # Gráfico 2: Tarjeta visual con total del sostenimiento seleccionado
         ax2 = axes[1]
         ax2.axis("off")
         total_shot = 0.0
-        if df_sost is not None and not df_sost.empty and "Shotcrete_m3" in df_sost.columns:
+        if df_sost is not None and not df_sost.empty and _sost_col in df_sost.columns:
             try:
-                total_shot = pd.to_numeric(df_sost["Shotcrete_m3"], errors="coerce").fillna(0).sum()
+                total_shot = pd.to_numeric(df_sost[_sost_col], errors="coerce").fillna(0).sum()
             except Exception:
                 total_shot = 0.0
 
-        ax2.text(0.5, 0.82, "Shotcrete Total", ha="center", va="center",
+        ax2.text(0.5, 0.82, f"{_sost_label} Total", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=14, fontweight="bold")
-        ax2.text(0.5, 0.55, f"{total_shot:.1f} m³", ha="center", va="center",
+        ax2.text(0.5, 0.55, f"{total_shot:,.1f}", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=30, fontweight="bold", color="steelblue")
         ax2.text(0.5, 0.30, f"Período: {fi_str} –\n         {ff_str}",
                  ha="center", va="center", transform=ax2.transAxes, fontsize=10, color="gray")
@@ -2715,23 +2836,22 @@ class VentanaDashboard(tk.Toplevel):
                                      facecolor="#eaf4fb",
                                      transform=ax2.transAxes, clip_on=False))
 
-        # Gráfico 3: Shotcrete por tipo de labor (Temporal vs Permanente)
+        # Gráfico 3: Sostenimiento por tipo de labor (Temporal vs Permanente)
         ax3 = axes[2]
-        ax3.set_title("Shotcrete por Tipo de Labor")
-        if df_sost is not None and not df_sost.empty and "Shotcrete_m3" in df_sost.columns:
+        ax3.set_title(f"{_sost_label} por Tipo de Labor")
+        if df_sost is not None and not df_sost.empty and _sost_col in df_sost.columns:
             try:
-                # Obtener tipo de cada labor desde el catálogo
                 df_labores = self.model._leer_labores_df()
                 if not df_labores.empty and "Tipo" in df_labores.columns:
                     mapa_tipo = df_labores.set_index("Labor")["Tipo"].to_dict()
                     df_sost_tipo = df_sost.copy()
                     df_sost_tipo["Tipo"] = df_sost_tipo["Labor"].map(mapa_tipo).fillna("Sin clasificar")
-                    shot_tipo = df_sost_tipo.groupby("Tipo")["Shotcrete_m3"].sum()
+                    shot_tipo = df_sost_tipo.groupby("Tipo")[_sost_col].sum()
                     if not shot_tipo.empty and shot_tipo.sum() > 0:
                         ax3.pie(shot_tipo, labels=shot_tipo.index, autopct="%1.1f%%",
                                 startangle=90)
                     else:
-                        ax3.text(0.5, 0.5, "Sin datos de shotcrete por tipo",
+                        ax3.text(0.5, 0.5, f"Sin datos de {_sost_label} por tipo",
                                  ha="center", va="center", transform=ax3.transAxes)
                 else:
                     ax3.text(0.5, 0.5, "Sin datos de tipo de labor",
@@ -2743,10 +2863,10 @@ class VentanaDashboard(tk.Toplevel):
             ax3.text(0.5, 0.5, "Sin datos para el período seleccionado",
                      ha="center", va="center", transform=ax3.transAxes)
 
-        # Gráfico 4: Shotcrete por fase de labor (Explotación, Desarrollo, Preparación)
+        # Gráfico 4: Sostenimiento por fase de labor
         ax4 = axes[3]
-        ax4.set_title("Shotcrete por Fase de Labor")
-        if df_sost is not None and not df_sost.empty and "Shotcrete_m3" in df_sost.columns:
+        ax4.set_title(f"{_sost_label} por Fase de Labor")
+        if df_sost is not None and not df_sost.empty and _sost_col in df_sost.columns:
             try:
                 df_labores = self.model._leer_labores_df()
                 fase_ok = (not df_labores.empty and "Fase" in df_labores.columns
@@ -2756,14 +2876,14 @@ class VentanaDashboard(tk.Toplevel):
                     mapa_fase = df_labores.set_index("Labor")["Fase"].to_dict()
                     df_sost_fase = df_sost.copy()
                     df_sost_fase["Fase"] = df_sost_fase["Labor"].map(mapa_fase).fillna("Sin fase")
-                    shot_fase = df_sost_fase.groupby("Fase")["Shotcrete_m3"].sum()
+                    shot_fase = df_sost_fase.groupby("Fase")[_sost_col].sum()
                     if not shot_fase.empty and shot_fase.sum() > 0:
                         shot_fase.plot(kind="bar", ax=ax4, color=["#4a90d9", "#e67e22", "#27ae60"])
                         ax4.set_xlabel("Fase")
-                        ax4.set_ylabel("m³")
+                        ax4.set_ylabel("Cantidad")
                         ax4.tick_params(axis="x", rotation=20)
                     else:
-                        ax4.text(0.5, 0.5, "Sin datos de shotcrete por fase",
+                        ax4.text(0.5, 0.5, f"Sin datos de {_sost_label} por fase",
                                  ha="center", va="center", transform=ax4.transAxes)
                 else:
                     ax4.text(0.5, 0.5, "Sin datos de fase disponibles",
@@ -2786,6 +2906,7 @@ class VentanaDashboard(tk.Toplevel):
             except Exception as exc:  # noqa: BLE001 — plt.close can raise various errors
                 pass
         self._fig_actual = fig
+        self._axes_actual = axes
         canvas = FigureCanvasTkAgg(fig, master=self.frame_graficos)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
@@ -2808,6 +2929,44 @@ class VentanaDashboard(tk.Toplevel):
             from tkinter import messagebox
             messagebox.showinfo("Exportado", f"Gráfico guardado en:\n{ruta}")
 
+    def _exportar_grafica_individual(self):
+        """Exporta una sola gráfica seleccionada como PNG."""
+        from matplotlib.figure import Figure
+        fig = getattr(self, "_fig_actual", None)
+        axes = getattr(self, "_axes_actual", None)
+        if fig is None or axes is None:
+            messagebox.showinfo("Sin gráfico", "Primero genere el gráfico con 'Actualizar'.")
+            return
+
+        seleccion = self._export_graph_var.get()
+        try:
+            idx = int(seleccion.split(" ")[0]) - 1
+        except (ValueError, IndexError):
+            idx = 0
+        if idx < 0 or idx >= len(axes):
+            idx = 0
+
+        from tkinter import filedialog
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG Image", "*.png")],
+            title="Exportar gráfica individual como PNG",
+        )
+        if not ruta:
+            return
+
+        # Crear nueva figura con solo el eje seleccionado
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        fig_single = Figure(figsize=(6, 5), dpi=150, facecolor='#f8fafc')
+        ax_new = fig_single.add_subplot(1, 1, 1)
+
+        # Copiar contenido del eje original renderizando la figura completa y
+        # extrayendo solo el área del subplot seleccionado
+        renderer = fig.canvas.get_renderer()
+        extent = axes[idx].get_tightbbox(renderer).transformed(fig.dpi_scale_trans.inverted())
+        fig.savefig(ruta, dpi=200, bbox_inches=extent)
+        messagebox.showinfo("Exportado", f"Gráfica guardada en:\n{ruta}")
+
 
 class VentanaConfiguracion(tk.Toplevel):
     """Panel de configuración de la aplicación"""
@@ -2817,7 +2976,8 @@ class VentanaConfiguracion(tk.Toplevel):
         self.callback_cerrar = callback_cerrar
         self.title("Configuración")
         self.geometry("480x700")
-        self.resizable(False, True)
+        self.minsize(420, 550)
+        self.resizable(True, True)
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._guardado = False
@@ -2863,6 +3023,24 @@ class VentanaConfiguracion(tk.Toplevel):
                    command=self._agregar_turno).pack(side="left", padx=5)
         ttk.Button(frame_turno_btns, text="🗑 Eliminar seleccionado",
                    command=self._eliminar_turno).pack(side="left", padx=5)
+
+        # Horarios de inicio de turno
+        frame_horarios = ttk.Frame(frame_turnos)
+        frame_horarios.pack(fill="x", pady=4)
+        ttk.Label(frame_horarios, text="Inicio turno día:").pack(side="left", padx=5)
+        self.turno_dia_inicio_var = tk.StringVar(
+            value=self._config.get("turno_dia_inicio", "07:30"))
+        ttk.Entry(frame_horarios, textvariable=self.turno_dia_inicio_var, width=7).pack(
+            side="left", padx=2)
+        ttk.Label(frame_horarios, text="Inicio turno noche:").pack(side="left", padx=(12, 5))
+        self.turno_noche_inicio_var = tk.StringVar(
+            value=self._config.get("turno_noche_inicio", "19:30"))
+        ttk.Entry(frame_horarios, textvariable=self.turno_noche_inicio_var, width=7).pack(
+            side="left", padx=2)
+        ttk.Label(frame_turnos,
+                  text="ℹ El turno noche que cruza medianoche pertenece a la fecha en que inició.",
+                  font=("Segoe UI", 8), foreground=PALETTE["text_muted"]).pack(
+            anchor="w", pady=(2, 0))
 
         # ── Clasificaciones activas ─────────────────────────────────────
         frame_clasif = ttk.LabelFrame(content, text="Clasificaciones de sostenimiento", padding=10)
@@ -3004,6 +3182,8 @@ class VentanaConfiguracion(tk.Toplevel):
     def _guardar(self):
         from utils.config_manager import guardar_config
         self._config["turnos"] = list(self.listbox_turnos.get(0, tk.END))
+        self._config["turno_dia_inicio"] = self.turno_dia_inicio_var.get().strip()
+        self._config["turno_noche_inicio"] = self.turno_noche_inicio_var.get().strip()
         self._config["backup_automatico"] = self.backup_var.get()
         self._config["theme_color"] = self.color_var.get()
         self._config["password_edicion"] = self.pwd_var.get()
@@ -3032,12 +3212,10 @@ def _aplicar_modo_oscuro(root, activar: bool):
         bg = "#1e1e2e"
         fg = "#cdd6f4"
         btn_bg = "#313244"
-        style_name = "Oscuro.TFrame"
     else:
         bg = WINDOW_BG_COLOR
         fg = "#222222"
         btn_bg = "#e0e0e0"
-        style_name = "Claro.TFrame"
 
     style = ttk.Style()
     try:
@@ -3061,11 +3239,28 @@ def _aplicar_modo_oscuro(root, activar: bool):
         pass
 
 
+# Colores que deben conservarse siempre (sidebar, headers oscuros)
+_COLORES_PRESERVADOS = {
+    PALETTE["sidebar_bg"].lower(),
+    PALETTE["sidebar_active"].lower(),
+}
+
+
 def _actualizar_widgets_colores(widget, bg, fg):
-    """Recorre widgets de tkinter (no ttk) y actualiza colores."""
+    """Recorre widgets de tkinter (no ttk) y actualiza colores,
+    preservando los que tienen fondo de sidebar/header (siempre oscuros)."""
     try:
         widget_class = widget.winfo_class()
         if widget_class in ("Label", "Frame", "Listbox", "Text", "Canvas"):
+            # Verificar si el widget tiene un color que debe conservarse
+            try:
+                current_bg = widget.cget("bg")
+                if str(current_bg).lower() in _COLORES_PRESERVADOS:
+                    # No modificar este widget ni sus hijos directos
+                    # (hijos dentro de sidebar/headers deben mantener sus colores)
+                    return
+            except Exception:
+                pass
             try:
                 widget.configure(bg=bg)
             except Exception:
@@ -3134,7 +3329,8 @@ class VentanaSostenimientos(tk.Toplevel):
         self._on_actualizar = on_actualizar
         self.title("Gestionar Sostenimientos")
         self.geometry("480x600")
-        self.resizable(False, False)
+        self.minsize(400, 450)
+        self.resizable(True, True)
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._crear_interfaz()
@@ -3251,7 +3447,8 @@ class VentanaReportePeriodo(tk.Toplevel):
         self.model = model
         self.title("Reporte de Período")
         self.geometry("420x240")
-        self.resizable(False, False)
+        self.minsize(380, 200)
+        self.resizable(True, True)
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._crear_interfaz()
@@ -3305,6 +3502,9 @@ class VentanaReportePeriodo(tk.Toplevel):
     def _generar_pdf(self, df, fi_str, ff_str):
         """Genera PDF del período con diseño visual mejorado."""
         from utils.config_manager import obtener_clasificaciones_activas
+
+        # Ordenar por labor numéricamente
+        df = ordenar_df_por_labor(df)
 
         fi_arch = fi_str.replace("/", "-")
         ff_arch = ff_str.replace("/", "-")

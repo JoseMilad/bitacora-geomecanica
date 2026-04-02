@@ -1,6 +1,7 @@
 """
 Funciones auxiliares para la aplicación
 """
+import re
 from datetime import datetime
 
 def obtener_fecha_actual():
@@ -28,12 +29,28 @@ def validar_gsi(valor):
 
 def _obtener_turno_automatico():
     """
-    Determina el turno según la hora actual.
-    Entre las 06:00 y las 17:59 → 'Día', de lo contrario → 'Noche'.
+    Determina el turno según la hora actual y los horarios configurados.
+    El turno de noche que se extiende al día siguiente sigue perteneciendo
+    a la fecha en que inició.
     """
     from utils.config import TURNOS
-    hora = datetime.now().hour
-    if 6 <= hora < 18:
+    from utils.config_manager import cargar_config
+    config = cargar_config()
+    try:
+        dia_inicio = config.get("turno_dia_inicio", "07:30")
+        noche_inicio = config.get("turno_noche_inicio", "19:30")
+        h_dia, m_dia = map(int, dia_inicio.split(":"))
+        h_noche, m_noche = map(int, noche_inicio.split(":"))
+    except (ValueError, AttributeError):
+        h_dia, m_dia = 7, 30
+        h_noche, m_noche = 19, 30
+
+    ahora = datetime.now()
+    minutos_actual = ahora.hour * 60 + ahora.minute
+    minutos_dia = h_dia * 60 + m_dia
+    minutos_noche = h_noche * 60 + m_noche
+
+    if minutos_dia <= minutos_actual < minutos_noche:
         turno = "Día"
     else:
         turno = "Noche"
@@ -65,3 +82,28 @@ def convertir_datetime_a_string(fecha_obj, formato="%d/%m/%Y"):
         return fecha_obj.strftime(formato)
     except (AttributeError, ValueError):
         return None
+
+
+def _clave_ordenamiento_natural(texto):
+    """
+    Genera una clave de ordenamiento natural para un texto.
+    Divide el texto en fragmentos numéricos y no-numéricos de modo que
+    'TJ 1815 R1' se ordene antes que 'TJ 2115 R1'.
+    """
+    texto = str(texto)
+    partes = re.split(r'(\d+)', texto)
+    return [int(p) if p.isdigit() else p.lower() for p in partes]
+
+
+def ordenar_df_por_labor(df):
+    """
+    Ordena un DataFrame por la columna 'Labor' usando ordenamiento natural
+    (numérico), de modo que 'TJ 1815 R1' aparezca antes de 'TJ 2115 R1'.
+    Retorna una copia del DataFrame ordenado.
+    """
+    if df.empty or "Labor" not in df.columns:
+        return df
+    copia = df.copy()
+    copia["_sort_key"] = copia["Labor"].apply(_clave_ordenamiento_natural)
+    copia = copia.sort_values("_sort_key").drop(columns=["_sort_key"]).reset_index(drop=True)
+    return copia
