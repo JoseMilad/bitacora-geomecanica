@@ -2955,13 +2955,7 @@ class VentanaDashboard(tk.Toplevel):
         if not ruta:
             return
 
-        # Crear nueva figura con solo el eje seleccionado
-        from matplotlib.backends.backend_agg import FigureCanvasAgg
-        fig_single = Figure(figsize=(6, 5), dpi=150, facecolor='#f8fafc')
-        ax_new = fig_single.add_subplot(1, 1, 1)
-
-        # Copiar contenido del eje original renderizando la figura completa y
-        # extrayendo solo el área del subplot seleccionado
+        # Exportar solo el área del subplot seleccionado
         renderer = fig.canvas.get_renderer()
         extent = axes[idx].get_tightbbox(renderer).transformed(fig.dpi_scale_trans.inverted())
         fig.savefig(ruta, dpi=200, bbox_inches=extent)

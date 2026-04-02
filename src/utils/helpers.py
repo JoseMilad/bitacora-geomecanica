@@ -91,7 +91,7 @@ def _clave_ordenamiento_natural(texto):
     'TJ 1815 R1' se ordene antes que 'TJ 2115 R1'.
     """
     texto = str(texto)
-    partes = re.split(r'(\d+)', texto)
+    partes = [p for p in re.split(r'(\d+)', texto) if p]
     return [int(p) if p.isdigit() else p.lower() for p in partes]
 
 
