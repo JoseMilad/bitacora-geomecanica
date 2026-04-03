@@ -181,6 +181,8 @@ class VentanaAnotador(tk.Toplevel):
 
     def _select_tool(self, tool: str):
         """Activa una herramienta de dibujo y resalta su botón."""
+        if tool not in _TOOLS:
+            return
         self._active_tool = tool
 
         for key, btn in self._tool_buttons.items():
@@ -394,6 +396,8 @@ class VentanaAnotador(tk.Toplevel):
         r_canvas = self._radius(self._start_x, self._start_y, event.x, event.y)
         cx, cy = self._canvas_to_image(self._start_x, self._start_y)
         r_img = int(r_canvas / self._scale) if self._scale else 0
+        if r_img < 1:
+            return
         self.annotations.append(
             {"tool": "circle", "coords": [cx, cy, r_img], "color": DRAW_COLOR}
         )
@@ -451,7 +455,7 @@ class VentanaAnotador(tk.Toplevel):
 
         IMAGES_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        original_name = self._image_path.stem if self._image_path else "imagen"
+        original_name = self._image_path.stem if self._image_path is not None else "imagen"
         filename = f"annotated_{timestamp}_{original_name}.png"
         save_path = IMAGES_DIR / filename
 
