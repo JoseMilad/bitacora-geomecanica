@@ -1,6 +1,6 @@
 """
 Modelo de datos para la Bitácora Geomecánica
-Maneja toda la lógica de lectura/escritura de Excel
+Maneja la lógica de lectura/escritura usando SQLite (primario) y Excel (secundario).
 """
 import shutil
 import pandas as pd
@@ -10,6 +10,7 @@ from utils.config import (
     ARCHIVO_BITACORA, COLUMNAS_BITACORA, COLUMNAS_ESTANDAR,
     COLUMNAS_LABORES, COLUMNAS_SOSTENIMIENTO, BACKUP_DIR
 )
+from models.database import DatabaseManager
 
 def _safe_concat(df_base: "pd.DataFrame", df_nuevo: "pd.DataFrame") -> "pd.DataFrame":
     """
@@ -68,14 +69,20 @@ def _convertir_valor(valor, col_dtype) -> object:
 
 
 class BitacoraModel:
-    """Gestiona la lógica de datos de la bitácora"""
+    """Gestiona la lógica de datos de la bitácora.
+
+    Usa SQLite como almacenamiento primario y mantiene el archivo Excel
+    sincronizado como formato secundario de exportación.
+    """
 
     _UNDO_MAX = 5
 
-    def __init__(self, archivo=None):
+    def __init__(self, archivo=None, db_path=None):
         self.archivo = archivo or ARCHIVO_BITACORA
         self._undo_stack: list = []
+        self.db = DatabaseManager(db_path=db_path)
         self.inicializar_excel()
+        self._migrar_excel_a_sqlite()
     
     def _hacer_backup(self):
         """
@@ -165,6 +172,64 @@ class BitacoraModel:
             except Exception:
                 pass
 
+    def _migrar_excel_a_sqlite(self):
+        """Migra datos del Excel existente a SQLite (solo la primera vez)."""
+        try:
+            if not os.path.exists(self.archivo):
+                return
+            # Verificar si ya hay datos en SQLite para evitar migración duplicada
+            registros = self.db.obtener_bitacora()
+            if registros:
+                return  # Ya hay datos, no migrar
+            self.db.migrar_desde_excel(str(self.archivo))
+        except Exception:
+            pass
+
+    def _sincronizar_a_excel(self, sheet: str = "Bitacora"):
+        """Sincroniza los datos de SQLite al archivo Excel."""
+        try:
+            if sheet == "Bitacora":
+                registros = self.db.obtener_bitacora()
+                if registros:
+                    df = pd.DataFrame(registros)
+                    # Mantener solo columnas del Excel original
+                    cols_excel = [c for c in COLUMNAS_BITACORA if c in df.columns]
+                    df = df[cols_excel]
+                else:
+                    df = pd.DataFrame(columns=COLUMNAS_BITACORA)
+                with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                    if_sheet_exists="replace") as writer:
+                    df.to_excel(writer, sheet_name="Bitacora", index=False)
+            elif sheet == "Labores":
+                labores = self.db.obtener_labores_guardadas()
+                rows = []
+                for labor_name in labores:
+                    datos = self.db.obtener_datos_labor(labor_name)
+                    if datos:
+                        rows.append(datos)
+                df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=COLUMNAS_LABORES)
+                cols_excel = [c for c in COLUMNAS_LABORES if c in df.columns]
+                df = df[cols_excel]
+                with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                    if_sheet_exists="replace") as writer:
+                    df.to_excel(writer, sheet_name="Labores", index=False)
+            elif sheet == "Sostenimiento_Diario":
+                registros = self.db.obtener_sostenimiento()
+                if registros:
+                    df = pd.DataFrame(registros)
+                    # Eliminar columnas internas de SQLite
+                    for col in ("id", "created_at"):
+                        if col in df.columns:
+                            df = df.drop(columns=[col])
+                else:
+                    cols_sost = self._columnas_sostenimiento_actuales()
+                    df = pd.DataFrame(columns=cols_sost)
+                with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                    if_sheet_exists="replace") as writer:
+                    df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
+        except Exception:
+            pass
+
     def _columnas_sostenimiento_actuales(self) -> list:
         """Retorna la lista completa de columnas de Sostenimiento_Diario (base + activas)."""
         base = ["Fecha", "Turno", "Labor"]
@@ -228,6 +293,7 @@ class BitacoraModel:
         """
         Guarda un nuevo registro en la bitácora.
         Verifica duplicados por (Fecha, Turno, Labor) antes de guardar.
+        Usa SQLite como almacenamiento primario y sincroniza a Excel.
         
         Args:
             datos (dict): Diccionario con los datos del registro
@@ -236,34 +302,19 @@ class BitacoraModel:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
-
-            # Verificar duplicado
-            mascara = (
-                (df["Fecha"].astype(str) == str(datos.get("Fecha", ""))) &
-                (df["Turno"].astype(str) == str(datos.get("Turno", ""))) &
-                (df["Labor"].astype(str) == str(datos.get("Labor", "")))
-            )
-            if mascara.any():
-                return False, "DUPLICADO: Ya existe un registro para esta labor en este turno y fecha."
-
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            df_nuevo = pd.DataFrame([datos])
-            df = _safe_concat(df, df_nuevo)
-            
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl", 
-                               if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Bitacora", index=False)
-            
-            return True, "Registro guardado exitosamente"
+            exito, mensaje = self.db.guardar_registro(datos)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
 
     def guardar_registro_forzado(self, datos):
         """
         Guarda un registro omitiendo la verificación de duplicados.
-        Usar cuando el usuario confirma sobreescribir un duplicado.
+        Usa SQLite como almacenamiento primario y sincroniza a Excel.
         
         Args:
             datos (dict): Diccionario con los datos del registro
@@ -274,95 +325,76 @@ class BitacoraModel:
         try:
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
-            df_nuevo = pd.DataFrame([datos])
-            df = _safe_concat(df, df_nuevo)
-            
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl", 
-                               if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Bitacora", index=False)
-            
-            return True, "Registro guardado exitosamente"
+            exito, mensaje = self.db.guardar_registro_forzado(datos)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
     
     def obtener_bitacora(self):
-        """Obtiene todos los registros de la bitácora"""
+        """Obtiene todos los registros de la bitácora desde SQLite."""
         try:
-            return pd.read_excel(self.archivo, sheet_name="Bitacora")
+            registros = self.db.obtener_bitacora()
+            if registros:
+                df = pd.DataFrame(registros)
+                # Mantener solo columnas compatibles con el formato original
+                cols_mostrar = [c for c in COLUMNAS_BITACORA if c in df.columns]
+                return df[cols_mostrar]
+            return pd.DataFrame(columns=COLUMNAS_BITACORA)
         except Exception as e:
             print(f"Error al leer bitácora: {str(e)}")
             return pd.DataFrame(columns=COLUMNAS_BITACORA)
     
     def obtener_labores_guardadas(self):
-        """Obtiene la lista de nombres de labores guardadas"""
+        """Obtiene la lista de nombres de labores guardadas desde SQLite."""
         try:
-            df = self._leer_labores_df()
-            return sorted(df["Labor"].dropna().unique().tolist())
+            return self.db.obtener_labores_guardadas()
         except Exception:
             return []
 
     def _leer_labores_df(self):
-        """Lee el DataFrame completo de la hoja Labores"""
+        """Lee las labores desde SQLite y retorna un DataFrame."""
         try:
-            return pd.read_excel(self.archivo, sheet_name="Labores")
+            labores = self.db.obtener_labores_guardadas()
+            rows = []
+            for labor_name in labores:
+                datos = self.db.obtener_datos_labor(labor_name)
+                if datos:
+                    rows.append(datos)
+            return pd.DataFrame(rows) if rows else pd.DataFrame(columns=COLUMNAS_LABORES)
         except Exception:
             return pd.DataFrame(columns=COLUMNAS_LABORES)
 
     def agregar_labor(self, nombre_labor, gsi="", rmr="", soporte="", tipo="Temporal",
                       fase="", clasificacion_kpi=""):
         """
-        Agrega una nueva labor a la hoja Labores con sus datos técnicos.
+        Agrega una nueva labor. Usa SQLite y sincroniza a Excel.
         Returns: tuple (éxito: bool, mensaje: str)
         """
         try:
-            nombre_labor = nombre_labor.strip()
-            if not nombre_labor:
-                return False, "El nombre de la labor no puede estar vacío"
-
-            df = self._leer_labores_df()
-            if nombre_labor in df["Labor"].values:
-                return False, f"La labor '{nombre_labor}' ya existe"
-
             self._hacer_backup()
-            nueva_fila = pd.DataFrame([{
-                "Labor": nombre_labor,
-                "GSI": gsi,
-                "RMR": rmr,
-                "Soporte": soporte,
-                "Tipo": tipo,
-                "Fase": fase,
-                "Clasificacion_KPI": clasificacion_kpi,
-            }])
-            df = _safe_concat(df, nueva_fila)
-            df = df.sort_values("Labor").reset_index(drop=True)
-
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                               if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Labores", index=False)
-
-            return True, f"Labor '{nombre_labor}' agregada correctamente"
+            exito, mensaje = self.db.agregar_labor(
+                nombre_labor, gsi=gsi, rmr=rmr, soporte=soporte,
+                tipo=tipo, fase=fase, clasificacion_kpi=clasificacion_kpi
+            )
+            if exito:
+                self._sincronizar_a_excel("Labores")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al agregar labor: {str(e)}"
 
     def eliminar_labor(self, nombre_labor):
         """
-        Elimina una labor de la hoja Labores.
+        Elimina una labor. Usa SQLite y sincroniza a Excel.
         Returns: tuple (éxito: bool, mensaje: str)
         """
         try:
-            df = self._leer_labores_df()
-            if nombre_labor not in df["Labor"].values:
-                return False, f"La labor '{nombre_labor}' no existe"
-
             self._hacer_backup()
-            df = df[df["Labor"] != nombre_labor].reset_index(drop=True)
-
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                               if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Labores", index=False)
-
-            return True, f"Labor '{nombre_labor}' eliminada correctamente"
+            exito, mensaje = self.db.eliminar_labor(nombre_labor)
+            if exito:
+                self._sincronizar_a_excel("Labores")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al eliminar labor: {str(e)}"
 
@@ -371,14 +403,7 @@ class BitacoraModel:
         Obtiene los datos técnicos de una labor del catálogo.
         Returns: dict con GSI, RMR, Soporte, Tipo o None
         """
-        try:
-            df = self._leer_labores_df()
-            fila = df[df["Labor"] == nombre_labor]
-            if fila.empty:
-                return None
-            return fila.iloc[0].to_dict()
-        except Exception:
-            return None
+        return self.db.obtener_datos_labor(nombre_labor)
 
     def obtener_labores_unicas(self):
         """
@@ -389,16 +414,13 @@ class BitacoraModel:
     
     def filtrar_labores(self, texto):
         """
-        Filtra labores guardadas que contengan el texto.
-        IMPORTANTE: Ahora usa la hoja 'Labores' en lugar de la bitácora.
+        Filtra labores que contengan el texto. Usa SQLite.
         """
-        labores = self.obtener_labores_guardadas()
-        texto_lower = texto.lower()
-        return [l for l in labores if texto_lower in l.lower()][:5]
+        return self.db.filtrar_labores(texto)
     
     def obtener_ultimo_registro_labor(self, labor):
         """
-        Obtiene el último registro de una labor específica
+        Obtiene el último registro de una labor específica desde SQLite.
         
         Args:
             labor (str): Nombre de la labor
@@ -406,30 +428,24 @@ class BitacoraModel:
         Returns:
             dict: Datos del último registro o None
         """
-        try:
-            df = self.obtener_bitacora()
-            df_labor = df[df["Labor"] == labor]
-            
-            if df_labor.empty:
-                return None
-            
-            return df_labor.iloc[-1].to_dict()
-        except Exception:
-            return None
+        return self.db.obtener_ultimo_registro_labor(labor)
     
     def obtener_estandar_sostenimiento(self, sistema="RMR"):
-        """Obtiene los estándares de sostenimiento para un sistema de clasificación."""
-        from utils.config_manager import nombre_hoja_estandar, columnas_estandar
-        hoja = nombre_hoja_estandar(sistema)
-        cols = columnas_estandar(sistema)
+        """Obtiene los estándares de sostenimiento desde SQLite."""
         try:
-            return pd.read_excel(self.archivo, sheet_name=hoja)
-        except Exception:
+            registros = self.db.obtener_estandar_sostenimiento(sistema)
+            if registros:
+                return pd.DataFrame(registros)
+            from utils.config_manager import columnas_estandar
+            cols = columnas_estandar(sistema)
             return pd.DataFrame(columns=cols)
+        except Exception:
+            return pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
     
     def recomendar_soporte(self, valor, tipo="Temporal", sistema="RMR"):
         """
         Recomienda soporte según el valor de clasificación y el tipo de labor.
+        Usa SQLite como fuente primaria.
 
         Args:
             valor (float): Valor de la clasificación (RMR, Q, GSI, etc.)
@@ -439,36 +455,11 @@ class BitacoraModel:
         Returns:
             str: Recomendación de soporte o vacío
         """
-        try:
-            from utils.config_manager import columnas_estandar
-            cols = columnas_estandar(sistema)
-            col_min = cols[0]
-            col_max = cols[1]
-
-            df = self.obtener_estandar_sostenimiento(sistema)
-
-            # Filtrar por tipo si la columna existe
-            if "Tipo" in df.columns:
-                df_tipo = df[df["Tipo"] == tipo]
-                # Si no hay filas para ese tipo, usar todas (retrocompatibilidad)
-                if df_tipo.empty:
-                    df_tipo = df
-            else:
-                df_tipo = df
-
-            for _, row in df_tipo.iterrows():
-                v_min = float(row[col_min])
-                v_max = float(row[col_max])
-                if v_min <= valor <= v_max:
-                    return str(row["Soporte"])
-
-            return ""
-        except Exception:
-            return ""
+        return self.db.recomendar_soporte(valor, tipo=tipo, sistema=sistema)
     
     def guardar_estandar_sostenimiento(self, datos, sistema="RMR"):
         """
-        Guarda los estándares de sostenimiento para un sistema de clasificación.
+        Guarda los estándares de sostenimiento. Usa SQLite y sincroniza a Excel.
         
         Args:
             datos (list): Lista de diccionarios con los estándares
@@ -478,31 +469,31 @@ class BitacoraModel:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
-            from utils.config_manager import nombre_hoja_estandar, columnas_estandar
             self._hacer_backup()
-            hoja = nombre_hoja_estandar(sistema)
-            cols = columnas_estandar(sistema)
-            if datos:
-                df = pd.DataFrame(datos)
-                # Ensure column order and add missing columns with empty values
-                for col in cols:
-                    if col not in df.columns:
-                        df[col] = ""
-                df = df[cols]
-            else:
-                df = pd.DataFrame(columns=cols)
-            
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                               if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name=hoja, index=False)
-            
-            return True, "Estándar guardado correctamente"
+            exito, mensaje = self.db.guardar_estandar_sostenimiento(datos, sistema)
+            if exito:
+                # Sincronizar a Excel
+                from utils.config_manager import nombre_hoja_estandar, columnas_estandar
+                hoja = nombre_hoja_estandar(sistema)
+                cols = columnas_estandar(sistema)
+                registros = self.db.obtener_estandar_sostenimiento(sistema)
+                if registros:
+                    df = pd.DataFrame(registros)
+                    # Remove id column if present
+                    if "id" in df.columns:
+                        df = df.drop(columns=["id"])
+                else:
+                    df = pd.DataFrame(columns=cols)
+                with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
+                                    if_sheet_exists="replace") as writer:
+                    df.to_excel(writer, sheet_name=hoja, index=False)
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar estándar: {str(e)}"
     
     def buscar_registros(self, labor="", fecha_inicio=None, fecha_fin=None):
         """
-        Busca registros con filtros
+        Busca registros con filtros. Usa SQLite.
         
         Args:
             labor (str): Filtro por labor
@@ -513,28 +504,12 @@ class BitacoraModel:
             DataFrame: Registros filtrados
         """
         try:
-            df = self.obtener_bitacora()
-            
-            if df.empty:
-                return df
-            
-            # Convertir fechas
-            df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y")
-            
-            # Filtrar por labor
-            if labor:
-                df = df[df["Labor"].str.contains(labor, case=False, na=False)]
-            
-            # Filtrar por fechas
-            if fecha_inicio and fecha_fin:
-                inicio = datetime.strptime(fecha_inicio, "%d/%m/%Y")
-                fin = datetime.strptime(fecha_fin, "%d/%m/%Y")
-                df = df[(df["Fecha"] >= inicio) & (df["Fecha"] <= fin)]
-            
-            # Convertir de vuelta a string
-            df["Fecha"] = df["Fecha"].dt.strftime("%d/%m/%Y")
-            
-            return df
+            registros = self.db.buscar_registros(labor, fecha_inicio, fecha_fin)
+            if registros:
+                df = pd.DataFrame(registros)
+                cols_mostrar = [c for c in COLUMNAS_BITACORA if c in df.columns]
+                return df[cols_mostrar]
+            return pd.DataFrame(columns=COLUMNAS_BITACORA)
         except Exception as e:
             print(f"Error al buscar: {str(e)}")
             return pd.DataFrame(columns=COLUMNAS_BITACORA)
@@ -542,6 +517,7 @@ class BitacoraModel:
     def editar_registro(self, indice: int, datos: dict) -> tuple:
         """
         Edita un registro de la bitácora por su índice (0-based).
+        Traduce el índice a ID de SQLite, edita allí y sincroniza a Excel.
         
         Args:
             indice: Índice de la fila en el DataFrame
@@ -553,24 +529,22 @@ class BitacoraModel:
         try:
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
-            if indice < 0 or indice >= len(df):
+            # Obtener el ID del registro por índice
+            registros = self.db.obtener_bitacora()
+            if indice < 0 or indice >= len(registros):
                 return False, "Índice fuera de rango"
-            for campo, valor in datos.items():
-                if campo in df.columns:
-                    valor_conv = _convertir_valor(valor, df[campo].dtype)
-                    df[campo] = df[campo].astype(object)
-                    df.at[indice, campo] = valor_conv
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Bitacora", index=False)
-            return True, "Registro editado correctamente"
+            record_id = registros[indice]["id"]
+            exito, mensaje = self.db.editar_registro(record_id, datos)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al editar: {str(e)}"
 
     def eliminar_registro(self, indice: int) -> tuple:
         """
         Elimina un registro de la bitácora por su índice (0-based).
+        Traduce el índice a ID de SQLite, elimina allí y sincroniza a Excel.
         
         Args:
             indice: Índice de la fila en el DataFrame
@@ -581,14 +555,14 @@ class BitacoraModel:
         try:
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
-            if indice < 0 or indice >= len(df):
+            registros = self.db.obtener_bitacora()
+            if indice < 0 or indice >= len(registros):
                 return False, "Índice fuera de rango"
-            df = df.drop(index=indice).reset_index(drop=True)
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Bitacora", index=False)
-            return True, "Registro eliminado correctamente"
+            record_id = registros[indice]["id"]
+            exito, mensaje = self.db.eliminar_registro(record_id)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al eliminar: {str(e)}"
 
@@ -613,59 +587,42 @@ class BitacoraModel:
 
     def guardar_sostenimiento(self, datos: dict) -> tuple:
         """
-        Guarda un registro de sostenimiento diario.
-        Verifica duplicado por (Fecha, Turno, Labor); si existe retorna
-        (False, 'DUPLICADO') para que la UI gestione la confirmación.
+        Guarda un registro de sostenimiento diario. Usa SQLite y sincroniza a Excel.
         
         Args:
-            datos: Diccionario con los campos de COLUMNAS_SOSTENIMIENTO
+            datos: Diccionario con los campos de sostenimiento
         
         Returns:
             tuple: (éxito: bool, mensaje: str)
         """
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
-
-            # Verificar duplicado
-            mascara = (
-                (df["Fecha"].astype(str) == str(datos.get("Fecha", ""))) &
-                (df["Turno"].astype(str) == str(datos.get("Turno", ""))) &
-                (df["Labor"].astype(str) == str(datos.get("Labor", "")))
-            )
-            if mascara.any():
-                return False, "DUPLICADO"
-
             self._hacer_backup()
             self._guardar_snapshot("Sostenimiento_Diario")
-            df_nuevo = pd.DataFrame([datos])
-            df = _safe_concat(df, df_nuevo)
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
-            return True, "Sostenimiento guardado correctamente"
+            exito, mensaje = self.db.guardar_sostenimiento(datos)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar sostenimiento: {str(e)}"
 
     def guardar_sostenimiento_forzado(self, datos: dict) -> tuple:
         """
-        Guarda un registro de sostenimiento omitiendo la verificación de duplicados.
+        Guarda un registro de sostenimiento omitiendo duplicados.
+        Usa SQLite y sincroniza a Excel.
         """
         try:
             self._hacer_backup()
             self._guardar_snapshot("Sostenimiento_Diario")
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
-            df_nuevo = pd.DataFrame([datos])
-            df = _safe_concat(df, df_nuevo)
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
-            return True, "Sostenimiento guardado correctamente"
+            exito, mensaje = self.db.guardar_sostenimiento_forzado(datos)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar sostenimiento: {str(e)}"
 
     def obtener_sostenimiento(self, fecha=None, labor=None) -> "pd.DataFrame":
         """
-        Retorna registros de sostenimiento diario, opcionalmente filtrados.
+        Retorna registros de sostenimiento diario desde SQLite.
         
         Args:
             fecha: Filtrar por fecha exacta (string dd/mm/yyyy)
@@ -675,65 +632,53 @@ class BitacoraModel:
             DataFrame con los registros
         """
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
-            if fecha:
-                df = df[df["Fecha"].astype(str) == str(fecha)]
-            if labor:
-                df = df[df["Labor"].astype(str).str.contains(labor, case=False, na=False)]
-            return df
+            registros = self.db.obtener_sostenimiento(fecha=fecha, labor=labor)
+            if registros:
+                df = pd.DataFrame(registros)
+                # Eliminar columnas internas de SQLite
+                for col in ("id", "created_at"):
+                    if col in df.columns:
+                        df = df.drop(columns=[col])
+                return df
+            return pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
         except Exception:
             return pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
 
     def editar_sostenimiento(self, indice: int, datos: dict) -> tuple:
         """
         Edita un registro de sostenimiento por índice (0-based).
-        
-        Args:
-            indice: Índice de la fila
-            datos: Campos a actualizar
-        
-        Returns:
-            tuple: (éxito: bool, mensaje: str)
+        Traduce índice a ID de SQLite.
         """
         try:
             self._hacer_backup()
             self._guardar_snapshot("Sostenimiento_Diario")
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
-            if indice < 0 or indice >= len(df):
+            registros = self.db.obtener_sostenimiento()
+            if indice < 0 or indice >= len(registros):
                 return False, "Índice fuera de rango"
-            for campo, valor in datos.items():
-                if campo in df.columns:
-                    valor_conv = _convertir_valor(valor, df[campo].dtype)
-                    df[campo] = df[campo].astype(object)
-                    df.at[indice, campo] = valor_conv
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
-            return True, "Sostenimiento editado correctamente"
+            record_id = registros[indice]["id"]
+            exito, mensaje = self.db.editar_sostenimiento(record_id, datos)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al editar sostenimiento: {str(e)}"
 
     def eliminar_sostenimiento(self, indice: int) -> tuple:
         """
         Elimina un registro de sostenimiento por índice (0-based).
-        
-        Args:
-            indice: Índice de la fila
-        
-        Returns:
-            tuple: (éxito: bool, mensaje: str)
+        Traduce índice a ID de SQLite.
         """
         try:
             self._hacer_backup()
             self._guardar_snapshot("Sostenimiento_Diario")
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
-            if indice < 0 or indice >= len(df):
+            registros = self.db.obtener_sostenimiento()
+            if indice < 0 or indice >= len(registros):
                 return False, "Índice fuera de rango"
-            df = df.drop(index=indice).reset_index(drop=True)
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df.to_excel(writer, sheet_name="Sostenimiento_Diario", index=False)
-            return True, "Registro de sostenimiento eliminado"
+            record_id = registros[indice]["id"]
+            exito, mensaje = self.db.eliminar_sostenimiento(record_id)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
         except Exception as e:
             return False, f"Error al eliminar sostenimiento: {str(e)}"
 
@@ -741,6 +686,7 @@ class BitacoraModel:
                                       labor=None) -> "pd.DataFrame":
         """
         Agrupa y suma los totales de cada elemento de sostenimiento por labor.
+        Usa datos de SQLite (via obtener_sostenimiento) como fuente primaria.
         
         Args:
             fecha_inicio: Fecha mínima (string dd/mm/yyyy)
@@ -751,7 +697,7 @@ class BitacoraModel:
             DataFrame agrupado por Labor con sumas de cada elemento
         """
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Sostenimiento_Diario")
+            df = self.obtener_sostenimiento()
             if df.empty:
                 return df
 
@@ -789,8 +735,8 @@ class BitacoraModel:
 
     def archivar_periodo(self, fecha_inicio: str, fecha_fin: str) -> tuple:
         """
-        Mueve registros de un rango de fechas al archivo histórico anual y los elimina del
-        archivo principal.
+        Mueve registros de un rango de fechas al archivo histórico anual y los elimina.
+        Usa SQLite como fuente primaria, archiva a Excel y sincroniza.
 
         Args:
             fecha_inicio: Fecha inicio en formato dd/mm/yyyy
@@ -801,7 +747,7 @@ class BitacoraModel:
         """
         from utils.config import DATA_DIR
         try:
-            df = pd.read_excel(self.archivo, sheet_name="Bitacora")
+            df = self.obtener_bitacora()
             if df.empty:
                 return False, "No hay registros en la bitácora", 0
 
@@ -811,7 +757,6 @@ class BitacoraModel:
 
             mask_arch = (df["Fecha_dt"] >= inicio) & (df["Fecha_dt"] <= fin)
             df_archivar = df[mask_arch].drop(columns=["Fecha_dt"])
-            df_restante = df[~mask_arch].drop(columns=["Fecha_dt"]).reset_index(drop=True)
 
             if df_archivar.empty:
                 return False, "No hay registros en ese período", 0
@@ -828,11 +773,18 @@ class BitacoraModel:
             with pd.ExcelWriter(str(archivo_hist), engine="openpyxl") as writer:
                 df_hist_final.to_excel(writer, sheet_name="Bitacora", index=False)
 
-            # Guardar el archivo principal sin los registros archivados
+            # Eliminar registros archivados de SQLite
+            registros_sqlite = self.db.obtener_bitacora()
             self._hacer_backup()
-            with pd.ExcelWriter(self.archivo, mode="a", engine="openpyxl",
-                                if_sheet_exists="replace") as writer:
-                df_restante.to_excel(writer, sheet_name="Bitacora", index=False)
+            for reg in registros_sqlite:
+                try:
+                    fecha_reg = datetime.strptime(reg["Fecha"], "%d/%m/%Y")
+                    if inicio <= fecha_reg <= fin:
+                        self.db.eliminar_registro(reg["id"])
+                except (ValueError, KeyError):
+                    continue
+
+            self._sincronizar_a_excel("Bitacora")
 
             cantidad = len(df_archivar)
             return True, (f"{cantidad} registro(s) archivado(s) en '{archivo_hist.name}'"), cantidad

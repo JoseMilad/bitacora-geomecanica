@@ -18,10 +18,11 @@ def archivo_temp(tmp_path):
 
 
 @pytest.fixture
-def model(archivo_temp):
-    """Crea un BitacoraModel con archivo temporal."""
+def model(archivo_temp, tmp_path):
+    """Crea un BitacoraModel con archivo temporal y base de datos temporal."""
     from models.bitacora_model import BitacoraModel
-    return BitacoraModel(archivo=str(archivo_temp))
+    db_path = tmp_path / "test_bitacora.db"
+    return BitacoraModel(archivo=str(archivo_temp), db_path=str(db_path))
 
 
 def test_inicializar_excel_crea_hojas(model, archivo_temp):

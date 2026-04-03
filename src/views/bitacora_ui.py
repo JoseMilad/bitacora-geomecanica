@@ -26,6 +26,7 @@ from utils.helpers import (
     ordenar_df_por_labor,
 )
 from utils.config_manager import cargar_config as _cargar_config
+from views.image_annotator import VentanaAnotador
 
 _SECONDS_IN_24H = 86400
 
@@ -286,6 +287,7 @@ class BitacoraApp:
         _make_nav_btn("📊  Dashboard",            self._abrir_dashboard)
         _make_nav_btn("🏗  Labores",              self._abrir_gestion_labores)
         _make_nav_btn("🔩  Estándar Sosten.",     self._abrir_estandar)
+        _make_nav_btn("📷  Registro Fotográfico", self._abrir_anotador_imagen)
         _make_nav_btn("⚙  Configuración",         self._abrir_configuracion)
         _make_nav_btn("📅  Reporte Período",      self._abrir_reporte_periodo)
 
@@ -438,6 +440,35 @@ class BitacoraApp:
         self.entrada_obs.grid(row=1, column=0, sticky="ew")
         card4.columnconfigure(0, weight=1)
 
+        # ── Card 5: Registro Fotográfico ─────────────────────────────────
+        card5 = _make_card(form_outer, "Registro Fotográfico")
+        self._imagen_path = ""
+        self._lbl_imagen = tk.Label(
+            card5, text="Sin imagen adjunta",
+            font=("Segoe UI", 9),
+            bg=PALETTE["card_bg"],
+            fg=PALETTE["text_muted"],
+        )
+        self._lbl_imagen.grid(row=1, column=0, sticky="w", padx=(0, 8))
+
+        btn_img = tk.Button(
+            card5,
+            text="📷 Adjuntar / Anotar imagen",
+            font=("Segoe UI", 9, "bold"),
+            bg=PALETTE["secondary"],
+            fg="#ffffff",
+            activebackground=PALETTE["secondary_hover"],
+            activeforeground="#ffffff",
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=4,
+            command=self._abrir_anotador_para_registro,
+        )
+        btn_img.grid(row=1, column=1, sticky="e", padx=(8, 0))
+        aplicar_hover(btn_img, PALETTE["secondary"], PALETTE["secondary_hover"])
+        card5.columnconfigure(0, weight=1)
+
         # ── Botón principal guardar ──────────────────────────────────────
         btn_frame = tk.Frame(content, bg=PALETTE["surface"])
         btn_frame.pack(fill="x", padx=16, pady=(0, 8))
@@ -565,7 +596,8 @@ class BitacoraApp:
             "GSI": self.entrada_gsi.get().strip(),
             "RMR": self.entrada_rmr.get().strip(),
             "Soporte": ValidadorBitacora.sanitizar_entrada(self.entrada_soporte.get()),
-            "Observaciones": ValidadorBitacora.sanitizar_entrada(self.entrada_obs.get("1.0", tk.END))
+            "Observaciones": ValidadorBitacora.sanitizar_entrada(self.entrada_obs.get("1.0", tk.END)),
+            "imagen_path": self._imagen_path,
         }
     
         # Validar registro completo
@@ -621,6 +653,9 @@ class BitacoraApp:
         self.entrada_rmr.delete(0, tk.END)
         self.entrada_soporte.delete(0, tk.END)
         self.entrada_obs.delete("1.0", tk.END)
+        # Limpiar imagen adjunta
+        self._imagen_path = ""
+        self._lbl_imagen.config(text="Sin imagen adjunta", fg=PALETTE["text_muted"])
         # Refrescar header
         try:
             self._actualizar_header()
@@ -847,6 +882,26 @@ class BitacoraApp:
     def _abrir_reporte_periodo(self):
         """Abre la ventana de reporte por período"""
         VentanaReportePeriodo(self.root, self.model)
+
+    def _abrir_anotador_imagen(self):
+        """Abre la ventana del anotador de imágenes (standalone)."""
+        VentanaAnotador(self.root)
+
+    def _abrir_anotador_para_registro(self):
+        """Abre el anotador de imágenes y vincula el resultado al registro actual."""
+        from pathlib import Path as _Path
+
+        def _on_imagen_guardada(path):
+            self._imagen_path = path
+            nombre = _Path(path).name
+            self._lbl_imagen.config(text=f"📎 {nombre}", fg=PALETTE["success"])
+
+        # Si ya hay una imagen, abrir para editar
+        if self._imagen_path:
+            VentanaAnotador(self.root, image_path=self._imagen_path,
+                            callback=_on_imagen_guardada)
+        else:
+            VentanaAnotador(self.root, callback=_on_imagen_guardada)
 
     def _toggle_modo_oscuro(self):
         """Alterna entre modo oscuro y claro"""
@@ -3206,10 +3261,20 @@ def _aplicar_modo_oscuro(root, activar: bool):
         bg = "#1e1e2e"
         fg = "#cdd6f4"
         btn_bg = "#313244"
+        card_bg = "#2a2a3c"
+        card_border = "#3b3b50"
+        entry_bg = "#313244"
+        status_bg = "#1a1a2a"
+        status_fg = "#8b8fa3"
     else:
         bg = WINDOW_BG_COLOR
         fg = "#222222"
         btn_bg = "#e0e0e0"
+        card_bg = PALETTE["card_bg"]
+        card_border = PALETTE["card_border"]
+        entry_bg = "#ffffff"
+        status_bg = "#e8edf2"
+        status_fg = PALETTE["text_muted"]
 
     style = ttk.Style()
     try:
@@ -3218,17 +3283,31 @@ def _aplicar_modo_oscuro(root, activar: bool):
         style.configure("TButton", background=btn_bg, foreground=fg)
         style.configure("TLabelframe", background=bg, foreground=fg)
         style.configure("TLabelframe.Label", background=bg, foreground=fg)
-        style.configure("TCombobox", fieldbackground=bg, foreground=fg)
-        style.configure("TEntry", fieldbackground=bg, foreground=fg)
-        style.configure("Treeview", background=bg, foreground=fg, fieldbackground=bg)
+        style.configure("TCombobox", fieldbackground=entry_bg, foreground=fg,
+                        background=btn_bg, selectbackground=PALETTE["primary"],
+                        selectforeground="#ffffff")
+        style.configure("TEntry", fieldbackground=entry_bg, foreground=fg)
+        style.configure("Treeview", background=card_bg, foreground=fg,
+                        fieldbackground=card_bg)
         style.configure("Treeview.Heading", background=btn_bg, foreground=fg)
+        style.configure("Custom.Treeview", background=card_bg, foreground=fg,
+                        fieldbackground=card_bg)
+        style.configure("Custom.Treeview.Heading",
+                        background=PALETTE["sidebar_bg"], foreground="#ffffff")
         style.map("TButton", background=[("active", btn_bg)])
+        style.map("TCombobox",
+                  fieldbackground=[("readonly", entry_bg)],
+                  foreground=[("readonly", fg)])
+        style.configure("TCheckbutton", background=bg, foreground=fg)
+        style.map("TCheckbutton", background=[("active", bg)])
+        style.configure("TScrollbar", background=btn_bg, troughcolor=bg)
     except Exception:
         pass
 
     try:
         root.configure(bg=bg)
-        _actualizar_widgets_colores(root, bg, fg)
+        _actualizar_widgets_colores(root, bg, fg, card_bg, card_border,
+                                    entry_bg, status_bg, status_fg)
     except Exception:
         pass
 
@@ -3239,32 +3318,110 @@ _COLORES_PRESERVADOS = {
     PALETTE["sidebar_active"].lower(),
 }
 
+# Colores de botones de acción que no deben cambiar
+_COLORES_BOTONES_ACCION = {
+    PALETTE["primary"].lower(),
+    PALETTE["primary_hover"].lower(),
+    PALETTE["secondary"].lower(),
+    PALETTE["secondary_hover"].lower(),
+    PALETTE["danger"].lower(),
+    PALETTE["danger_hover"].lower(),
+    PALETTE["accent"].lower(),
+}
 
-def _actualizar_widgets_colores(widget, bg, fg):
+
+def _actualizar_widgets_colores(widget, bg, fg, card_bg="#ffffff",
+                                card_border="#dde3ec", entry_bg="#ffffff",
+                                status_bg="#e8edf2", status_fg="#6b7280"):
     """Recorre widgets de tkinter (no ttk) y actualiza colores,
     preservando los que tienen fondo de sidebar/header (siempre oscuros)."""
     try:
         widget_class = widget.winfo_class()
-        if widget_class in ("Label", "Frame", "Listbox", "Text", "Canvas"):
-            # Verificar si el widget tiene un color que debe conservarse
+
+        # Verificar si el widget tiene un color que debe conservarse (sidebar/header)
+        try:
+            current_bg = widget.cget("bg")
+            current_bg_lower = str(current_bg).lower()
+            if current_bg_lower in _COLORES_PRESERVADOS:
+                # No modificar este widget ni sus hijos directos
+                return
+        except Exception:
+            current_bg_lower = ""
+
+        if widget_class == "Button":
+            # Preservar botones de acción (primarios, secundarios, peligro)
+            if current_bg_lower not in _COLORES_BOTONES_ACCION:
+                try:
+                    widget.configure(bg=bg, fg=fg)
+                except Exception:
+                    pass
+
+        elif widget_class in ("Label", "Frame"):
+            # Detectar cards (frames con card_bg or card_border backgrounds)
+            is_card_border = current_bg_lower in (
+                PALETTE["card_border"].lower(), "#dde3ec"
+            )
+            is_card_bg = current_bg_lower in (
+                PALETTE["card_bg"].lower(), "#ffffff"
+            )
+            is_status = current_bg_lower == "#e8edf2"
+
+            if is_card_border:
+                try:
+                    widget.configure(bg=card_border)
+                except Exception:
+                    pass
+            elif is_status:
+                try:
+                    widget.configure(bg=status_bg)
+                    if widget_class == "Label":
+                        widget.configure(fg=status_fg)
+                except Exception:
+                    pass
+            elif is_card_bg:
+                try:
+                    widget.configure(bg=card_bg)
+                    if widget_class == "Label":
+                        widget.configure(fg=fg)
+                except Exception:
+                    pass
+            else:
+                try:
+                    widget.configure(bg=bg)
+                except Exception:
+                    pass
+                if widget_class == "Label":
+                    try:
+                        widget.configure(fg=fg)
+                    except Exception:
+                        pass
+
+        elif widget_class == "Listbox":
             try:
-                current_bg = widget.cget("bg")
-                if str(current_bg).lower() in _COLORES_PRESERVADOS:
-                    # No modificar este widget ni sus hijos directos
-                    # (hijos dentro de sidebar/headers deben mantener sus colores)
-                    return
+                widget.configure(bg=card_bg, fg=fg,
+                                 selectbackground=PALETTE["primary"],
+                                 selectforeground="#ffffff")
             except Exception:
                 pass
+
+        elif widget_class == "Text":
+            try:
+                widget.configure(bg=entry_bg, fg=fg,
+                                 insertbackground=fg,
+                                 highlightbackground=card_border)
+            except Exception:
+                pass
+
+        elif widget_class == "Canvas":
+            # Preserve canvas in annotator and other special canvases
             try:
                 widget.configure(bg=bg)
             except Exception:
                 pass
-            try:
-                widget.configure(fg=fg)
-            except Exception:
-                pass
+
         for child in widget.winfo_children():
-            _actualizar_widgets_colores(child, bg, fg)
+            _actualizar_widgets_colores(child, bg, fg, card_bg, card_border,
+                                        entry_bg, status_bg, status_fg)
     except Exception:
         pass
 
