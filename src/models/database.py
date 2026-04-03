@@ -287,6 +287,7 @@ class DatabaseManager:
                 if not cur.fetchone():
                     return False, "Registro no encontrado"
 
+                # Mapa fijo UI → columna DB (no acepta entrada del usuario)
                 campo_map = {
                     "Fecha": "fecha",
                     "Turno": "turno",
@@ -298,7 +299,7 @@ class DatabaseManager:
                     "imagen_path": "imagen_path",
                 }
                 sets: list[str] = []
-                vals: list[str] = []
+                vals: list = []
                 for clave_ui, col_db in campo_map.items():
                     if clave_ui in datos:
                         sets.append(f"{col_db}=?")
@@ -471,6 +472,7 @@ class DatabaseManager:
                 if not cur.fetchone():
                     return False, f"La labor '{nombre_original}' no existe"
 
+                # Mapa fijo UI → columna DB (no acepta entrada del usuario)
                 campo_map = {
                     "Labor": "labor",
                     "GSI": "gsi",
