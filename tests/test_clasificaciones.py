@@ -28,9 +28,10 @@ def archivo_temp(tmp_path):
 
 
 @pytest.fixture
-def model(archivo_temp):
+def model(archivo_temp, tmp_path):
     from models.bitacora_model import BitacoraModel
-    return BitacoraModel(archivo=str(archivo_temp))
+    db_path = tmp_path / "test_bitacora.db"
+    return BitacoraModel(archivo=str(archivo_temp), db_path=str(db_path))
 
 
 # ── Tests config_manager: clasificaciones ───────────────────────────────────
