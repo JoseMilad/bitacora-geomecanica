@@ -889,9 +889,11 @@ class BitacoraApp:
 
     def _abrir_anotador_para_registro(self):
         """Abre el anotador de imágenes y vincula el resultado al registro actual."""
+        from pathlib import Path as _Path
+
         def _on_imagen_guardada(path):
             self._imagen_path = path
-            nombre = path.split("/")[-1] if "/" in path else path.split("\\")[-1]
+            nombre = _Path(path).name
             self._lbl_imagen.config(text=f"📎 {nombre}", fg=PALETTE["success"])
 
         # Si ya hay una imagen, abrir para editar
