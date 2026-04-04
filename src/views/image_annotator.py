@@ -46,16 +46,20 @@ class VentanaAnotador(tk.Toplevel):
     callback : callable | None
         Función que recibe la ruta del archivo guardado al completar
         la operación de guardado.
+    labor_name : str | None
+        Nombre de la labor a la que se vincula esta imagen.
     """
 
     # ------------------------------------------------------------------ init
-    def __init__(self, parent, *, image_path=None, callback=None):
+    def __init__(self, parent, *, image_path=None, callback=None, labor_name=None):
         super().__init__(parent)
-        self.title("Anotador de Imágenes")
+        labor_title = f" — {labor_name}" if labor_name else ""
+        self.title(f"Anotador de Imágenes{labor_title}")
         self.configure(bg=PALETTE["surface"])
 
         # Estado interno
         self._callback = callback
+        self._labor_name = labor_name
         self._pil_image: Image.Image | None = None
         self._tk_image: ImageTk.PhotoImage | None = None
         self._image_path: Path | None = None
@@ -101,6 +105,7 @@ class VentanaAnotador(tk.Toplevel):
             ("📏 Línea", lambda: self._select_tool("line"), "line"),
             ("✏️ Lápiz", lambda: self._select_tool("pencil"), "pencil"),
             ("⭕ Círculo", lambda: self._select_tool("circle"), "circle"),
+            ("↩ Deshacer", self._on_undo, None),
             ("💾 Guardar Anotaciones", self._on_save, None),
         ]
 
@@ -438,6 +443,15 @@ class VentanaAnotador(tk.Toplevel):
                     cx - r, cy - r, cx + r, cy + r,
                     outline=color, width=LINE_WIDTH,
                 )
+
+    # ─────────────────────────────────── deshacer
+
+    def _on_undo(self):
+        """Elimina la última anotación registrada y redibuja el lienzo."""
+        if not self.annotations:
+            return
+        self.annotations.pop()
+        self._render_image()
 
     # ─────────────────────────────────── guardado
 
