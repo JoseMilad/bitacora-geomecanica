@@ -3403,9 +3403,7 @@ def _actualizar_widgets_colores(widget, bg, fg, card_bg="#ffffff",
         except Exception:
             current_bg_lower = ""
 
-        is_preserved = current_bg_lower in _COLORES_PRESERVADOS
-
-        if not is_preserved:
+        if current_bg_lower not in _COLORES_PRESERVADOS:
             if widget_class == "Button":
                 # Preservar botones de acción (primarios, secundarios, peligro)
                 if current_bg_lower not in _COLORES_BOTONES_ACCION:
@@ -3640,10 +3638,6 @@ class VentanaRegistroFotografico(tk.Toplevel):
                                   values=(row.get("Fecha", ""),
                                           row.get("Turno", ""),
                                           nombre_img))
-            if not df_con_img.empty:
-                pass
-            elif df_labor.empty:
-                pass
         except Exception:
             pass
 
