@@ -168,6 +168,18 @@ def aplicar_hover(btn, color_normal, color_hover):
     btn.bind("<Leave>", lambda e: btn.configure(bg=color_normal))
 
 
+def _aplicar_modo_oscuro_si_activo(ventana: tk.Toplevel):
+    """Aplica el modo oscuro a una ventana Toplevel recién creada si está activo en config."""
+    try:
+        from utils.config_manager import cargar_config
+        config = cargar_config()
+        if config.get("modo_oscuro", False):
+            # Defer a bit so the window is fully built before recoloring
+            ventana.after(50, lambda: _aplicar_modo_oscuro(ventana, True))
+    except Exception:
+        pass
+
+
 def _make_styled_btn(parent, text, command, style="primary", padx=12, pady=5):
     """Creates a styled tk.Button with PALETTE colors and hover effect."""
     colors_map = {
@@ -385,6 +397,7 @@ class BitacoraApp:
         self.entrada_labor.bind("<KeyRelease>", self._filtrar_labores)
         self.entrada_labor.bind("<FocusIn>",    self._filtrar_labores)
         self.entrada_labor.bind("<FocusOut>",   self._ocultar_lista)
+        self.labor_var.trace_add("write", self._labor_a_mayusculas)
 
         self.lista_filtrada = tk.Listbox(card2, height=5, exportselection=False)
         self.lista_filtrada.grid(row=2, column=1, sticky="ew")
@@ -405,6 +418,7 @@ class BitacoraApp:
         self._lbl_gsi.grid(row=1, column=0, sticky="w", padx=(0, 8))
         self.entrada_gsi = ttk.Entry(self._card3, width=18)
         self.entrada_gsi.grid(row=1, column=1, sticky="ew")
+        self.entrada_gsi.bind("<KeyRelease>", lambda e: self._a_mayusculas_entry(self.entrada_gsi))
 
         # RMR entry (always created; shown/hidden by _actualizar_campos_clasificacion)
         self._lbl_rmr = tk.Label(self._card3, text="RMR", font=("Segoe UI", 9),
@@ -412,7 +426,9 @@ class BitacoraApp:
         self._lbl_rmr.grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
         self.entrada_rmr = ttk.Entry(self._card3, width=18)
         self.entrada_rmr.grid(row=2, column=1, sticky="ew", pady=(4, 0))
-        self.entrada_rmr.bind("<KeyRelease>", self._calcular_soporte)
+        self.entrada_rmr.bind("<KeyRelease>",
+                              lambda e: (self._a_mayusculas_entry(self.entrada_rmr),
+                                         self._calcular_soporte(e)))
 
         # Soporte recomendado (always shown)
         self._lbl_soporte = tk.Label(self._card3, text="Soporte recomendado",
@@ -421,6 +437,7 @@ class BitacoraApp:
         self._lbl_soporte.grid(row=3, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
         self.entrada_soporte = ttk.Entry(self._card3, width=18)
         self.entrada_soporte.grid(row=3, column=1, sticky="ew", pady=(4, 0))
+        self.entrada_soporte.bind("<KeyRelease>", lambda e: self._a_mayusculas_entry(self.entrada_soporte))
         self._card3.columnconfigure(1, weight=1)
 
         # Apply visibility based on current config
@@ -515,6 +532,29 @@ class BitacoraApp:
         )
         self._lbl_status_time.pack(side="right", padx=8)
         self._actualizar_status_bar()
+
+    # ── Utilidades de transformación de texto ────────────────────────────────
+
+    @staticmethod
+    def _a_mayusculas_entry(entry: ttk.Entry):
+        """Convierte el contenido de un Entry de ttk a mayúsculas manteniendo la posición del cursor."""
+        try:
+            pos = entry.index(tk.INSERT)
+            val = entry.get()
+            upper = val.upper()
+            if val != upper:
+                entry.delete(0, tk.END)
+                entry.insert(0, upper)
+                entry.icursor(pos)
+        except Exception:
+            pass
+
+    def _labor_a_mayusculas(self, *_):
+        """Trace callback que convierte labor_var a mayúsculas."""
+        val = self.labor_var.get()
+        upper = val.upper()
+        if val != upper:
+            self.labor_var.set(upper)
 
     def _actualizar_header(self):
         """Actualiza el header contextual con fecha, turno y registros."""
@@ -884,12 +924,14 @@ class BitacoraApp:
         VentanaReportePeriodo(self.root, self.model)
 
     def _abrir_anotador_imagen(self):
-        """Abre la ventana del anotador de imágenes (standalone)."""
-        VentanaAnotador(self.root)
+        """Abre la ventana de registro fotográfico vinculado a labores."""
+        VentanaRegistroFotografico(self.root, self.model)
 
     def _abrir_anotador_para_registro(self):
         """Abre el anotador de imágenes y vincula el resultado al registro actual."""
         from pathlib import Path as _Path
+
+        labor = self.labor_var.get().strip() or None
 
         def _on_imagen_guardada(path):
             self._imagen_path = path
@@ -899,9 +941,9 @@ class BitacoraApp:
         # Si ya hay una imagen, abrir para editar
         if self._imagen_path:
             VentanaAnotador(self.root, image_path=self._imagen_path,
-                            callback=_on_imagen_guardada)
+                            callback=_on_imagen_guardada, labor_name=labor)
         else:
-            VentanaAnotador(self.root, callback=_on_imagen_guardada)
+            VentanaAnotador(self.root, callback=_on_imagen_guardada, labor_name=labor)
 
     def _toggle_modo_oscuro(self):
         """Alterna entre modo oscuro y claro"""
@@ -1052,6 +1094,7 @@ class VentanaHistorial:
         self._todos_registros = None  # cache para búsqueda global
         
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self.ventana)
     
     def _crear_interfaz(self):
         """Crea la interfaz de la ventana de historial"""
@@ -1543,6 +1586,7 @@ class VentanaEstandar:
         self.ventana.configure(bg=PALETTE["surface"])
         
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self.ventana)
     
     def _crear_interfaz(self):
         """Crea la interfaz de la ventana de estándar con pestañas por sistema"""
@@ -1771,6 +1815,7 @@ class VentanaLabores:
         self.ventana.configure(bg=PALETTE["surface"])
         self.ventana.resizable(True, True)
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self.ventana)
 
     def _crear_interfaz(self):
         """Crea la interfaz de la ventana de gestión de labores"""
@@ -2037,6 +2082,7 @@ class VentanaClasificaciones(tk.Toplevel):
         self.resizable(True, True)
         self.grab_set()
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         tk.Label(self, text="Clasificaciones de Labor",
@@ -2177,6 +2223,7 @@ class VentanaGestionKPI(tk.Toplevel):
         self.resizable(True, True)
         self.grab_set()
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         tk.Label(self, text="Clasificaciones KPI",
@@ -2261,6 +2308,7 @@ class VentanaSostenimiento(tk.Toplevel):
         self.configure(bg=PALETTE["surface"])
         self.resizable(True, True)
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _cargar_activos(self):
         """Carga los sostenimientos activos desde config."""
@@ -2479,6 +2527,7 @@ class VentanaHistorialSostenimiento(tk.Toplevel):
         self._indices_originales = []
         self.COLUMNAS = self._obtener_columnas()
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _obtener_columnas(self):
         """Obtiene las columnas a mostrar (base + activas + observaciones)."""
@@ -2671,6 +2720,7 @@ class VentanaDashboard(tk.Toplevel):
         self.minsize(900, 600)
         self.configure(bg=PALETTE["surface"])
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         # Header
@@ -3032,6 +3082,7 @@ class VentanaConfiguracion(tk.Toplevel):
         self._guardado = False
         self._crear_interfaz()
         self.protocol("WM_DELETE_WINDOW", self._cancelar)
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         from utils.config_manager import (
@@ -3256,7 +3307,8 @@ class VentanaConfiguracion(tk.Toplevel):
 # ── Funciones auxiliares globales ────────────────────────────────────────────
 
 def _aplicar_modo_oscuro(root, activar: bool):
-    """Aplica o desactiva el modo oscuro en toda la interfaz."""
+    """Aplica o desactiva el modo oscuro en toda la interfaz, incluyendo
+    todas las ventanas Toplevel que estén abiertas en ese momento."""
     if activar:
         bg = "#1e1e2e"
         fg = "#cdd6f4"
@@ -3304,12 +3356,18 @@ def _aplicar_modo_oscuro(root, activar: bool):
     except Exception:
         pass
 
-    try:
-        root.configure(bg=bg)
-        _actualizar_widgets_colores(root, bg, fg, card_bg, card_border,
-                                    entry_bg, status_bg, status_fg)
-    except Exception:
-        pass
+    # Aplicar a la ventana raíz y a todos los Toplevel abiertos
+    _ventanas = [root] + [
+        w for w in root.winfo_children()
+        if isinstance(w, tk.Toplevel) and w.winfo_exists()
+    ]
+    for ventana in _ventanas:
+        try:
+            ventana.configure(bg=bg)
+            _actualizar_widgets_colores(ventana, bg, fg, card_bg, card_border,
+                                        entry_bg, status_bg, status_fg)
+        except Exception:
+            pass
 
 
 # Colores que deben conservarse siempre (sidebar, headers oscuros)
@@ -3342,83 +3400,83 @@ def _actualizar_widgets_colores(widget, bg, fg, card_bg="#ffffff",
         try:
             current_bg = widget.cget("bg")
             current_bg_lower = str(current_bg).lower()
-            if current_bg_lower in _COLORES_PRESERVADOS:
-                # No modificar este widget ni sus hijos directos
-                return
         except Exception:
             current_bg_lower = ""
 
-        if widget_class == "Button":
-            # Preservar botones de acción (primarios, secundarios, peligro)
-            if current_bg_lower not in _COLORES_BOTONES_ACCION:
+        is_preserved = current_bg_lower in _COLORES_PRESERVADOS
+
+        if not is_preserved:
+            if widget_class == "Button":
+                # Preservar botones de acción (primarios, secundarios, peligro)
+                if current_bg_lower not in _COLORES_BOTONES_ACCION:
+                    try:
+                        widget.configure(bg=bg, fg=fg)
+                    except Exception:
+                        pass
+
+            elif widget_class in ("Label", "Frame"):
+                # Detectar cards (frames con card_bg or card_border backgrounds)
+                is_card_border = current_bg_lower in (
+                    PALETTE["card_border"].lower(), "#dde3ec"
+                )
+                is_card_bg = current_bg_lower in (
+                    PALETTE["card_bg"].lower(), "#ffffff"
+                )
+                is_status = current_bg_lower == "#e8edf2"
+
+                if is_card_border:
+                    try:
+                        widget.configure(bg=card_border)
+                    except Exception:
+                        pass
+                elif is_status:
+                    try:
+                        widget.configure(bg=status_bg)
+                        if widget_class == "Label":
+                            widget.configure(fg=status_fg)
+                    except Exception:
+                        pass
+                elif is_card_bg:
+                    try:
+                        widget.configure(bg=card_bg)
+                        if widget_class == "Label":
+                            widget.configure(fg=fg)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        widget.configure(bg=bg)
+                    except Exception:
+                        pass
+                    if widget_class == "Label":
+                        try:
+                            widget.configure(fg=fg)
+                        except Exception:
+                            pass
+
+            elif widget_class == "Listbox":
                 try:
-                    widget.configure(bg=bg, fg=fg)
+                    widget.configure(bg=card_bg, fg=fg,
+                                     selectbackground=PALETTE["primary"],
+                                     selectforeground="#ffffff")
                 except Exception:
                     pass
 
-        elif widget_class in ("Label", "Frame"):
-            # Detectar cards (frames con card_bg or card_border backgrounds)
-            is_card_border = current_bg_lower in (
-                PALETTE["card_border"].lower(), "#dde3ec"
-            )
-            is_card_bg = current_bg_lower in (
-                PALETTE["card_bg"].lower(), "#ffffff"
-            )
-            is_status = current_bg_lower == "#e8edf2"
+            elif widget_class == "Text":
+                try:
+                    widget.configure(bg=entry_bg, fg=fg,
+                                     insertbackground=fg,
+                                     highlightbackground=card_border)
+                except Exception:
+                    pass
 
-            if is_card_border:
-                try:
-                    widget.configure(bg=card_border)
-                except Exception:
-                    pass
-            elif is_status:
-                try:
-                    widget.configure(bg=status_bg)
-                    if widget_class == "Label":
-                        widget.configure(fg=status_fg)
-                except Exception:
-                    pass
-            elif is_card_bg:
-                try:
-                    widget.configure(bg=card_bg)
-                    if widget_class == "Label":
-                        widget.configure(fg=fg)
-                except Exception:
-                    pass
-            else:
+            elif widget_class == "Canvas":
                 try:
                     widget.configure(bg=bg)
                 except Exception:
                     pass
-                if widget_class == "Label":
-                    try:
-                        widget.configure(fg=fg)
-                    except Exception:
-                        pass
 
-        elif widget_class == "Listbox":
-            try:
-                widget.configure(bg=card_bg, fg=fg,
-                                 selectbackground=PALETTE["primary"],
-                                 selectforeground="#ffffff")
-            except Exception:
-                pass
-
-        elif widget_class == "Text":
-            try:
-                widget.configure(bg=entry_bg, fg=fg,
-                                 insertbackground=fg,
-                                 highlightbackground=card_border)
-            except Exception:
-                pass
-
-        elif widget_class == "Canvas":
-            # Preserve canvas in annotator and other special canvases
-            try:
-                widget.configure(bg=bg)
-            except Exception:
-                pass
-
+        # Siempre recurrir en los hijos (incluso si el widget padre está preservado)
         for child in widget.winfo_children():
             _actualizar_widgets_colores(child, bg, fg, card_bg, card_border,
                                         entry_bg, status_bg, status_fg)
@@ -3468,6 +3526,164 @@ def _mostrar_vista_previa(parent, df, titulo: str, callback_confirmar):
 
 # ── Nuevas clases ─────────────────────────────────────────────────────────────
 
+class VentanaRegistroFotografico(tk.Toplevel):
+    """Ventana para gestionar el registro fotográfico vinculado a labores.
+
+    Permite seleccionar una labor, ver las imágenes asociadas y abrir el
+    anotador para añadir o editar imágenes de esa labor.
+    """
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.model = model
+        self.title("Registro Fotográfico por Labor")
+        self.geometry("860x540")
+        self.minsize(700, 400)
+        self.resizable(True, True)
+        self.configure(bg=PALETTE["surface"])
+        self._registros_labor: list[dict] = []
+        self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
+
+    # ---------------------------------------------------------------- UI
+
+    def _crear_interfaz(self):
+        # Header
+        header = tk.Frame(self, bg=PALETTE["sidebar_bg"], height=48)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="📷 Registro Fotográfico por Labor",
+                 font=("Segoe UI", 13, "bold"), fg="#ffffff",
+                 bg=PALETTE["sidebar_bg"]).pack(fill="x", pady=12, padx=16)
+
+        # Selector de labor
+        top = tk.Frame(self, bg=PALETTE["surface"])
+        top.pack(fill="x", padx=14, pady=10)
+
+        tk.Label(top, text="Seleccionar Labor:", font=("Segoe UI", 9),
+                 bg=PALETTE["surface"]).pack(side="left", padx=(0, 6))
+
+        self._labor_var = tk.StringVar()
+        labores = self.model.obtener_labores_guardadas()
+        self._combo_labor = ttk.Combobox(top, textvariable=self._labor_var,
+                                         values=labores, width=28, state="readonly")
+        self._combo_labor.pack(side="left")
+        self._combo_labor.bind("<<ComboboxSelected>>", self._on_labor_seleccionada)
+
+        btn_buscar = _make_styled_btn(top, "🔍 Cargar imágenes", self._cargar_imagenes,
+                                      style="primary", padx=10, pady=4)
+        btn_buscar.pack(side="left", padx=8)
+
+        # Tabla de registros con imagen
+        cols = ["Fecha", "Turno", "Imagen"]
+        self._tree = ttk.Treeview(self, columns=cols, show="headings", height=10,
+                                   style="Custom.Treeview")
+        for col in cols:
+            self._tree.heading(col, text=col)
+        self._tree.column("Fecha", width=110, anchor="center")
+        self._tree.column("Turno", width=80, anchor="center")
+        self._tree.column("Imagen", width=400, anchor="w")
+        self._tree.pack(fill="both", expand=True, padx=14, pady=(0, 6))
+
+        sb = ttk.Scrollbar(self._tree, orient="vertical", command=self._tree.yview)
+        self._tree.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+
+        self._tree.bind("<Double-1>", self._on_doble_click)
+
+        # Botones inferiores
+        frame_btns = tk.Frame(self, bg=PALETTE["surface"])
+        frame_btns.pack(pady=8)
+
+        _make_styled_btn(frame_btns, "🖼 Ver / Anotar imagen seleccionada",
+                         self._abrir_imagen_seleccionada, style="secondary",
+                         padx=10, pady=5).pack(side="left", padx=6)
+        _make_styled_btn(frame_btns, "📷 Nueva imagen para la labor",
+                         self._nueva_imagen_labor, style="primary",
+                         padx=10, pady=5).pack(side="left", padx=6)
+        _make_styled_btn(frame_btns, "✕ Cerrar", self.destroy,
+                         style="danger", padx=10, pady=5).pack(side="left", padx=6)
+
+    # ---------------------------------------------------------------- lógica
+
+    def _on_labor_seleccionada(self, _event=None):
+        self._cargar_imagenes()
+
+    def _cargar_imagenes(self):
+        """Carga los registros con imagen para la labor seleccionada."""
+        labor = self._labor_var.get().strip()
+        for row in self._tree.get_children():
+            self._tree.delete(row)
+        self._registros_labor.clear()
+
+        if not labor:
+            return
+
+        try:
+            import pandas as pd
+            df = self.model.obtener_bitacora()
+            if df.empty:
+                return
+            df_labor = df[df["Labor"] == labor].copy()
+            if "imagen_path" not in df_labor.columns:
+                return
+            df_con_img = df_labor[
+                df_labor["imagen_path"].notna() &
+                (df_labor["imagen_path"].astype(str).str.strip() != "")
+            ]
+            for _, row in df_con_img.iterrows():
+                from pathlib import Path
+                img_path = str(row.get("imagen_path", ""))
+                nombre_img = Path(img_path).name if img_path else "—"
+                self._registros_labor.append(dict(row))
+                self._tree.insert("", "end",
+                                  values=(row.get("Fecha", ""),
+                                          row.get("Turno", ""),
+                                          nombre_img))
+            if not df_con_img.empty:
+                pass
+            elif df_labor.empty:
+                pass
+        except Exception:
+            pass
+
+    def _registro_seleccionado(self) -> dict | None:
+        sel = self._tree.selection()
+        if not sel:
+            return None
+        idx = self._tree.index(sel[0])
+        if idx < len(self._registros_labor):
+            return self._registros_labor[idx]
+        return None
+
+    def _abrir_imagen_seleccionada(self):
+        """Abre el anotador con la imagen del registro seleccionado."""
+        reg = self._registro_seleccionado()
+        if reg is None:
+            from tkinter import messagebox
+            messagebox.showwarning("Sin selección",
+                                   "Seleccione un registro de la lista.", parent=self)
+            return
+        img_path = reg.get("imagen_path", "")
+        labor = reg.get("Labor", "")
+        VentanaAnotador(self, image_path=img_path if img_path else None,
+                        labor_name=labor)
+
+    def _on_doble_click(self, _event):
+        """Doble clic en la tabla abre el anotador."""
+        self._abrir_imagen_seleccionada()
+
+    def _nueva_imagen_labor(self):
+        """Abre el anotador en blanco para la labor seleccionada."""
+        labor = self._labor_var.get().strip()
+        if not labor:
+            from tkinter import messagebox
+            messagebox.showwarning("Sin labor",
+                                   "Seleccione una labor primero.", parent=self)
+            return
+        VentanaAnotador(self, labor_name=labor)
+
+
 class VentanaSostenimientos(tk.Toplevel):
     """
     Ventana para gestionar la lista de sostenimientos activos.
@@ -3485,6 +3701,7 @@ class VentanaSostenimientos(tk.Toplevel):
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         from utils.config_manager import cargar_config
@@ -3603,6 +3820,7 @@ class VentanaReportePeriodo(tk.Toplevel):
         self.configure(bg=PALETTE["surface"])
         self.grab_set()
         self._crear_interfaz()
+        _aplicar_modo_oscuro_si_activo(self)
 
     def _crear_interfaz(self):
         # Header
