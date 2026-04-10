@@ -146,6 +146,8 @@ async def dashboard(request: Request):
 
     # Nombre del sostenimiento principal para etiquetas
     nombre_col_principal = activos_sost[0]["display"] if activos_sost else "Sostenimiento"
+
+    return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "app_version": APP_VERSION,
         "total_registros": total_registros,
