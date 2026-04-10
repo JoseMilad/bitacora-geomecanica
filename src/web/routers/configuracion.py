@@ -103,8 +103,7 @@ async def guardar_configuracion(request: Request):
     custom_display = form.get("custom_sost_display", "").strip()
     custom_tipo = form.get("custom_sost_tipo", "int").strip()
     if custom_display:
-        import re as _re
-        col = _re.sub(r"[^a-zA-Z0-9]", "_", custom_display)
+        col = re.sub(r"[^a-zA-Z0-9]", "_", custom_display)
         cols_existentes = {s["columna"] for s in catalogo}
         if col not in cols_existentes:
             nuevo_sost = {"display": custom_display, "columna": col, "tipo": custom_tipo}

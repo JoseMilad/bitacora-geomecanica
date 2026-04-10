@@ -31,6 +31,14 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _validar_sistema(sistema: str) -> str:
+    """Valida y sanea el sistema devolviendo solo IDs alfanuméricos permitidos."""
+    activas = obtener_clasificaciones_activas()
+    if sistema in activas:
+        return sistema
+    return activas[0] if activas else "RMR"
+
+
 # ── Ver estándar ──────────────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -86,7 +94,8 @@ async def agregar_fila(
         _set_flash(request, "success", msg)
     else:
         _set_flash(request, "error", msg)
-    return RedirectResponse(url=f"/estandar?sistema={sistema}", status_code=303)
+    sistema_seguro = _validar_sistema(sistema)
+    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
 
 
 # ── Eliminar fila por índice ──────────────────────────────────────────────────
@@ -109,7 +118,8 @@ async def eliminar_fila(
             _set_flash(request, "error", msg)
     else:
         _set_flash(request, "error", "Índice fuera de rango.")
-    return RedirectResponse(url=f"/estandar?sistema={sistema}", status_code=303)
+    sistema_seguro = _validar_sistema(sistema)
+    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
 
 
 # ── Editar fila (guardar desde formulario inline) ─────────────────────────────
@@ -137,4 +147,5 @@ async def editar_fila(
             _set_flash(request, "error", msg)
     else:
         _set_flash(request, "error", "Índice fuera de rango.")
-    return RedirectResponse(url=f"/estandar?sistema={sistema}", status_code=303)
+    sistema_seguro = _validar_sistema(sistema)
+    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)

@@ -93,6 +93,8 @@ async def dashboard(request: Request):
     # ── Datos para gráfico de sostenimiento ───────────────────────────────────
     config = cargar_config()
     activos_sost = config.get("sostenimientos_activos", DEFAULTS["sostenimientos_activos"])
+    if not activos_sost:
+        activos_sost = list(DEFAULTS["sostenimientos_activos"])
     cols_sost = [s["columna"] for s in activos_sost if isinstance(s, dict)]
 
     # Totales por labor (para chart de barras)
@@ -144,8 +146,6 @@ async def dashboard(request: Request):
 
     # Nombre del sostenimiento principal para etiquetas
     nombre_col_principal = activos_sost[0]["display"] if activos_sost else "Sostenimiento"
-
-    return templates.TemplateResponse(request, "dashboard.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "total_registros": total_registros,

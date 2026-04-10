@@ -22,8 +22,8 @@ async function autocompletarLabor(nombre) {
     if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
 
     // Si RMR fue rellenado, calcular soporte
-    if (rmrInput && rmrInput.value) {
-      setTimeout(() => calcularSoporte && calcularSoporte(), 200);
+    if (rmrInput && rmrInput.value && typeof calcularSoporte === 'function') {
+      setTimeout(calcularSoporte, 200);
     }
   } catch (err) {
     console.warn('autocompletarLabor error:', err);
