@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Bitácora Geomecánica{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="row g-4 mt-1">
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-primary-soft">
+        <i class="fa-solid fa-clipboard-list text-primary fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Total Registros</p>
+        <h3 class="kpi-value">{{ total_registros }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-success-soft">
+        <i class="fa-solid fa-hard-hat text-success fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Labores Activas</p>
+        <h3 class="kpi-value">{{ total_labores }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-accent-soft">
+        <i class="fa-solid fa-calendar-days text-accent fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Registros Último Mes</p>
+        <h3 class="kpi-value">{{ registros_mes }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-secondary-soft">
+        <i class="fa-solid fa-layer-group text-secondary fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Total Shotcrete (m³)</p>
+        <h3 class="kpi-value">{{ total_shotcrete }}</h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row g-4 mt-2">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-bar me-2 text-primary"></i>Top 10 Labores por Registros
+      </div>
+      <div class="card-body">
+        <canvas id="chartLabores" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-line me-2 text-primary"></i>Actividad últimos 30 días
+      </div>
+      <div class="card-body">
+        <canvas id="chartFechas" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Últimos 10 registros -->
+<div class="card shadow-sm border-0 mt-4">
+  <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+    <span class="fw-semibold"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Últimos Registros</span>
+    <a href="/bitacora" class="btn btn-sm btn-outline-primary">Ver todos</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Fecha</th>
+            <th>Turno</th>
+            <th>Labor</th>
+            <th>GSI</th>
+            <th>RMR</th>
+            <th>Soporte</th>
+            <th>Observaciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if ultimos_10 %}
+            {% for r in ultimos_10 %}
+            <tr>
+              <td>{{ r.get('Fecha', '') }}</td>
+              <td>
+                <span class="badge {{ 'badge-dia' if r.get('Turno') == 'Día' else 'badge-noche' }}">
+                  {{ r.get('Turno', '') }}
+                </span>
+              </td>
+              <td>{{ r.get('Labor', '') }}</td>
+              <td>{{ r.get('GSI', '') }}</td>
+              <td>{{ r.get('RMR', '') }}</td>
+              <td>{{ r.get('Soporte', '') }}</td>
+              <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:60] }}{% if (r.get('Observaciones', '') or '')|length > 60 %}…{% endif %}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-4">Sin registros</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const labelsLabores = {{ labels_labores | tojson }};
+const dataLabores   = {{ data_labores | tojson }};
+const labelsFechas  = {{ labels_fechas | tojson }};
+const dataFechas    = {{ data_fechas | tojson }};
+
+new Chart(document.getElementById('chartLabores'), {
+  type: 'bar',
+  data: {
+    labels: labelsLabores,
+    datasets: [{
+      label: 'Registros',
+      data: dataLabores,
+      backgroundColor: '#1a6fc4cc',
+      borderColor: '#1a6fc4',
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+  }
+});
+
+new Chart(document.getElementById('chartFechas'), {
+  type: 'line',
+  data: {
+    labels: labelsFechas,
+    datasets: [{
+      label: 'Registros',
+      data: dataFechas,
+      borderColor: '#2d8a6e',
+      backgroundColor: '#2d8a6e22',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+  }
+});
+</script>
+{% endblock %}

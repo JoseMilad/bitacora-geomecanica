@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Sostenimiento Diario{% endblock %}
+{% block page_title %}Sostenimiento Diario{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-body">
+    <form method="get" action="/sostenimiento" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Fecha</label>
+        <input type="date" name="fecha" value="{{ fecha }}" class="form-control" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Labor</label>
+        <select name="labor" class="form-select">
+          <option value="">Todas las labores</option>
+          {% for l in labores %}
+          <option value="{{ l }}" {% if labor == l %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="fa-solid fa-filter me-1"></i>Filtrar
+        </button>
+        <a href="/sostenimiento" class="btn btn-outline-secondary">
+          <i class="fa-solid fa-xmark"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Acciones -->
+<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+  <div class="d-flex gap-2">
+    <a href="/sostenimiento/totales" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-sigma me-1"></i>Ver Totales
+    </a>
+  </div>
+  <a href="/sostenimiento/nuevo" class="btn btn-primary">
+    <i class="fa-solid fa-plus me-1"></i>Nuevo Registro
+  </a>
+</div>
+
+<!-- Tabla -->
+<div class="card shadow-sm border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Fecha</th>
+            <th>Turno</th>
+            <th>Labor</th>
+            {% for c in campos %}
+            <th><small>{{ c.display }}</small></th>
+            {% endfor %}
+            <th>Observaciones</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if registros %}
+            {% for r in registros %}
+            <tr>
+              <td>{{ r.get('Fecha', '') }}</td>
+              <td>
+                <span class="badge {{ 'badge-dia' if r.get('Turno') == 'Día' else 'badge-noche' }}">
+                  {{ r.get('Turno', '') }}
+                </span>
+              </td>
+              <td class="fw-semibold">{{ r.get('Labor', '') }}</td>
+              {% for c in campos %}
+              <td>
+                {% set val = r.get(c.columna, 0) %}
+                {% if val and val != 0 %}
+                  <span class="badge bg-light text-dark border">{{ val }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+              <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:60] }}</td>
+              <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                  <a href="/sostenimiento/{{ r.get('id', loop.index0) }}/editar"
+                    class="btn btn-outline-primary" title="Editar">
+                    <i class="fa-solid fa-pen"></i>
+                  </a>
+                  <button type="button" class="btn btn-outline-danger"
+                    onclick="confirmarEliminacion('{{ r.get('id', loop.index0) }}', 'sostenimiento')"
+                    title="Eliminar">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="{{ 5 + campos|length }}" class="text-center text-muted py-5">
+              <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+              No se encontraron registros
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

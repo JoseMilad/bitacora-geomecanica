@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — Labores{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-hard-hat me-2 text-primary"></i>{{ titulo }}
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ action }}">
+          <div class="row g-3">
+            <!-- Nombre de labor (solo en creación) -->
+            {% if not labor %}
+            <div class="col-12">
+              <label class="form-label fw-semibold">Nombre de Labor <span class="text-danger">*</span></label>
+              <input type="text" name="nombre" class="form-control" required
+                placeholder="Ej: Galería Principal Norte" />
+            </div>
+            {% else %}
+            <div class="col-12">
+              <label class="form-label fw-semibold">Nombre de Labor</label>
+              <input type="text" class="form-control bg-light" value="{{ labor.get('Labor', '') }}" readonly />
+            </div>
+            {% endif %}
+
+            <!-- GSI -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">GSI</label>
+              <input type="text" name="gsi" class="form-control"
+                value="{{ labor.get('GSI', '') if labor else '' }}"
+                placeholder="Valor GSI" />
+            </div>
+            <!-- RMR -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">RMR</label>
+              <input type="text" name="rmr" class="form-control"
+                value="{{ labor.get('RMR', '') if labor else '' }}"
+                placeholder="Valor RMR" />
+            </div>
+            <!-- Soporte -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Soporte</label>
+              <input type="text" name="soporte" class="form-control"
+                value="{{ labor.get('Soporte', '') if labor else '' }}"
+                placeholder="Tipo de soporte recomendado" />
+            </div>
+            <!-- Tipo -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Tipo</label>
+              <select name="tipo" class="form-select">
+                <option value="Temporal" {% if not labor or labor.get('Tipo') == 'Temporal' %}selected{% endif %}>Temporal</option>
+                <option value="Permanente" {% if labor and labor.get('Tipo') == 'Permanente' %}selected{% endif %}>Permanente</option>
+              </select>
+            </div>
+            <!-- Fase -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Fase</label>
+              <input type="text" name="fase" class="form-control"
+                value="{{ labor.get('Fase', '') if labor else '' }}"
+                placeholder="Fase de minado" />
+            </div>
+            <!-- Clasificación KPI -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Clasificación KPI</label>
+              <input type="text" name="clasificacion_kpi" class="form-control"
+                value="{{ labor.get('Clasificacion_KPI', '') if labor else '' }}"
+                placeholder="Clasificación KPI" />
+            </div>
+          </div>
+
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-save me-1"></i>Guardar
+            </button>
+            <a href="/labores" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-arrow-left me-1"></i>Cancelar
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

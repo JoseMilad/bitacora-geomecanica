@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Totales de Sostenimiento{% endblock %}
+{% block page_title %}Totales de Sostenimiento{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-body">
+    <form method="get" action="/sostenimiento/totales" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Fecha inicio</label>
+        <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Fecha fin</label>
+        <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Labor</label>
+        <select name="labor" class="form-select">
+          <option value="">Todas</option>
+          {% for l in labores %}
+          <option value="{{ l }}" {% if labor == l %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="fa-solid fa-filter me-1"></i>Filtrar
+        </button>
+        <a href="/sostenimiento/totales" class="btn btn-outline-secondary">
+          <i class="fa-solid fa-xmark"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+  <span class="text-muted"><i class="fa-solid fa-sigma me-1"></i>Totales agrupados por labor</span>
+  <a href="/sostenimiento" class="btn btn-sm btn-outline-secondary">
+    <i class="fa-solid fa-arrow-left me-1"></i>Volver
+  </a>
+</div>
+
+<!-- Tabla de totales -->
+<div class="card shadow-sm border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Labor</th>
+            {% for c in campos %}
+            <th><small>{{ c.display }}</small></th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% if totales %}
+            {% for r in totales %}
+            <tr>
+              <td class="fw-semibold">{{ r.get('Labor', '') }}</td>
+              {% for c in campos %}
+              <td>
+                {% set val = r.get(c.columna, 0) %}
+                {% if val and val != 0 %}
+                  <strong>{{ val | round(2) if c.tipo == 'float' else val }}</strong>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="{{ 1 + campos|length }}" class="text-center text-muted py-5">
+              <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+              No se encontraron totales
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

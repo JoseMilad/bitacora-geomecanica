@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Reportes y Exportación{% endblock %}
+{% block page_title %}Reportes y Exportación{% endblock %}
+
+{% block content %}
+<div class="row g-4 mt-2">
+  <!-- Exportar Bitácora -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-file-excel me-2 text-success"></i>Exportar Bitácora
+      </div>
+      <div class="card-body">
+        <form method="get" action="/reportes/exportar/bitacora">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fecha inicio</label>
+            <input type="date" name="fecha_inicio" class="form-control" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fecha fin</label>
+            <input type="date" name="fecha_fin" class="form-control" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Labor</label>
+            <select name="labor" class="form-select">
+              <option value="">Todas las labores</option>
+              {% for l in labores %}
+              <option value="{{ l }}">{{ l }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="fa-solid fa-download me-1"></i>Descargar Excel — Bitácora
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exportar Sostenimiento -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-file-excel me-2 text-success"></i>Exportar Sostenimiento Diario
+      </div>
+      <div class="card-body">
+        <form method="get" action="/reportes/exportar/sostenimiento">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fecha</label>
+            <input type="date" name="fecha_inicio" class="form-control" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Labor</label>
+            <select name="labor" class="form-select">
+              <option value="">Todas las labores</option>
+              {% for l in labores %}
+              <option value="{{ l }}">{{ l }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-success w-100 mt-4">
+            <i class="fa-solid fa-download me-1"></i>Descargar Excel — Sostenimiento
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Resumen estadístico -->
+<div class="row g-4 mt-2">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-pie me-2 text-primary"></i>Resumen Bitácora
+      </div>
+      <div class="card-body">
+        {% if resumen_bit %}
+        <p><strong>Total registros:</strong> {{ resumen_bit.get('total', 0) }}</p>
+        {% if resumen_bit.get('por_turno') %}
+        <p class="mb-1"><strong>Por turno:</strong></p>
+        <ul class="list-unstyled ms-3">
+          {% for turno, cnt in resumen_bit.por_turno.items() %}
+          <li><span class="badge {{ 'badge-dia' if turno == 'Día' else 'badge-noche' }} me-1"></span> {{ turno }}: <strong>{{ cnt }}</strong></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if resumen_bit.get('top_labores') %}
+        <p class="mb-1 mt-2"><strong>Top 5 labores:</strong></p>
+        <ul class="list-unstyled ms-3">
+          {% for labor, cnt in resumen_bit.top_labores.items() %}
+          <li>{{ labor }}: <strong>{{ cnt }}</strong></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% else %}
+        <p class="text-muted">Sin datos disponibles.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-pie me-2 text-secondary"></i>Resumen Sostenimiento
+      </div>
+      <div class="card-body">
+        {% if resumen_sost %}
+        <p><strong>Total registros:</strong> {{ resumen_sost.get('total', 0) }}</p>
+        <p class="mb-1"><strong>Totales acumulados:</strong></p>
+        <ul class="list-unstyled ms-3">
+          {% for key, val in resumen_sost.items() %}
+          {% if key != 'total' %}
+          <li>{{ key }}: <strong>{{ val }}</strong></li>
+          {% endif %}
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos disponibles.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
