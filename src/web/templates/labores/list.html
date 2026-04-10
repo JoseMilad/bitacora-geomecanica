@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Labores — Catálogo{% endblock %}
+{% block page_title %}Catálogo de Labores{% endblock %}
+
+{% block content %}
+<!-- Filtros y acciones -->
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 gap-3">
+  <form method="get" action="/labores" class="d-flex gap-2 flex-grow-1">
+    <input type="text" name="q" value="{{ q }}" class="form-control"
+      placeholder="Buscar por nombre de labor..." />
+    <button type="submit" class="btn btn-outline-primary">
+      <i class="fa-solid fa-search me-1"></i>Buscar
+    </button>
+    {% if q %}
+    <a href="/labores" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-xmark"></i>
+    </a>
+    {% endif %}
+  </form>
+  <a href="/labores/nueva" class="btn btn-primary">
+    <i class="fa-solid fa-plus me-1"></i>Nueva Labor
+  </a>
+</div>
+
+<!-- Tabla -->
+<div class="card shadow-sm border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Labor</th>
+            <th>GSI</th>
+            <th>RMR</th>
+            <th>Soporte</th>
+            <th>Tipo</th>
+            <th>Fase</th>
+            <th>KPI</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if labores %}
+            {% for l in labores %}
+            <tr>
+              <td class="fw-semibold">{{ l.get('Labor', '') }}</td>
+              <td>{{ l.get('GSI', '') }}</td>
+              <td>{{ l.get('RMR', '') }}</td>
+              <td><small>{{ l.get('Soporte', '') }}</small></td>
+              <td>
+                <span class="badge {{ 'badge-permanente' if l.get('Tipo') == 'Permanente' else 'badge-temporal' }}">
+                  {{ l.get('Tipo', '') }}
+                </span>
+              </td>
+              <td><small>{{ l.get('Fase', '') }}</small></td>
+              <td><small>{{ l.get('Clasificacion_KPI', '') }}</small></td>
+              <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                  <a href="/labores/{{ l.get('Labor', '') | urlencode }}/editar"
+                    class="btn btn-outline-primary" title="Editar">
+                    <i class="fa-solid fa-pen"></i>
+                  </a>
+                  <button type="button" class="btn btn-outline-danger"
+                    onclick="confirmarEliminacionLabor('{{ l.get('Labor', '') }}')"
+                    title="Eliminar">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-5">
+              <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+              No se encontraron labores
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal eliminación labor -->
+<div class="modal fade" id="modalEliminarLabor" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title text-danger">
+          <i class="fa-solid fa-triangle-exclamation me-2"></i>Confirmar eliminación
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">¿Eliminar la labor <strong id="nombreLaborEliminar"></strong>? Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formEliminarLabor" method="POST" class="d-inline">
+          <button type="submit" class="btn btn-danger">
+            <i class="fa-solid fa-trash me-1"></i>Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function confirmarEliminacionLabor(nombre) {
+  document.getElementById('nombreLaborEliminar').textContent = nombre;
+  document.getElementById('formEliminarLabor').action = '/labores/' + encodeURIComponent(nombre) + '/eliminar';
+  new bootstrap.Modal(document.getElementById('modalEliminarLabor')).show();
+}
+</script>
+{% endblock %}

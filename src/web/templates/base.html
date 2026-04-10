@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Bitácora Geomecánica{% endblock %}</title>
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/custom.css" />
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="d-flex" id="app-wrapper">
+    <!-- ── Sidebar ────────────────────────────────────────────────────── -->
+    <nav id="sidebar">
+      <div class="sidebar-header">
+        <i class="fa-solid fa-mountain-sun me-2"></i>
+        <span class="sidebar-brand">Bitácora<br /><small>Geomecánica</small></span>
+      </div>
+      <ul class="sidebar-nav">
+        <li>
+          <a href="/dashboard" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">
+            <i class="fa-solid fa-house me-2"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="/bitacora" class="sidebar-link {% if active_page == 'bitacora' %}active{% endif %}">
+            <i class="fa-solid fa-clipboard-list me-2"></i> Bitácora
+          </a>
+        </li>
+        <li>
+          <a href="/labores" class="sidebar-link {% if active_page == 'labores' %}active{% endif %}">
+            <i class="fa-solid fa-hard-hat me-2"></i> Labores
+          </a>
+        </li>
+        <li>
+          <a href="/sostenimiento" class="sidebar-link {% if active_page == 'sostenimiento' %}active{% endif %}">
+            <i class="fa-solid fa-layer-group me-2"></i> Sostenimiento
+          </a>
+        </li>
+        <li>
+          <a href="/reportes" class="sidebar-link {% if active_page == 'reportes' %}active{% endif %}">
+            <i class="fa-solid fa-chart-bar me-2"></i> Reportes
+          </a>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <small><i class="fa-solid fa-circle-info me-1"></i> v{{ app_version }}</small>
+      </div>
+    </nav>
+
+    <!-- ── Contenido principal ───────────────────────────────────────── -->
+    <div id="main-content">
+      <!-- Topbar -->
+      <header class="topbar d-flex align-items-center px-4">
+        <button class="btn btn-sm sidebar-toggle me-3" id="sidebarToggle">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <h5 class="mb-0 fw-semibold">{% block page_title %}Bitácora Geomecánica{% endblock %}</h5>
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <a href="/docs" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-book me-1"></i> API Docs
+          </a>
+        </div>
+      </header>
+
+      <!-- Flash messages -->
+      {% if flash and flash.mensaje %}
+      <div class="alert alert-{{ 'success' if flash.tipo == 'success' else ('warning' if flash.tipo == 'warning' else 'danger') }} alert-dismissible fade show mx-4 mt-3" role="alert">
+        <i class="fa-solid fa-{{ 'circle-check' if flash.tipo == 'success' else ('triangle-exclamation' if flash.tipo == 'warning' else 'circle-xmark') }} me-2"></i>
+        {{ flash.mensaje }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endif %}
+
+      <!-- Page content -->
+      <main class="page-content px-4 pb-5">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación de eliminación -->
+  <div class="modal fade" id="modalEliminar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title text-danger">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>Confirmar eliminación
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0">¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <form id="formEliminar" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-danger">
+              <i class="fa-solid fa-trash me-1"></i>Eliminar
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="/static/js/main.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

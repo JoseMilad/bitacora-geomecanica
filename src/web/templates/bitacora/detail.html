@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Detalle — Bitácora{% endblock %}
+{% block page_title %}Detalle de Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">
+          <i class="fa-solid fa-clipboard-list me-2 text-primary"></i>Registro #{{ registro.get('id','') }}
+        </span>
+        <div class="d-flex gap-2">
+          <a href="/bitacora/{{ registro.get('id') }}/editar" class="btn btn-sm btn-outline-primary">
+            <i class="fa-solid fa-pen me-1"></i>Editar
+          </a>
+          <a href="/bitacora" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-left me-1"></i>Volver
+          </a>
+        </div>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-4">Fecha</dt>
+          <dd class="col-sm-8">{{ registro.get('Fecha','') }}</dd>
+
+          <dt class="col-sm-4">Turno</dt>
+          <dd class="col-sm-8">
+            <span class="badge {{ 'badge-dia' if registro.get('Turno') == 'Día' else 'badge-noche' }}">
+              {{ registro.get('Turno','') }}
+            </span>
+          </dd>
+
+          <dt class="col-sm-4">Labor</dt>
+          <dd class="col-sm-8 fw-semibold">{{ registro.get('Labor','') }}</dd>
+
+          <dt class="col-sm-4">GSI</dt>
+          <dd class="col-sm-8">{{ registro.get('GSI','—') }}</dd>
+
+          <dt class="col-sm-4">RMR</dt>
+          <dd class="col-sm-8">{{ registro.get('RMR','—') }}</dd>
+
+          <dt class="col-sm-4">Soporte</dt>
+          <dd class="col-sm-8">{{ registro.get('Soporte','—') }}</dd>
+
+          <dt class="col-sm-4">Observaciones</dt>
+          <dd class="col-sm-8">{{ registro.get('Observaciones','—') }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

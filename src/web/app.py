@@ -1,0 +1,51 @@
+"""Aplicación FastAPI principal — Bitácora Geomecánica Web."""
+import os
+import sys
+from pathlib import Path
+
+# Agregar raíz del proyecto y src/ al sys.path
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+SRC_DIR = ROOT_DIR / "src"
+for _p in (str(ROOT_DIR), str(SRC_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
+
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes
+
+# ── Instancia principal ───────────────────────────────────────────────────────
+app = FastAPI(
+    title="Bitácora Geomecánica - Web",
+    version="1.0.0",
+    description="Plataforma web empresarial para gestión de bitácora geomecánica minera.",
+)
+
+# ── Middleware ────────────────────────────────────────────────────────────────
+_SECRET_KEY = os.environ.get("BITACORA_SECRET_KEY", "bitacora-geomecanica-secret-change-in-production")
+app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY)
+
+# ── Archivos estáticos ────────────────────────────────────────────────────────
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(dashboard.router)
+app.include_router(bitacora.router, prefix="/bitacora")
+app.include_router(labores.router, prefix="/labores")
+app.include_router(sostenimiento.router, prefix="/sostenimiento")
+app.include_router(reportes.router, prefix="/reportes")
+
+
+# ── Ruta raíz ─────────────────────────────────────────────────────────────────
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/dashboard")
