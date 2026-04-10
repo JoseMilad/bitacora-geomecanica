@@ -9,11 +9,12 @@ for _p in (str(_ROOT), str(_ROOT / "src")):
 
 from typing import Optional
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import TURNOS, APP_VERSION
+from src.utils.config_manager import cargar_config
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -29,6 +30,18 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _config_clasificaciones():
+    """Devuelve las clasificaciones activas desde la configuración."""
+    config = cargar_config()
+    return config.get("clasificaciones_activas", ["RMR"])
+
+
+def _turnos_config():
+    """Devuelve los turnos configurados."""
+    config = cargar_config()
+    return config.get("turnos", TURNOS)
+
+
 # ── Listar ────────────────────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -37,6 +50,7 @@ async def listar_bitacora(
     labor: str = "",
     fecha_inicio: str = "",
     fecha_fin: str = "",
+    q: str = "",
     page: int = 1,
 ):
     model = BitacoraModel()
@@ -45,6 +59,11 @@ async def listar_bitacora(
         fecha_inicio=fecha_inicio or None,
         fecha_fin=fecha_fin or None,
     )
+
+    # Búsqueda global
+    if q and not df.empty:
+        mask = df.apply(lambda row: any(q.lower() in str(v).lower() for v in row), axis=1)
+        df = df[mask]
 
     registros = df.to_dict(orient="records") if not df.empty else []
     total = len(registros)
@@ -55,6 +74,7 @@ async def listar_bitacora(
 
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
+    clasif_activas = _config_clasificaciones()
 
     return templates.TemplateResponse(request, "bitacora/list.html", context={
         "request": request,
@@ -64,9 +84,11 @@ async def listar_bitacora(
         "labor": labor,
         "fecha_inicio": fecha_inicio,
         "fecha_fin": fecha_fin,
+        "q": q,
         "page": page,
         "total_pages": total_pages,
         "total": total,
+        "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
     })
@@ -78,14 +100,16 @@ async def nuevo_bitacora_form(request: Request):
     model = BitacoraModel()
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
+    clasif_activas = _config_clasificaciones()
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "registro": None,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
+        "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
     })
@@ -125,14 +149,16 @@ async def nuevo_bitacora_save(
 
     # Duplicado u otro error — mostrar formulario con error
     labores_nombres = model.obtener_labores_guardadas()
+    clasif_activas = _config_clasificaciones()
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "registro": datos,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
+        "clasif_activas": clasif_activas,
         "flash": {"tipo": "warning", "mensaje": msg},
         "duplicado": True,
         "active_page": "bitacora",
@@ -162,14 +188,16 @@ async def editar_bitacora_form(request: Request, id: int):
 
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
+    clasif_activas = _config_clasificaciones()
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "registro": registro,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
         "action": f"/bitacora/{id}/editar",
         "titulo": "Editar Registro",
+        "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
     })
@@ -239,3 +267,50 @@ async def eliminar_bitacora(request: Request, id: int):
     else:
         _set_flash(request, "error", msg)
     return RedirectResponse(url="/bitacora", status_code=303)
+
+
+# ── Deshacer última acción ────────────────────────────────────────────────────
+@router.post("/deshacer")
+async def deshacer(request: Request):
+    model = BitacoraModel()
+    ok, msg = model.deshacer_ultima_accion()
+    if ok:
+        _set_flash(request, "success", msg)
+    else:
+        _set_flash(request, "warning", msg)
+    return RedirectResponse(url="/bitacora", status_code=303)
+
+
+# ── Archivar período ──────────────────────────────────────────────────────────
+@router.post("/archivar")
+async def archivar_periodo(
+    request: Request,
+    fecha_inicio: str = Form(...),
+    fecha_fin: str = Form(...),
+):
+    model = BitacoraModel()
+    ok, msg, _ = model.archivar_periodo(fecha_inicio, fecha_fin)
+    if ok:
+        _set_flash(request, "success", msg)
+    else:
+        _set_flash(request, "error", msg)
+    return RedirectResponse(url="/bitacora", status_code=303)
+
+
+# ── Calcular soporte (JSON API) ───────────────────────────────────────────────
+@router.get("/calcular-soporte")
+async def calcular_soporte(rmr: str = "", labor: str = ""):
+    """Devuelve el soporte recomendado dado un valor RMR."""
+    model = BitacoraModel()
+    from src.utils.helpers import validar_rmr
+    rmr_val = validar_rmr(rmr)
+    if rmr_val is None:
+        return JSONResponse({"soporte": "", "error": "RMR inválido"})
+    tipo = "Temporal"
+    if labor:
+        datos = model.obtener_datos_labor(labor)
+        if datos and datos.get("Tipo"):
+            tipo = str(datos["Tipo"])
+    soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR") or ""
+    return JSONResponse({"soporte": soporte})
+

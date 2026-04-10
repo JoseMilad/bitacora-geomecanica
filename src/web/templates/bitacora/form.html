@@ -66,21 +66,40 @@
                 </option>
                 {% endfor %}
               </select>
+              <small id="infoUltimoRegistro" class="text-muted"></small>
             </div>
-            <!-- GSI -->
-            <div class="col-md-4">
+
+            <!-- GSI — visible solo si GSI está activo -->
+            {% if 'GSI' in clasif_activas %}
+            <div class="col-md-4" id="campoGSI">
               <label class="form-label fw-semibold">GSI</label>
               <input type="text" name="gsi" id="inputGSI" class="form-control"
                 value="{{ registro.get('GSI','') if registro else '' }}"
                 placeholder="Valor GSI" />
             </div>
-            <!-- RMR -->
-            <div class="col-md-4">
+            {% else %}
+            <input type="hidden" name="gsi" value="" />
+            {% endif %}
+
+            <!-- RMR — visible solo si RMR está activo -->
+            {% if 'RMR' in clasif_activas %}
+            <div class="col-md-4" id="campoRMR">
               <label class="form-label fw-semibold">RMR</label>
-              <input type="text" name="rmr" id="inputRMR" class="form-control"
-                value="{{ registro.get('RMR','') if registro else '' }}"
-                placeholder="Valor RMR" />
+              <div class="input-group">
+                <input type="text" name="rmr" id="inputRMR" class="form-control"
+                  value="{{ registro.get('RMR','') if registro else '' }}"
+                  placeholder="Valor RMR"
+                  oninput="calcularSoporteAuto()" />
+                <button type="button" class="btn btn-outline-secondary" id="btnCalcSoporte"
+                  onclick="calcularSoporte()" title="Calcular soporte recomendado">
+                  <i class="fa-solid fa-calculator"></i>
+                </button>
+              </div>
             </div>
+            {% else %}
+            <input type="hidden" name="rmr" value="" />
+            {% endif %}
+
             <!-- Soporte -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Soporte</label>
@@ -88,6 +107,19 @@
                 value="{{ registro.get('Soporte','') if registro else '' }}"
                 placeholder="Tipo de soporte" />
             </div>
+
+            <!-- Clasificaciones personalizadas activas (no GSI/RMR) -->
+            {% for cid in clasif_activas %}
+              {% if cid not in ('GSI', 'RMR') %}
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">{{ cid }}</label>
+                <input type="text" name="clasif_{{ cid }}" class="form-control"
+                  value="{{ registro.get(cid,'') if registro else '' }}"
+                  placeholder="Valor {{ cid }}" />
+              </div>
+              {% endif %}
+            {% endfor %}
+
             <!-- Observaciones -->
             <div class="col-12">
               <label class="form-label fw-semibold">Observaciones</label>
@@ -110,3 +142,33 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Auto-calcular soporte al cambiar RMR (con debounce)
+let _calcTimer = null;
+function calcularSoporteAuto() {
+  clearTimeout(_calcTimer);
+  _calcTimer = setTimeout(calcularSoporte, 700);
+}
+
+async function calcularSoporte() {
+  const rmr = document.getElementById('inputRMR')?.value?.trim();
+  if (!rmr) return;
+  const labor = document.getElementById('selectLabor')?.value || '';
+  try {
+    const params = new URLSearchParams({ rmr, labor });
+    const res = await fetch(`/bitacora/calcular-soporte?${params}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const inp = document.getElementById('inputSoporte');
+    if (inp && data.soporte) {
+      inp.value = data.soporte;
+    }
+  } catch (e) {
+    console.warn('calcularSoporte error:', e);
+  }
+}
+</script>
+{% endblock %}
+

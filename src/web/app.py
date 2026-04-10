@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar
 
 # ── Instancia principal ───────────────────────────────────────────────────────
 app = FastAPI(
@@ -43,6 +43,8 @@ app.include_router(bitacora.router, prefix="/bitacora")
 app.include_router(labores.router, prefix="/labores")
 app.include_router(sostenimiento.router, prefix="/sostenimiento")
 app.include_router(reportes.router, prefix="/reportes")
+app.include_router(configuracion.router, prefix="/configuracion")
+app.include_router(estandar.router, prefix="/estandar")
 
 
 # ── Ruta raíz ─────────────────────────────────────────────────────────────────

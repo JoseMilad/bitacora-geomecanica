@@ -23,27 +23,37 @@
       <ul class="sidebar-nav">
         <li>
           <a href="/dashboard" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">
-            <i class="fa-solid fa-house me-2"></i> Dashboard
+            <i class="fa-solid fa-house me-2"></i><span>Dashboard</span>
           </a>
         </li>
         <li>
           <a href="/bitacora" class="sidebar-link {% if active_page == 'bitacora' %}active{% endif %}">
-            <i class="fa-solid fa-clipboard-list me-2"></i> Bitácora
+            <i class="fa-solid fa-clipboard-list me-2"></i><span>Bitácora</span>
           </a>
         </li>
         <li>
           <a href="/labores" class="sidebar-link {% if active_page == 'labores' %}active{% endif %}">
-            <i class="fa-solid fa-hard-hat me-2"></i> Labores
+            <i class="fa-solid fa-hard-hat me-2"></i><span>Labores</span>
           </a>
         </li>
         <li>
           <a href="/sostenimiento" class="sidebar-link {% if active_page == 'sostenimiento' %}active{% endif %}">
-            <i class="fa-solid fa-layer-group me-2"></i> Sostenimiento
+            <i class="fa-solid fa-layer-group me-2"></i><span>Sostenimiento</span>
+          </a>
+        </li>
+        <li>
+          <a href="/estandar" class="sidebar-link {% if active_page == 'estandar' %}active{% endif %}">
+            <i class="fa-solid fa-table me-2"></i><span>Estándar</span>
           </a>
         </li>
         <li>
           <a href="/reportes" class="sidebar-link {% if active_page == 'reportes' %}active{% endif %}">
-            <i class="fa-solid fa-chart-bar me-2"></i> Reportes
+            <i class="fa-solid fa-chart-bar me-2"></i><span>Reportes</span>
+          </a>
+        </li>
+        <li>
+          <a href="/configuracion" class="sidebar-link {% if active_page == 'configuracion' %}active{% endif %}">
+            <i class="fa-solid fa-gear me-2"></i><span>Configuración</span>
           </a>
         </li>
       </ul>
@@ -61,8 +71,14 @@
         </button>
         <h5 class="mb-0 fw-semibold">{% block page_title %}Bitácora Geomecánica{% endblock %}</h5>
         <div class="ms-auto d-flex align-items-center gap-3">
+          <button class="btn btn-sm btn-outline-secondary" id="darkModeToggle" title="Alternar modo oscuro">
+            <i class="fa-solid fa-moon" id="darkModeIcon"></i>
+          </button>
+          <a href="/configuracion" class="btn btn-sm btn-outline-secondary" title="Configuración">
+            <i class="fa-solid fa-gear me-1"></i><span class="d-none d-md-inline">Configuración</span>
+          </a>
           <a href="/docs" target="_blank" class="btn btn-sm btn-outline-secondary">
-            <i class="fa-solid fa-book me-1"></i> API Docs
+            <i class="fa-solid fa-book me-1"></i><span class="d-none d-md-inline">API</span>
           </a>
         </div>
       </header>
