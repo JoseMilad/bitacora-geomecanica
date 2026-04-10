@@ -7,7 +7,7 @@
 <div class="card shadow-sm border-0 mt-3">
   <div class="card-body">
     <form method="get" action="/bitacora" class="row g-3 align-items-end">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label fw-semibold">Labor</label>
         <select name="labor" class="form-select">
           <option value="">Todas las labores</option>
@@ -16,13 +16,17 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
         <label class="form-label fw-semibold">Fecha inicio</label>
         <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control" />
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
         <label class="form-label fw-semibold">Fecha fin</label>
         <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Búsqueda global</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar en todos los campos…" />
       </div>
       <div class="col-md-2 d-flex gap-2">
         <button type="submit" class="btn btn-primary flex-grow-1">
@@ -37,14 +41,39 @@
 </div>
 
 <!-- Header de la tabla -->
-<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+<div class="d-flex justify-content-between align-items-center mt-4 mb-2 flex-wrap gap-2">
   <p class="text-muted mb-0">
     <i class="fa-solid fa-list me-1"></i>
     {{ total }} registro{% if total != 1 %}s{% endif %} encontrado{% if total != 1 %}s{% endif %}
   </p>
-  <a href="/bitacora/nuevo" class="btn btn-primary">
-    <i class="fa-solid fa-plus me-1"></i>Nuevo Registro
-  </a>
+  <div class="d-flex gap-2 flex-wrap">
+    <!-- Deshacer -->
+    <form method="POST" action="/bitacora/deshacer" class="d-inline">
+      <button type="submit" class="btn btn-sm btn-outline-warning"
+        onclick="return confirm('¿Deshacer la última acción en bitácora?')"
+        title="Deshacer última acción">
+        <i class="fa-solid fa-rotate-left me-1"></i>Deshacer
+      </button>
+    </form>
+    <!-- Archivar período -->
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+      data-bs-toggle="modal" data-bs-target="#modalArchivar" title="Archivar período">
+      <i class="fa-solid fa-box-archive me-1"></i>Archivar
+    </button>
+    <!-- Exportar PDF -->
+    <a href="/reportes/pdf/bitacora?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+       class="btn btn-sm btn-outline-danger" title="Exportar PDF">
+      <i class="fa-solid fa-file-pdf me-1"></i>PDF
+    </a>
+    <!-- Exportar Excel -->
+    <a href="/reportes/exportar/bitacora?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
+       class="btn btn-sm btn-outline-success" title="Exportar Excel">
+      <i class="fa-solid fa-file-excel me-1"></i>Excel
+    </a>
+    <a href="/bitacora/nuevo" class="btn btn-primary btn-sm">
+      <i class="fa-solid fa-plus me-1"></i>Nuevo Registro
+    </a>
+  </div>
 </div>
 
 <!-- Tabla -->
@@ -57,8 +86,9 @@
             <th>Fecha</th>
             <th>Turno</th>
             <th>Labor</th>
-            <th>GSI</th>
-            <th>RMR</th>
+            {% if 'GSI' in clasif_activas %}<th>GSI</th>{% endif %}
+            {% if 'RMR' in clasif_activas %}<th>RMR</th>{% endif %}
+            {% for cid in clasif_activas %}{% if cid not in ('GSI','RMR') %}<th>{{ cid }}</th>{% endif %}{% endfor %}
             <th>Soporte</th>
             <th>Observaciones</th>
             <th class="text-center">Acciones</th>
@@ -75,8 +105,9 @@
                 </span>
               </td>
               <td class="fw-semibold">{{ r.get('Labor', '') }}</td>
-              <td>{{ r.get('GSI', '') }}</td>
-              <td>{{ r.get('RMR', '') }}</td>
+              {% if 'GSI' in clasif_activas %}<td>{{ r.get('GSI', '') }}</td>{% endif %}
+              {% if 'RMR' in clasif_activas %}<td>{{ r.get('RMR', '') }}</td>{% endif %}
+              {% for cid in clasif_activas %}{% if cid not in ('GSI','RMR') %}<td>{{ r.get(cid, '') }}</td>{% endif %}{% endfor %}
               <td><small>{{ r.get('Soporte', '') }}</small></td>
               <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:80] }}{% if (r.get('Observaciones', '') or '')|length > 80 %}…{% endif %}</td>
               <td class="text-center">
@@ -94,7 +125,7 @@
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="8" class="text-center text-muted py-5">
+            <tr><td colspan="10" class="text-center text-muted py-5">
               <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
               No se encontraron registros
             </td></tr>
@@ -110,21 +141,56 @@
 <nav class="mt-3">
   <ul class="pagination justify-content-center">
     <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ page - 1 }}">
+      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&q={{ q }}&page={{ page - 1 }}">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
     </li>
     {% for p in range(1, total_pages + 1) %}
     <li class="page-item {% if p == page %}active{% endif %}">
-      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ p }}">{{ p }}</a>
+      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&q={{ q }}&page={{ p }}">{{ p }}</a>
     </li>
     {% endfor %}
     <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ page + 1 }}">
+      <a class="page-link" href="?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&q={{ q }}&page={{ page + 1 }}">
         <i class="fa-solid fa-chevron-right"></i>
       </a>
     </li>
   </ul>
 </nav>
 {% endif %}
+
+<!-- Modal: Archivar período -->
+<div class="modal fade" id="modalArchivar" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-box-archive me-2"></i>Archivar Período</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/bitacora/archivar">
+        <div class="modal-body">
+          <p class="text-muted small">
+            Los registros del período seleccionado serán movidos al archivo histórico y eliminados de la bitácora activa.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fecha inicio</label>
+            <input type="date" name="fecha_inicio" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fecha fin</label>
+            <input type="date" name="fecha_fin" class="form-control" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-warning"
+            onclick="return confirm('¿Confirma archivar el período? Los registros se moverán al archivo.')">
+            <i class="fa-solid fa-box-archive me-1"></i>Archivar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
+

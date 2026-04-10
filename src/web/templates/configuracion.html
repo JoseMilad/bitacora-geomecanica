@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Configuración — Bitácora Geomecánica{% endblock %}
+{% block page_title %}Configuración{% endblock %}
+
+{% block content %}
+<form method="POST" action="/configuracion/guardar">
+<div class="row g-4 mt-1">
+
+  <!-- ── Turnos ──────────────────────────────────────────────────────── -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-clock me-2 text-primary"></i>Turnos
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">
+            Turnos disponibles
+            <small class="text-muted fw-normal">(uno por línea)</small>
+          </label>
+          <textarea name="turnos" class="form-control font-monospace" rows="4"
+            placeholder="Día&#10;Noche">{{ config.get('turnos', ['Día', 'Noche']) | join('\n') }}</textarea>
+        </div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold">Inicio turno día</label>
+            <input type="time" name="turno_dia_inicio" class="form-control"
+              value="{{ config.get('turno_dia_inicio', '07:30') }}" />
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold">Inicio turno noche</label>
+            <input type="time" name="turno_noche_inicio" class="form-control"
+              value="{{ config.get('turno_noche_inicio', '19:30') }}" />
+          </div>
+        </div>
+        <small class="text-muted mt-2 d-block">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          El turno noche que cruza medianoche pertenece a la fecha en que inició.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Clasificaciones ─────────────────────────────────────────────── -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-layer-group me-2 text-primary"></i>Clasificaciones de sostenimiento
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">Seleccione los sistemas de clasificación activos:</p>
+        {% for c in todas_clasif %}
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox"
+            name="clasif_{{ c.id }}" id="clasif_{{ c.id }}"
+            {% if c.id in activas_set %}checked{% endif %} />
+          <label class="form-check-label" for="clasif_{{ c.id }}">
+            {{ c.nombre }}
+            {% if not c.predefinida %}
+            <small class="text-muted">(personalizada)</small>
+            <a href="/configuracion/eliminar-clasificacion/{{ c.id }}" class="text-danger ms-2 small"
+               onclick="return confirm('¿Eliminar clasificación {{ c.id }}?')"
+               title="Eliminar">
+              <i class="fa-solid fa-trash"></i>
+            </a>
+            {% endif %}
+          </label>
+        </div>
+        {% endfor %}
+        <hr class="my-3" />
+        <p class="fw-semibold small mb-2">Añadir clasificación personalizada:</p>
+        <div class="row g-2">
+          <div class="col-4">
+            <input type="text" name="nueva_clasif_id" class="form-control form-control-sm"
+              placeholder="ID (ej: RQD)" />
+          </div>
+          <div class="col-8">
+            <input type="text" name="nueva_clasif_nombre" class="form-control form-control-sm"
+              placeholder="Nombre completo" />
+          </div>
+        </div>
+        <small class="text-muted mt-1 d-block">
+          El ID será normalizado a mayúsculas (ej: RQD). Guarda para confirmar.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sostenimientos activos ───────────────────────────────────────── -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-hard-hat me-2 text-secondary"></i>Tipos de sostenimiento activos
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">Seleccione los tipos que se mostrarán en el formulario de sostenimiento:</p>
+        <div class="row g-1">
+          {% for s in catalogo_sost %}
+          <div class="col-sm-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox"
+                name="sost_{{ s.columna }}" id="sost_{{ s.columna }}"
+                {% if s.columna in activos_sost %}checked{% endif %} />
+              <label class="form-check-label small" for="sost_{{ s.columna }}">
+                {{ s.display }}
+                <span class="text-muted">({{ s.tipo }})</span>
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <hr class="my-3" />
+        <p class="fw-semibold small mb-2">Añadir sostenimiento personalizado:</p>
+        <div class="row g-2 align-items-end">
+          <div class="col-5">
+            <input type="text" name="custom_sost_display" class="form-control form-control-sm"
+              placeholder="Nombre (ej: Inyección)" />
+          </div>
+          <div class="col-3">
+            <select name="custom_sost_tipo" class="form-select form-select-sm">
+              <option value="int">Entero</option>
+              <option value="float">Decimal</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="custom_sost_activo" id="custom_sost_activo" />
+              <label class="form-check-label small" for="custom_sost_activo">Activar</label>
+            </div>
+          </div>
+        </div>
+        <small class="text-muted mt-1 d-block">El nombre se convierte en columna automáticamente. Guarda para confirmar.</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Opciones generales ───────────────────────────────────────────── -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-gear me-2 text-primary"></i>Opciones generales
+      </div>
+      <div class="card-body">
+
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="backup_automatico"
+            id="backup_automatico"
+            {% if config.get('backup_automatico', True) %}checked{% endif %} />
+          <label class="form-check-label" for="backup_automatico">
+            <i class="fa-solid fa-database me-1"></i>Respaldo automático al guardar
+          </label>
+        </div>
+
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="modo_oscuro"
+            id="modo_oscuro_cfg"
+            {% if config.get('modo_oscuro', False) %}checked{% endif %} />
+          <label class="form-check-label" for="modo_oscuro_cfg">
+            <i class="fa-solid fa-moon me-1"></i>Modo oscuro por defecto
+          </label>
+        </div>
+
+        <hr />
+        <div class="mb-0">
+          <label class="form-label fw-semibold">
+            <i class="fa-solid fa-lock me-1"></i>Contraseña para editar registros &gt;24h
+          </label>
+          <div class="input-group">
+            <input type="password" name="password_edicion" id="pwdEdicion"
+              class="form-control"
+              value="{{ config.get('password_edicion', 'admin1234') }}" />
+            <button class="btn btn-outline-secondary" type="button"
+              onclick="togglePwd()">
+              <i class="fa-solid fa-eye" id="eyeIcon"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Botones de acción -->
+<div class="mt-4 d-flex gap-3">
+  <button type="submit" class="btn btn-primary px-4">
+    <i class="fa-solid fa-save me-2"></i>Guardar configuración
+  </button>
+  <a href="/dashboard" class="btn btn-outline-secondary">
+    <i class="fa-solid fa-xmark me-1"></i>Cancelar
+  </a>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function togglePwd() {
+  const inp = document.getElementById('pwdEdicion');
+  const ico = document.getElementById('eyeIcon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    ico.className = 'fa-solid fa-eye-slash';
+  } else {
+    inp.type = 'password';
+    ico.className = 'fa-solid fa-eye';
+  }
+}
+</script>
+{% endblock %}

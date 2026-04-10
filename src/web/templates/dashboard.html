@@ -79,6 +79,88 @@
   </div>
 </div>
 
+<!-- ── Dashboard Sostenimiento ───────────────────────────────────────────────── -->
+<h6 class="text-muted text-uppercase fw-semibold mt-4 mb-3" style="font-size:0.75rem;letter-spacing:0.06em;">
+  <i class="fa-solid fa-layer-group me-2"></i>Dashboard de Sostenimiento — {{ nombre_col_principal }}
+</h6>
+<div class="row g-4">
+  <!-- Totales por Labor -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-bar me-2 text-secondary"></i>{{ nombre_col_principal }} por Labor (top 10)
+      </div>
+      <div class="card-body">
+        <canvas id="chartSostLabor" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Tarjeta Total -->
+  <div class="col-lg-3">
+    <div class="card shadow-sm border-0 h-100 text-center d-flex align-items-center justify-content-center">
+      <div class="card-body">
+        <p class="text-muted small text-uppercase fw-semibold mb-2">{{ nombre_col_principal }} Total</p>
+        <h2 class="fw-bold text-secondary" style="font-size:2.5rem;">{{ total_shotcrete }}</h2>
+        <p class="text-muted small mt-1">acumulado histórico</p>
+        <a href="/sostenimiento/totales" class="btn btn-sm btn-outline-secondary mt-2">
+          <i class="fa-solid fa-table me-1"></i>Ver totales
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totales por Tipo de Labor -->
+  <div class="col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-pie me-2 text-secondary"></i>Por Tipo de Labor
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <canvas id="chartSostTipo" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-2">
+  <!-- Totales por Fase -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-column me-2 text-secondary"></i>{{ nombre_col_principal }} por Fase de Labor
+      </div>
+      <div class="card-body">
+        <canvas id="chartSostFase" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6 d-flex align-items-stretch">
+    <div class="card shadow-sm border-0 w-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-circle-info me-2 text-primary"></i>Acciones rápidas
+      </div>
+      <div class="card-body d-flex flex-column gap-2">
+        <a href="/sostenimiento/nuevo" class="btn btn-outline-secondary text-start">
+          <i class="fa-solid fa-plus me-2"></i>Registrar Sostenimiento
+        </a>
+        <a href="/sostenimiento/totales" class="btn btn-outline-secondary text-start">
+          <i class="fa-solid fa-table me-2"></i>Ver Totales de Sostenimiento
+        </a>
+        <a href="/estandar" class="btn btn-outline-secondary text-start">
+          <i class="fa-solid fa-table me-2"></i>Editar Estándar de Sostenimiento
+        </a>
+        <a href="/reportes/pdf/bitacora" class="btn btn-outline-danger text-start">
+          <i class="fa-solid fa-file-pdf me-2"></i>Descargar PDF Bitácora
+        </a>
+        <a href="/configuracion" class="btn btn-outline-secondary text-start">
+          <i class="fa-solid fa-gear me-2"></i>Configuración
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Últimos 10 registros -->
 <div class="card shadow-sm border-0 mt-4">
   <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
@@ -132,6 +214,12 @@ const labelsLabores = {{ labels_labores | tojson }};
 const dataLabores   = {{ data_labores | tojson }};
 const labelsFechas  = {{ labels_fechas | tojson }};
 const dataFechas    = {{ data_fechas | tojson }};
+const labelsSostLabor = {{ labels_sost_labor | tojson }};
+const dataSostLabor   = {{ data_sost_labor | tojson }};
+const labelsSostTipo  = {{ labels_sost_tipo | tojson }};
+const dataSostTipo    = {{ data_sost_tipo | tojson }};
+const labelsSostFase  = {{ labels_sost_fase | tojson }};
+const dataSostFase    = {{ data_sost_fase | tojson }};
 
 new Chart(document.getElementById('chartLabores'), {
   type: 'bar',
@@ -173,5 +261,78 @@ new Chart(document.getElementById('chartFechas'), {
     scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
   }
 });
+
+// Dashboard Sostenimiento — totales por labor
+if (labelsSostLabor.length > 0) {
+  new Chart(document.getElementById('chartSostLabor'), {
+    type: 'bar',
+    data: {
+      labels: labelsSostLabor,
+      datasets: [{
+        label: 'Cantidad',
+        data: dataSostLabor,
+        backgroundColor: '#2d8a6ecc',
+        borderColor: '#2d8a6e',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+} else {
+  document.getElementById('chartSostLabor').parentElement.innerHTML =
+    '<p class="text-muted text-center py-4"><i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>Sin datos de sostenimiento</p>';
+}
+
+// Por tipo de labor (pie)
+if (labelsSostTipo.length > 0) {
+  new Chart(document.getElementById('chartSostTipo'), {
+    type: 'doughnut',
+    data: {
+      labels: labelsSostTipo,
+      datasets: [{
+        data: dataSostTipo,
+        backgroundColor: ['#1a6fc4', '#2d8a6e', '#f59e0b', '#d94f3d', '#8b5cf6'],
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+    }
+  });
+} else {
+  document.getElementById('chartSostTipo').parentElement.innerHTML =
+    '<p class="text-muted text-center py-4 small">Sin datos de tipo</p>';
+}
+
+// Por fase (bar)
+if (labelsSostFase.length > 0) {
+  new Chart(document.getElementById('chartSostFase'), {
+    type: 'bar',
+    data: {
+      labels: labelsSostFase,
+      datasets: [{
+        label: 'Cantidad',
+        data: dataSostFase,
+        backgroundColor: ['#4a90d9cc', '#e67e22cc', '#27ae60cc', '#9b59b6cc'],
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+} else {
+  document.getElementById('chartSostFase').parentElement.innerHTML =
+    '<p class="text-muted text-center py-4 small">Sin datos de fase</p>';
+}
 </script>
 {% endblock %}

@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Estándar de Sostenimiento{% endblock %}
+{% block page_title %}Estándar de Sostenimiento{% endblock %}
+
+{% block content %}
+<!-- Tabs de sistemas de clasificación -->
+<div class="mt-3">
+  <ul class="nav nav-tabs border-0 mb-0" id="estandarTabs">
+    {% for tab in tabs %}
+    <li class="nav-item">
+      <a class="nav-link {% if tab.id == sistema %}active fw-semibold{% endif %} border"
+         href="/estandar?sistema={{ tab.id }}">
+        {{ tab.nombre }}
+      </a>
+    </li>
+    {% endfor %}
+    {% if not tabs %}
+    <li class="nav-item">
+      <span class="nav-link text-muted">Sin clasificaciones activas — ve a
+        <a href="/configuracion">Configuración</a>
+      </span>
+    </li>
+    {% endif %}
+  </ul>
+</div>
+
+{% if tabs %}
+<div class="card shadow-sm border-0 rounded-0 rounded-bottom rounded-end">
+  <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+    <span>
+      <i class="fa-solid fa-table me-2 text-primary"></i>
+      Estándar: {{ nombre_sistema }}
+    </span>
+    <small class="text-muted">{{ filas|length }} fila{% if filas|length != 1 %}s{% endif %}</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="tablaEstandar">
+        <thead class="table-light">
+          <tr>
+            {% for col in cols %}
+            <th>{{ col.replace('_', ' ') }}</th>
+            {% endfor %}
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if filas %}
+            {% for fila in filas %}
+            <tr id="fila-{{ loop.index0 }}">
+              <!-- Vista normal -->
+              <td class="view-cell">{{ fila.get(cols[0], '') }}</td>
+              <td class="view-cell">{{ fila.get(cols[1], '') }}</td>
+              <td class="view-cell">
+                <span class="badge {{ 'badge-permanente' if fila.get('Tipo') == 'Permanente' else 'badge-temporal' }}">
+                  {{ fila.get('Tipo', '') }}
+                </span>
+              </td>
+              <td class="view-cell"><small>{{ fila.get('Soporte', '') }}</small></td>
+              <!-- Celdas de edición (ocultas por defecto) -->
+              <td class="edit-cell d-none"><input class="form-control form-control-sm" name="val_min" value="{{ fila.get(cols[0], '') }}" /></td>
+              <td class="edit-cell d-none"><input class="form-control form-control-sm" name="val_max" value="{{ fila.get(cols[1], '') }}" /></td>
+              <td class="edit-cell d-none">
+                <select class="form-select form-select-sm" name="tipo">
+                  <option {% if fila.get('Tipo') == 'Temporal' %}selected{% endif %}>Temporal</option>
+                  <option {% if fila.get('Tipo') == 'Permanente' %}selected{% endif %}>Permanente</option>
+                </select>
+              </td>
+              <td class="edit-cell d-none"><input class="form-control form-control-sm" name="soporte" value="{{ fila.get('Soporte', '') }}" /></td>
+              <td class="text-center">
+                <!-- Botones vista -->
+                <div class="view-actions btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-primary" title="Editar"
+                    onclick="editarFila({{ loop.index0 }})">
+                    <i class="fa-solid fa-pen"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-danger" title="Eliminar"
+                    onclick="eliminarFila({{ loop.index0 }}, '{{ sistema }}')">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+                <!-- Botones edición -->
+                <div class="edit-actions d-none btn-group btn-group-sm">
+                  <button type="button" class="btn btn-success btn-sm" title="Guardar"
+                    onclick="guardarEdicion({{ loop.index0 }}, '{{ sistema }}')">
+                    <i class="fa-solid fa-check"></i>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" title="Cancelar"
+                    onclick="cancelarEdicion({{ loop.index0 }})">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="{{ cols|length + 1 }}" class="text-center text-muted py-5">
+                <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+                No hay estándares definidos para {{ nombre_sistema }}
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Formulario para agregar nueva fila -->
+<div class="card shadow-sm border-0 mt-4">
+  <div class="card-header bg-white border-0 fw-semibold">
+    <i class="fa-solid fa-plus-circle me-2 text-primary"></i>Agregar nueva fila — {{ nombre_sistema }}
+  </div>
+  <div class="card-body">
+    <form method="POST" action="/estandar/agregar">
+      <input type="hidden" name="sistema" value="{{ sistema }}" />
+      <div class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">{{ cols[0] }}</label>
+          <input type="number" step="0.01" name="val_min" class="form-control" required placeholder="Mínimo" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">{{ cols[1] }}</label>
+          <input type="number" step="0.01" name="val_max" class="form-control" required placeholder="Máximo" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">Tipo</label>
+          <select name="tipo" class="form-select">
+            <option value="Temporal">Temporal</option>
+            <option value="Permanente">Permanente</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Soporte <span class="text-danger">*</span></label>
+          <input type="text" name="soporte" class="form-control" required
+            placeholder="Descripción del soporte recomendado" />
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa-solid fa-plus me-1"></i>Agregar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Formularios ocultos para editar/eliminar (se envían por JS) -->
+<form id="formEliminarFila" method="POST" action="/estandar/eliminar" class="d-none">
+  <input type="hidden" name="sistema" id="eliminarSistema" />
+  <input type="hidden" name="indice" id="eliminarIndice" />
+</form>
+<form id="formEditarFila" method="POST" action="/estandar/editar" class="d-none">
+  <input type="hidden" name="sistema" id="editarSistema" />
+  <input type="hidden" name="indice" id="editarIndice" />
+  <input type="hidden" name="val_min" id="editarMin" />
+  <input type="hidden" name="val_max" id="editarMax" />
+  <input type="hidden" name="tipo" id="editarTipo" />
+  <input type="hidden" name="soporte" id="editarSoporte" />
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function editarFila(idx) {
+  const tr = document.getElementById(`fila-${idx}`);
+  tr.querySelectorAll('.view-cell').forEach(el => el.classList.add('d-none'));
+  tr.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('d-none'));
+  tr.querySelector('.view-actions').classList.add('d-none');
+  tr.querySelector('.edit-actions').classList.remove('d-none');
+}
+
+function cancelarEdicion(idx) {
+  const tr = document.getElementById(`fila-${idx}`);
+  tr.querySelectorAll('.view-cell').forEach(el => el.classList.remove('d-none'));
+  tr.querySelectorAll('.edit-cell').forEach(el => el.classList.add('d-none'));
+  tr.querySelector('.view-actions').classList.remove('d-none');
+  tr.querySelector('.edit-actions').classList.add('d-none');
+}
+
+function guardarEdicion(idx, sistema) {
+  const tr = document.getElementById(`fila-${idx}`);
+  const inputs = tr.querySelectorAll('.edit-cell input, .edit-cell select');
+  const vals = Array.from(inputs).map(i => i.value);
+  document.getElementById('editarSistema').value = sistema;
+  document.getElementById('editarIndice').value = idx;
+  document.getElementById('editarMin').value = vals[0];
+  document.getElementById('editarMax').value = vals[1];
+  document.getElementById('editarTipo').value = vals[2];
+  document.getElementById('editarSoporte').value = vals[3];
+  document.getElementById('formEditarFila').submit();
+}
+
+function eliminarFila(idx, sistema) {
+  if (!confirm('¿Eliminar esta fila del estándar?')) return;
+  document.getElementById('eliminarSistema').value = sistema;
+  document.getElementById('eliminarIndice').value = idx;
+  document.getElementById('formEliminarFila').submit();
+}
+</script>
+{% endblock %}

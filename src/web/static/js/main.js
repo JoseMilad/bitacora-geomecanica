@@ -14,10 +14,17 @@ async function autocompletarLabor(nombre) {
     const gsiInput    = document.getElementById('inputGSI');
     const rmrInput    = document.getElementById('inputRMR');
     const soporteInput = document.getElementById('inputSoporte');
+    const infoLbl     = document.getElementById('infoUltimoRegistro');
 
     if (gsiInput && datos.GSI !== undefined)     gsiInput.value    = datos.GSI    || '';
     if (rmrInput && datos.RMR !== undefined)     rmrInput.value    = datos.RMR    || '';
     if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
+    if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
+
+    // Si RMR fue rellenado, calcular soporte
+    if (rmrInput && rmrInput.value) {
+      setTimeout(() => calcularSoporte && calcularSoporte(), 200);
+    }
   } catch (err) {
     console.warn('autocompletarLabor error:', err);
   }
@@ -35,6 +42,19 @@ function confirmarEliminacion(id, tipo) {
   modal.show();
 }
 
+// ── Modo Oscuro ───────────────────────────────────────────────────────────────
+function aplicarModoOscuro(activo) {
+  const html = document.documentElement;
+  const icon = document.getElementById('darkModeIcon');
+  if (activo) {
+    html.classList.add('dark-mode');
+    if (icon) { icon.className = 'fa-solid fa-sun'; }
+  } else {
+    html.classList.remove('dark-mode');
+    if (icon) { icon.className = 'fa-solid fa-moon'; }
+  }
+}
+
 // ── Toggle sidebar ────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
   // Inicializar tooltips de Bootstrap
@@ -47,6 +67,20 @@ document.addEventListener('DOMContentLoaded', function () {
   if (toggleBtn && sidebar) {
     toggleBtn.addEventListener('click', function () {
       sidebar.classList.toggle('collapsed');
+    });
+  }
+
+  // Dark mode: inicializar desde localStorage
+  const darkSaved = localStorage.getItem('bitacoraGeo_darkMode') === 'true';
+  aplicarModoOscuro(darkSaved);
+
+  // Dark mode toggle button
+  const dmBtn = document.getElementById('darkModeToggle');
+  if (dmBtn) {
+    dmBtn.addEventListener('click', function () {
+      const activo = !document.documentElement.classList.contains('dark-mode');
+      aplicarModoOscuro(activo);
+      localStorage.setItem('bitacoraGeo_darkMode', activo ? 'true' : 'false');
     });
   }
 

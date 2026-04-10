@@ -132,6 +132,13 @@ async def nuevo_sostenimiento_save(request: Request):
         "Labor": labor,
         "Observaciones": observaciones,
     }
+    # Tipo shotcrete
+    tipo_shotcrete = form.get("tipo_shotcrete", "")
+    if tipo_shotcrete and " - " in tipo_shotcrete:
+        datos["Tipo_Shotcrete"] = tipo_shotcrete.split(" - ")[0]
+    else:
+        datos["Tipo_Shotcrete"] = tipo_shotcrete
+
     # Campos dinámicos de sostenimiento
     for campo in _campos_sost():
         col = campo["columna"]

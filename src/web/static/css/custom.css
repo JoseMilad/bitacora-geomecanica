@@ -308,3 +308,126 @@ body {
     display: none;
   }
 }
+
+/* ── Modo Oscuro ─────────────────────────────────────────── */
+.dark-mode {
+  --dm-bg: #1a1d2e;
+  --dm-surface: #252840;
+  --dm-border: #363a55;
+  --dm-text: #e2e8f0;
+  --dm-text-muted: #94a3b8;
+  --dm-card: #2a2d45;
+  --dm-table-head: #1e213a;
+}
+
+.dark-mode body {
+  background-color: var(--dm-bg);
+  color: var(--dm-text);
+}
+
+.dark-mode .card,
+.dark-mode .modal-content {
+  background-color: var(--dm-card);
+  border-color: var(--dm-border);
+  color: var(--dm-text);
+}
+
+.dark-mode .card-header {
+  background-color: var(--dm-table-head) !important;
+  border-color: var(--dm-border);
+  color: var(--dm-text);
+}
+
+.dark-mode .form-control,
+.dark-mode .form-select {
+  background-color: var(--dm-surface);
+  border-color: var(--dm-border);
+  color: var(--dm-text);
+}
+
+.dark-mode .form-control:focus,
+.dark-mode .form-select:focus {
+  background-color: var(--dm-surface);
+  color: var(--dm-text);
+}
+
+.dark-mode .table {
+  --bs-table-bg: transparent;
+  color: var(--dm-text);
+}
+
+.dark-mode .table-light,
+.dark-mode .table-light th {
+  background-color: var(--dm-table-head) !important;
+  color: var(--dm-text);
+}
+
+.dark-mode .table-hover tbody tr:hover {
+  background-color: rgba(255,255,255,0.05);
+}
+
+.dark-mode #topbar {
+  background-color: var(--dm-card) !important;
+  border-bottom: 1px solid var(--dm-border);
+}
+
+.dark-mode #topbar h5 {
+  color: var(--dm-text);
+}
+
+.dark-mode .topbar-meta {
+  color: var(--dm-text-muted);
+}
+
+.dark-mode .nav-tabs .nav-link {
+  color: var(--dm-text-muted);
+  border-color: var(--dm-border);
+}
+
+.dark-mode .nav-tabs .nav-link.active {
+  background-color: var(--dm-card);
+  color: var(--dm-text);
+  border-color: var(--dm-border) var(--dm-border) var(--dm-card);
+}
+
+.dark-mode .btn-outline-secondary {
+  color: var(--dm-text-muted);
+  border-color: var(--dm-border);
+}
+
+.dark-mode .alert {
+  background-color: var(--dm-surface);
+  border-color: var(--dm-border);
+}
+
+.dark-mode .text-muted {
+  color: var(--dm-text-muted) !important;
+}
+
+.dark-mode .modal-header,
+.dark-mode .modal-footer {
+  border-color: var(--dm-border);
+}
+
+#darkModeToggle {
+  transition: transform 0.2s;
+}
+#darkModeToggle:hover {
+  transform: rotate(20deg);
+}
+
+/* ── Estándar badges ─────────────────────────────────────── */
+.badge-temporal {
+  background-color: #1a6fc4;
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+.badge-permanente {
+  background-color: #2d8a6e;
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}

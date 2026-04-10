@@ -85,6 +85,19 @@
                 class="form-control"
                 value="{{ registro.get(c.columna, 0) if registro else 0 }}"
               />
+              <!-- Tipo Shotcrete solo para Shotcrete_m3 -->
+              {% if c.columna == 'Shotcrete_m3' %}
+              <div class="mt-2">
+                <select name="tipo_shotcrete" class="form-select form-select-sm">
+                  <option value="">— Tipo de shotcrete —</option>
+                  <option value="X1 - Lanzado para avance"      {% if registro and registro.get('Tipo_Shotcrete','').startswith('X1') %}selected{% endif %}>X1 — Lanzado para avance</option>
+                  <option value="X5 - Lanzado para reforzamiento" {% if registro and registro.get('Tipo_Shotcrete','').startswith('X5') %}selected{% endif %}>X5 — Lanzado para reforzamiento</option>
+                  <option value="X6 - Lanzado sobre zona inestable" {% if registro and registro.get('Tipo_Shotcrete','').startswith('X6') %}selected{% endif %}>X6 — Lanzado sobre zona inestable</option>
+                  <option value="X7 - Lanzado sobre malla"      {% if registro and registro.get('Tipo_Shotcrete','').startswith('X7') %}selected{% endif %}>X7 — Lanzado sobre malla</option>
+                  <option value="X10 - Lanzado para resane"     {% if registro and registro.get('Tipo_Shotcrete','').startswith('X10') %}selected{% endif %}>X10 — Lanzado para resane</option>
+                </select>
+              </div>
+              {% endif %}
             </div>
             {% endfor %}
 
