@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import APP_VERSION, APP_NAME
-from src.utils.config_manager import DEFAULTS, obtener_clasificaciones_activas
+from src.utils.config_manager import DEFAULTS, cargar_config, obtener_clasificaciones_activas
 from src.utils.helpers import ordenar_df_por_labor
 
 router = APIRouter()
@@ -261,7 +261,8 @@ async def reportes_index(request: Request):
     resumen_sost = {}
     if not df_sost.empty:
         resumen_sost["total"] = len(df_sost)
-        campos = DEFAULTS["sostenimientos_activos"]
+        _cfg = cargar_config()
+        campos = _cfg.get("sostenimientos_activos", DEFAULTS["sostenimientos_activos"])
         for c in campos:
             col = c["columna"]
             if col in df_sost.columns:

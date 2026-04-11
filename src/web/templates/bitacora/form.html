@@ -47,7 +47,9 @@
               <select name="turno" class="form-select" required>
                 {% for t in turnos %}
                 <option value="{{ t }}"
-                  {% if registro and registro.get('Turno') == t %}selected{% endif %}>
+                  {% if registro and registro.get('Turno') == t %}selected
+                  {% elif not registro and turno_auto is defined and turno_auto == t %}selected
+                  {% endif %}>
                   {{ t }}
                 </option>
                 {% endfor %}
@@ -86,15 +88,16 @@
             <div class="col-md-4" id="campoRMR">
               <label class="form-label fw-semibold">RMR</label>
               <div class="input-group">
-                <input type="text" name="rmr" id="inputRMR" class="form-control"
+                <input type="number" name="rmr" id="inputRMR" class="form-control"
                   value="{{ registro.get('RMR','') if registro else '' }}"
-                  placeholder="Valor RMR"
+                  placeholder="0–100" min="0" max="100" step="1"
                   oninput="calcularSoporteAuto()" />
                 <button type="button" class="btn btn-outline-secondary" id="btnCalcSoporte"
                   onclick="calcularSoporte()" title="Calcular soporte recomendado">
                   <i class="fa-solid fa-calculator"></i>
                 </button>
               </div>
+              <div class="invalid-feedback">RMR debe estar entre 0 y 100</div>
             </div>
             {% else %}
             <input type="hidden" name="rmr" value="" />

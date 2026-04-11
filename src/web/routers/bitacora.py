@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import TURNOS, APP_VERSION
 from src.utils.config_manager import cargar_config
+from src.utils.helpers import _obtener_turno_automatico
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -107,6 +108,7 @@ async def nuevo_bitacora_form(request: Request):
         "registro": None,
         "labores": labores_nombres,
         "turnos": _turnos_config(),
+        "turno_auto": _obtener_turno_automatico(),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
         "clasif_activas": clasif_activas,

@@ -9,7 +9,7 @@ for _p in (str(_ROOT), str(_ROOT / "src")):
 
 import re
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from src.utils.config import APP_VERSION
@@ -138,3 +138,14 @@ async def eliminar_clasificacion(request: Request, cid: str):
     guardar_config(config)
     _set_flash(request, "success", f"Clasificación '{cid}' eliminada.")
     return RedirectResponse(url="/configuracion", status_code=303)
+
+
+# ── Toggle modo oscuro (AJAX) ─────────────────────────────────────────────────
+@router.post("/modo-oscuro")
+async def toggle_modo_oscuro(request: Request):
+    """Persiste la preferencia de modo oscuro desde el toggle del topbar."""
+    form = await request.form()
+    config = cargar_config()
+    config["modo_oscuro"] = (form.get("modo_oscuro") == "on")
+    guardar_config(config)
+    return JSONResponse({"ok": True})

@@ -47,7 +47,9 @@
               <select name="turno" class="form-select" required>
                 {% for t in turnos %}
                 <option value="{{ t }}"
-                  {% if registro and registro.get('Turno') == t %}selected{% endif %}>
+                  {% if registro and registro.get('Turno') == t %}selected
+                  {% elif not registro and turno_auto is defined and turno_auto == t %}selected
+                  {% endif %}>
                   {{ t }}
                 </option>
                 {% endfor %}

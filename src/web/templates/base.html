@@ -47,6 +47,11 @@
           </a>
         </li>
         <li>
+          <a href="/clasificaciones" class="sidebar-link {% if active_page == 'clasificaciones' %}active{% endif %}">
+            <i class="fa-solid fa-tags me-2"></i><span>Clasificaciones</span>
+          </a>
+        </li>
+        <li>
           <a href="/reportes" class="sidebar-link {% if active_page == 'reportes' %}active{% endif %}">
             <i class="fa-solid fa-chart-bar me-2"></i><span>Reportes</span>
           </a>
@@ -74,12 +79,31 @@
           <button class="btn btn-sm btn-outline-secondary" id="darkModeToggle" title="Alternar modo oscuro">
             <i class="fa-solid fa-moon" id="darkModeIcon"></i>
           </button>
+          {% set user = request.session.get('user') %}
+          {% if user %}
+          <span class="text-muted small d-none d-md-inline">
+            <i class="fa-solid fa-user-circle me-1"></i>{{ user.get('nombre') or user.get('username', '') }}
+            {% if user.get('rol') == 'admin' %}
+            <span class="badge bg-primary ms-1">admin</span>
+            {% endif %}
+          </span>
+          {% if user.get('rol') == 'admin' %}
+          <a href="/auth/usuarios" class="btn btn-sm btn-outline-secondary" title="Gestión de usuarios">
+            <i class="fa-solid fa-users me-1"></i><span class="d-none d-md-inline">Usuarios</span>
+          </a>
+          {% endif %}
+          {% endif %}
           <a href="/configuracion" class="btn btn-sm btn-outline-secondary" title="Configuración">
             <i class="fa-solid fa-gear me-1"></i><span class="d-none d-md-inline">Configuración</span>
           </a>
           <a href="/docs" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="fa-solid fa-book me-1"></i><span class="d-none d-md-inline">API</span>
           </a>
+          {% if user %}
+          <a href="/auth/logout" class="btn btn-sm btn-outline-danger" title="Cerrar sesión">
+            <i class="fa-solid fa-right-from-bracket me-1"></i><span class="d-none d-md-inline">Salir</span>
+          </a>
+          {% endif %}
         </div>
       </header>
 

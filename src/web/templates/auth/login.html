@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar Sesión — Bitácora Geomecánica</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/custom.css" />
+  <style>
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      overflow: hidden;
+    }
+    .login-header {
+      background: var(--sidebar-bg);
+      color: #fff;
+      padding: 2rem 2rem 1.5rem;
+      text-align: center;
+    }
+    .login-header i { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .login-header h4 { margin: 0; font-weight: 700; }
+    .login-header small { color: var(--sidebar-text); font-size: 0.8rem; }
+    .login-body { padding: 2rem; }
+    .login-body .form-label { font-weight: 600; font-size: 0.85rem; }
+    .login-footer {
+      text-align: center;
+      padding: 0.75rem 2rem 1.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card card border-0">
+    <div class="login-header">
+      <i class="fa-solid fa-mountain-sun d-block"></i>
+      <h4>Bitácora Geomecánica</h4>
+      <small>Plataforma de gestión minera</small>
+    </div>
+    <div class="login-body">
+      {% if flash and flash.mensaje %}
+      <div class="alert alert-{{ 'success' if flash.tipo == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+        <i class="fa-solid fa-{{ 'circle-check' if flash.tipo == 'success' else 'circle-xmark' }} me-2"></i>
+        {{ flash.mensaje }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endif %}
+
+      <form method="POST" action="/auth/login">
+        <div class="mb-3">
+          <label class="form-label">
+            <i class="fa-solid fa-user me-1"></i>Usuario
+          </label>
+          <input type="text" name="username" class="form-control" placeholder="Ingrese su usuario"
+            required autofocus autocomplete="username" />
+        </div>
+        <div class="mb-4">
+          <label class="form-label">
+            <i class="fa-solid fa-lock me-1"></i>Contraseña
+          </label>
+          <div class="input-group">
+            <input type="password" name="password" id="loginPwd" class="form-control"
+              placeholder="Ingrese su contraseña" required autocomplete="current-password" />
+            <button class="btn btn-outline-secondary" type="button" onclick="toggleLoginPwd()">
+              <i class="fa-solid fa-eye" id="loginPwdIcon"></i>
+            </button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 py-2">
+          <i class="fa-solid fa-right-to-bracket me-2"></i>Iniciar Sesión
+        </button>
+      </form>
+    </div>
+    <div class="login-footer">
+      <i class="fa-solid fa-circle-info me-1"></i>
+      v{{ app_version }} · Usuario por defecto: <code>admin</code> / <code>admin1234</code>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  function toggleLoginPwd() {
+    const inp = document.getElementById('loginPwd');
+    const ico = document.getElementById('loginPwdIcon');
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      ico.className = 'fa-solid fa-eye-slash';
+    } else {
+      inp.type = 'password';
+      ico.className = 'fa-solid fa-eye';
+    }
+  }
+  </script>
+</body>
+</html>

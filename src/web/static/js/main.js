@@ -81,6 +81,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const activo = !document.documentElement.classList.contains('dark-mode');
       aplicarModoOscuro(activo);
       localStorage.setItem('bitacoraGeo_darkMode', activo ? 'true' : 'false');
+      // Sync preference to server config (fire-and-forget)
+      fetch('/configuracion/modo-oscuro', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'modo_oscuro=' + (activo ? 'on' : 'off'),
+      }).catch(function() {});
     });
   }
 

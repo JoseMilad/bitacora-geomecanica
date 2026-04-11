@@ -10,13 +10,14 @@ for _p in (str(ROOT_DIR), str(SRC_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth
+from src.models.auth import inicializar_tabla_usuarios
 
 # ── Instancia principal ───────────────────────────────────────────────────────
 app = FastAPI(
@@ -37,7 +38,35 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+# ── Middleware de autenticación ───────────────────────────────────────────────
+# Rutas públicas que NO requieren autenticación
+_PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/static", "/docs", "/openapi.json", "/redoc"}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Redirige a login si el usuario no está autenticado."""
+    path = request.url.path
+    # Permitir rutas públicas y archivos estáticos
+    if any(path.startswith(p) for p in _PUBLIC_PATHS):
+        return await call_next(request)
+    # Verificar sesión
+    user = request.session.get("user")
+    if not user:
+        return RedirectResponse(url="/auth/login", status_code=303)
+    return await call_next(request)
+
+
+# ── Evento de inicio ─────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    """Inicializa la tabla de usuarios al arrancar."""
+    inicializar_tabla_usuarios()
+
+
 # ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth.router, prefix="/auth")
 app.include_router(dashboard.router)
 app.include_router(bitacora.router, prefix="/bitacora")
 app.include_router(labores.router, prefix="/labores")
@@ -45,6 +74,7 @@ app.include_router(sostenimiento.router, prefix="/sostenimiento")
 app.include_router(reportes.router, prefix="/reportes")
 app.include_router(configuracion.router, prefix="/configuracion")
 app.include_router(estandar.router, prefix="/estandar")
+app.include_router(clasificaciones.router, prefix="/clasificaciones")
 
 
 # ── Ruta raíz ─────────────────────────────────────────────────────────────────

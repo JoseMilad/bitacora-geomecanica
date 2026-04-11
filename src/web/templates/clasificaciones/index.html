@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Clasificaciones — Bitácora Geomecánica{% endblock %}
+{% block page_title %}Clasificaciones de Labor & KPI{% endblock %}
+
+{% block content %}
+<div class="row g-4 mt-1">
+
+  <!-- ── Clasificaciones de Labor (Temporal / Permanente) ──────────── -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-tags me-2 text-primary"></i>Clasificaciones de Labor
+      </div>
+      <div class="card-body">
+        <div class="row">
+          {% for tipo in ['Temporal', 'Permanente'] %}
+          <div class="col-md-6 mb-3">
+            <h6 class="fw-semibold">
+              <span class="badge {{ 'badge-temporal' if tipo == 'Temporal' else 'badge-permanente' }}">{{ tipo }}</span>
+            </h6>
+            {% set clases = clasificaciones.get(tipo, {}) %}
+            {% if clases %}
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Nombre</th>
+                  <th>Prefijo</th>
+                  <th>Fase</th>
+                  <th class="text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for nombre, datos in clases.items() %}
+                <tr>
+                  <td class="fw-semibold">{{ nombre }}</td>
+                  <td><code>{{ datos.prefijo }}</code></td>
+                  <td>{{ datos.fase or '—' }}</td>
+                  <td class="text-center">
+                    <form method="POST" action="/clasificaciones/eliminar" class="d-inline"
+                      onsubmit="return confirm('¿Eliminar clasificación {{ nombre }}?')">
+                      <input type="hidden" name="nombre" value="{{ nombre }}" />
+                      <input type="hidden" name="tipo" value="{{ tipo }}" />
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted small">No hay clasificaciones de tipo {{ tipo }}.</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Formulario para agregar -->
+        <hr class="my-3" />
+        <h6 class="fw-semibold mb-2">
+          <i class="fa-solid fa-plus me-1"></i>Agregar nueva clasificación
+        </h6>
+        <form method="POST" action="/clasificaciones/agregar">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Nombre</label>
+              <input type="text" name="nombre" class="form-control form-control-sm"
+                placeholder="Ej: CRUCERO" required />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Prefijo</label>
+              <input type="text" name="prefijo" class="form-control form-control-sm"
+                placeholder="Ej: CR" required />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Fase</label>
+              <select name="fase" class="form-select form-select-sm">
+                <option value="">— Sin fase —</option>
+                <option value="Explotación">Explotación</option>
+                <option value="Desarrollo">Desarrollo</option>
+                <option value="Preparación">Preparación</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Tipo</label>
+              <select name="tipo" class="form-select form-select-sm">
+                <option value="Temporal">Temporal</option>
+                <option value="Permanente">Permanente</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="fa-solid fa-plus me-1"></i>Agregar
+              </button>
+            </div>
+          </div>
+        </form>
+        <small class="text-muted mt-1 d-block">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          El nombre y prefijo se convierten a mayúsculas automáticamente.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Clasificaciones KPI ──────────────────────────────────────── -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="fa-solid fa-chart-pie me-2 text-secondary"></i>Clasificaciones KPI
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">
+          Las clasificaciones KPI se asignan a las labores para agrupar reportes.
+        </p>
+        {% if kpis %}
+        <ul class="list-group list-group-flush mb-3">
+          {% for kpi in kpis %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+            <span>{{ kpi }}</span>
+            <form method="POST" action="/clasificaciones/kpi/eliminar" class="d-inline"
+              onsubmit="return confirm('¿Eliminar KPI {{ kpi }}?')">
+              <input type="hidden" name="nombre_kpi" value="{{ kpi }}" />
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small mb-3">No hay clasificaciones KPI definidas.</p>
+        {% endif %}
+
+        <form method="POST" action="/clasificaciones/kpi/agregar">
+          <div class="input-group input-group-sm">
+            <input type="text" name="nombre_kpi" class="form-control"
+              placeholder="Ej: Producción" required />
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-plus me-1"></i>Agregar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="mt-4">
+  <a href="/dashboard" class="btn btn-outline-secondary">
+    <i class="fa-solid fa-arrow-left me-1"></i>Volver al Dashboard
+  </a>
+</div>
+{% endblock %}
