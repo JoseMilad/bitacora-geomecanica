@@ -366,12 +366,14 @@ body {
   background-color: rgba(255,255,255,0.05);
 }
 
-.dark-mode #topbar {
+.dark-mode #topbar,
+.dark-mode .topbar {
   background-color: var(--dm-card) !important;
   border-bottom: 1px solid var(--dm-border);
 }
 
-.dark-mode #topbar h5 {
+.dark-mode #topbar h5,
+.dark-mode .topbar h5 {
   color: var(--dm-text);
 }
 

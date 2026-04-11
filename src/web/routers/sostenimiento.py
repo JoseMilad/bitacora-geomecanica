@@ -13,7 +13,8 @@ from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import TURNOS, APP_VERSION, COLUMNAS_SOSTENIMIENTO
-from src.utils.config_manager import DEFAULTS
+from src.utils.config_manager import DEFAULTS, cargar_config
+from src.utils.helpers import _obtener_turno_automatico
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -28,8 +29,16 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
 
 
 def _campos_sost():
-    """Devuelve los campos activos de sostenimiento desde la config."""
-    return DEFAULTS["sostenimientos_activos"]
+    """Devuelve los campos activos de sostenimiento desde la config viva."""
+    config = cargar_config()
+    activos = config.get("sostenimientos_activos", DEFAULTS["sostenimientos_activos"])
+    return activos if activos else DEFAULTS["sostenimientos_activos"]
+
+
+def _turnos_config():
+    """Devuelve los turnos configurados."""
+    config = cargar_config()
+    return config.get("turnos", TURNOS)
 
 
 # ── Listar sostenimiento ──────────────────────────────────────────────────────
@@ -107,7 +116,8 @@ async def nuevo_sostenimiento_form(request: Request):
         "app_version": APP_VERSION,
         "registro": None,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
+        "turno_auto": _obtener_turno_automatico(),
         "campos": _campos_sost(),
         "action": "/sostenimiento/nuevo",
         "titulo": "Nuevo Registro de Sostenimiento",
@@ -164,7 +174,7 @@ async def nuevo_sostenimiento_save(request: Request):
         "app_version": APP_VERSION,
         "registro": datos,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
         "campos": _campos_sost(),
         "action": "/sostenimiento/nuevo",
         "titulo": "Nuevo Registro de Sostenimiento",
@@ -205,7 +215,7 @@ async def editar_sostenimiento_form(request: Request, id: int):
         "app_version": APP_VERSION,
         "registro": registro,
         "labores": labores_nombres,
-        "turnos": TURNOS,
+        "turnos": _turnos_config(),
         "campos": _campos_sost(),
         "action": f"/sostenimiento/{id}/editar",
         "titulo": "Editar Registro de Sostenimiento",
