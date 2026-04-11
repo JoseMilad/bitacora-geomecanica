@@ -79,14 +79,15 @@
           <button class="btn btn-sm btn-outline-secondary" id="darkModeToggle" title="Alternar modo oscuro">
             <i class="fa-solid fa-moon" id="darkModeIcon"></i>
           </button>
-          {% if request.session.get('user') %}
+          {% set user = request.session.get('user') %}
+          {% if user %}
           <span class="text-muted small d-none d-md-inline">
-            <i class="fa-solid fa-user-circle me-1"></i>{{ request.session.user.nombre or request.session.user.username }}
-            {% if request.session.user.rol == 'admin' %}
+            <i class="fa-solid fa-user-circle me-1"></i>{{ user.get('nombre') or user.get('username', '') }}
+            {% if user.get('rol') == 'admin' %}
             <span class="badge bg-primary ms-1">admin</span>
             {% endif %}
           </span>
-          {% if request.session.get('user', {}).get('rol') == 'admin' %}
+          {% if user.get('rol') == 'admin' %}
           <a href="/auth/usuarios" class="btn btn-sm btn-outline-secondary" title="Gestión de usuarios">
             <i class="fa-solid fa-users me-1"></i><span class="d-none d-md-inline">Usuarios</span>
           </a>
@@ -98,7 +99,7 @@
           <a href="/docs" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="fa-solid fa-book me-1"></i><span class="d-none d-md-inline">API</span>
           </a>
-          {% if request.session.get('user') %}
+          {% if user %}
           <a href="/auth/logout" class="btn btn-sm btn-outline-danger" title="Cerrar sesión">
             <i class="fa-solid fa-right-from-bracket me-1"></i><span class="d-none d-md-inline">Salir</span>
           </a>

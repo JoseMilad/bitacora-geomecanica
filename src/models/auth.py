@@ -20,12 +20,13 @@ from utils.config import DATA_DIR
 # compiladas que podrían no estar disponibles en todos los entornos.
 
 _SALT_LEN = 32  # bytes
+_PBKDF2_ITERATIONS = 600_000  # OWASP 2023 recommendation for SHA-256
 
 
 def _hash_password(password: str) -> str:
     """Genera un hash seguro de la contraseña con salt aleatorio."""
     salt = os.urandom(_SALT_LEN)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations=260_000)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations=_PBKDF2_ITERATIONS)
     return salt.hex() + ":" + dk.hex()
 
 
@@ -35,7 +36,7 @@ def _verify_password(password: str, stored_hash: str) -> bool:
         salt_hex, dk_hex = stored_hash.split(":", 1)
         salt = bytes.fromhex(salt_hex)
         dk_expected = bytes.fromhex(dk_hex)
-        dk_actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations=260_000)
+        dk_actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations=_PBKDF2_ITERATIONS)
         return hmac.compare_digest(dk_actual, dk_expected)
     except Exception:
         return False
