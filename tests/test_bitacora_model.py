@@ -208,3 +208,58 @@ def test_obtener_totales_sostenimiento(model):
     fila = totales[totales["Labor"] == "GALERIA NORTE"].iloc[0]
     assert fila["Shotcrete_m3"] == pytest.approx(4.0)
     assert fila["Pernos_Helicoidales"] == 8
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Tests para Registro Fotográfico (fotos asociadas a labores)
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_guardar_foto_labor(model):
+    """guardar_foto_labor() debe guardar una foto asociada a una labor."""
+    ok, msg = model.guardar_foto_labor("GALERIA NORTE", "/images/foto1.png")
+    assert ok is True
+    fotos = model.obtener_fotos_labor("GALERIA NORTE")
+    assert len(fotos) == 1
+    assert fotos[0]["Labor"] == "GALERIA NORTE"
+    assert fotos[0]["imagen_path"] == "/images/foto1.png"
+
+
+def test_obtener_fotos_labor_vacia(model):
+    """obtener_fotos_labor() retorna lista vacía si la labor no tiene fotos."""
+    fotos = model.obtener_fotos_labor("LABOR_INEXISTENTE")
+    assert fotos == []
+
+
+def test_guardar_multiples_fotos_labor(model):
+    """Se pueden guardar múltiples fotos para la misma labor."""
+    model.guardar_foto_labor("GALERIA SUR", "/images/a.png")
+    model.guardar_foto_labor("GALERIA SUR", "/images/b.png")
+    model.guardar_foto_labor("GALERIA SUR", "/images/c.png", "Con descripción")
+    fotos = model.obtener_fotos_labor("GALERIA SUR")
+    assert len(fotos) == 3
+    assert fotos[2]["descripcion"] == "Con descripción"
+
+
+def test_fotos_distintas_labores(model):
+    """Las fotos de distintas labores se mantienen separadas."""
+    model.guardar_foto_labor("LABOR_A", "/images/a.png")
+    model.guardar_foto_labor("LABOR_B", "/images/b.png")
+    assert len(model.obtener_fotos_labor("LABOR_A")) == 1
+    assert len(model.obtener_fotos_labor("LABOR_B")) == 1
+
+
+def test_eliminar_foto_labor(model):
+    """eliminar_foto_labor() debe eliminar la foto por su ID."""
+    model.guardar_foto_labor("GALERIA NORTE", "/images/foto1.png")
+    fotos = model.obtener_fotos_labor("GALERIA NORTE")
+    foto_id = fotos[0]["id"]
+    ok, msg = model.db.eliminar_foto_labor(foto_id)
+    assert ok is True
+    assert model.obtener_fotos_labor("GALERIA NORTE") == []
+
+
+def test_eliminar_foto_inexistente(model):
+    """eliminar_foto_labor() retorna False si el ID no existe."""
+    ok, msg = model.db.eliminar_foto_labor(9999)
+    assert ok is False

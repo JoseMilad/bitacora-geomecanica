@@ -88,6 +88,14 @@ class DatabaseManager:
                     observaciones   TEXT    DEFAULT '',
                     created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS registro_fotografico (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    labor           TEXT    NOT NULL,
+                    imagen_path     TEXT    NOT NULL,
+                    descripcion     TEXT    DEFAULT '',
+                    created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
+                );
             """)
             conn.commit()
         finally:
@@ -1065,6 +1073,97 @@ class DatabaseManager:
                 conn.close()
         except Exception:
             return []
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  REGISTRO FOTOGRÁFICO – fotos asociadas a labores
+    # ══════════════════════════════════════════════════════════════════════
+
+    def guardar_foto_labor(
+        self, labor: str, imagen_path: str, descripcion: str = ""
+    ) -> tuple[bool, str]:
+        """
+        Guarda una foto asociada a una labor en la tabla registro_fotografico.
+
+        Args:
+            labor: Nombre de la labor.
+            imagen_path: Ruta al archivo de imagen.
+            descripcion: Descripción opcional de la foto.
+
+        Returns:
+            (True, mensaje) o (False, mensaje de error).
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                conn.execute(
+                    """INSERT INTO registro_fotografico (labor, imagen_path, descripcion)
+                       VALUES (?, ?, ?)""",
+                    (labor, imagen_path, descripcion),
+                )
+                conn.commit()
+                return True, "Foto guardada exitosamente"
+            finally:
+                conn.close()
+        except Exception as e:
+            return False, f"Error al guardar foto: {e}"
+
+    def obtener_fotos_labor(self, labor: str) -> list[dict]:
+        """
+        Retorna las fotos asociadas a una labor.
+
+        Args:
+            labor: Nombre de la labor.
+
+        Returns:
+            Lista de dicts con id, labor, imagen_path, descripcion, created_at.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM registro_fotografico WHERE labor=? ORDER BY id",
+                    (labor,),
+                ).fetchall()
+                return [
+                    {
+                        "id": r["id"],
+                        "Labor": r["labor"],
+                        "imagen_path": r["imagen_path"],
+                        "descripcion": r["descripcion"],
+                        "created_at": r["created_at"],
+                    }
+                    for r in rows
+                ]
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"Error al obtener fotos: {e}")
+            return []
+
+    def eliminar_foto_labor(self, foto_id: int) -> tuple[bool, str]:
+        """
+        Elimina una foto del registro fotográfico por su ID.
+
+        Args:
+            foto_id: ID primario de la foto.
+
+        Returns:
+            (True, mensaje) o (False, mensaje de error).
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                cur = conn.execute(
+                    "DELETE FROM registro_fotografico WHERE id=?", (foto_id,)
+                )
+                conn.commit()
+                if cur.rowcount == 0:
+                    return False, "Foto no encontrada"
+                return True, "Foto eliminada correctamente"
+            finally:
+                conn.close()
+        except Exception as e:
+            return False, f"Error al eliminar foto: {e}"
 
 
 # ── Utilidades de módulo ─────────────────────────────────────────────────

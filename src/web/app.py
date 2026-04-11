@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth
@@ -28,7 +29,6 @@ app = FastAPI(
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 _SECRET_KEY = os.environ.get("BITACORA_SECRET_KEY", "bitacora-geomecanica-secret-change-in-production")
-app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY)
 
 # ── Archivos estáticos ────────────────────────────────────────────────────────
 STATIC_DIR = Path(__file__).parent / "static"
@@ -44,7 +44,6 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 _PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/static", "/docs", "/openapi.json", "/redoc"}
 
 
-@app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Redirige a login si el usuario no está autenticado."""
     path = request.url.path
@@ -56,6 +55,13 @@ async def auth_middleware(request: Request, call_next):
     if not user:
         return RedirectResponse(url="/auth/login", status_code=303)
     return await call_next(request)
+
+
+# Los middlewares se ejecutan en orden LIFO (último registrado = primero en ejecutarse).
+# auth_middleware debe ejecutarse DESPUÉS de SessionMiddleware (para que la sesión exista),
+# por eso se registra PRIMERO en el código.
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY)
 
 
 # ── Evento de inicio ─────────────────────────────────────────────────────────
