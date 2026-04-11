@@ -790,3 +790,33 @@ class BitacoraModel:
             return True, (f"{cantidad} registro(s) archivado(s) en '{archivo_hist.name}'"), cantidad
         except Exception as e:
             return False, f"Error al archivar: {str(e)}", 0
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  REGISTRO FOTOGRÁFICO – fotos asociadas a labores
+    # ══════════════════════════════════════════════════════════════════════
+
+    def guardar_foto_labor(
+        self, labor: str, imagen_path: str, descripcion: str = ""
+    ) -> tuple:
+        """Guarda una foto asociada a una labor.
+
+        Args:
+            labor: Nombre de la labor.
+            imagen_path: Ruta al archivo de imagen.
+            descripcion: Descripción opcional.
+
+        Returns:
+            (True, mensaje) o (False, mensaje de error).
+        """
+        return self.db.guardar_foto_labor(labor, imagen_path, descripcion)
+
+    def obtener_fotos_labor(self, labor: str) -> list[dict]:
+        """Retorna las fotos del registro fotográfico asociadas a una labor.
+
+        Args:
+            labor: Nombre de la labor.
+
+        Returns:
+            Lista de dicts con los datos de cada foto.
+        """
+        return self.db.obtener_fotos_labor(labor)

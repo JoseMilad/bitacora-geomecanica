@@ -3608,7 +3608,12 @@ class VentanaRegistroFotografico(tk.Toplevel):
         self._cargar_imagenes()
 
     def _cargar_imagenes(self):
-        """Carga los registros con imagen para la labor seleccionada."""
+        """Carga los registros con imagen para la labor seleccionada.
+
+        Combina imágenes de dos fuentes:
+        1. Registros de bitácora que tienen imagen_path.
+        2. Fotos del registro fotográfico (tabla registro_fotografico).
+        """
         labor = self._labor_var.get().strip()
         for row in self._tree.get_children():
             self._tree.delete(row)
@@ -3618,26 +3623,47 @@ class VentanaRegistroFotografico(tk.Toplevel):
             return
 
         try:
+            from pathlib import Path
+
+            # --- Fuente 1: imágenes en registros de bitácora ---
             import pandas as pd
             df = self.model.obtener_bitacora()
-            if df.empty:
-                return
-            df_labor = df[df["Labor"] == labor].copy()
-            if "imagen_path" not in df_labor.columns:
-                return
-            df_con_img = df_labor[
-                df_labor["imagen_path"].notna() &
-                (df_labor["imagen_path"].astype(str).str.strip() != "")
-            ]
-            for _, row in df_con_img.iterrows():
-                from pathlib import Path
-                img_path = str(row.get("imagen_path", ""))
+            if not df.empty:
+                df_labor = df[df["Labor"] == labor].copy()
+                if "imagen_path" in df_labor.columns:
+                    df_con_img = df_labor[
+                        df_labor["imagen_path"].notna() &
+                        (df_labor["imagen_path"].astype(str).str.strip() != "")
+                    ]
+                    for _, row in df_con_img.iterrows():
+                        img_path = str(row.get("imagen_path", ""))
+                        nombre_img = Path(img_path).name if img_path else "—"
+                        registro = dict(row)
+                        registro["_origen"] = "bitacora"
+                        self._registros_labor.append(registro)
+                        self._tree.insert("", "end",
+                                          values=(row.get("Fecha", ""),
+                                                  row.get("Turno", ""),
+                                                  nombre_img))
+
+            # --- Fuente 2: fotos del registro fotográfico ---
+            fotos = self.model.obtener_fotos_labor(labor)
+            for foto in fotos:
+                img_path = foto.get("imagen_path", "")
                 nombre_img = Path(img_path).name if img_path else "—"
-                self._registros_labor.append(dict(row))
+                created = foto.get("created_at", "")
+                fecha_display = created[:10] if created else ""
+                registro = {
+                    "Labor": labor,
+                    "imagen_path": img_path,
+                    "Fecha": fecha_display,
+                    "Turno": "—",
+                    "_origen": "foto",
+                    "_foto_id": foto.get("id"),
+                }
+                self._registros_labor.append(registro)
                 self._tree.insert("", "end",
-                                  values=(row.get("Fecha", ""),
-                                          row.get("Turno", ""),
-                                          nombre_img))
+                                  values=(fecha_display, "📷", nombre_img))
         except Exception:
             pass
 
@@ -3675,7 +3701,13 @@ class VentanaRegistroFotografico(tk.Toplevel):
             messagebox.showwarning("Sin labor",
                                    "Seleccione una labor primero.", parent=self)
             return
-        VentanaAnotador(self, labor_name=labor)
+
+        def _on_imagen_guardada(path):
+            """Callback que guarda la asociación imagen–labor en la BD."""
+            self.model.guardar_foto_labor(labor, path)
+            self._cargar_imagenes()
+
+        VentanaAnotador(self, callback=_on_imagen_guardada, labor_name=labor)
 
 
 class VentanaSostenimientos(tk.Toplevel):
