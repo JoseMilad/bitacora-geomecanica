@@ -58,7 +58,7 @@ async def auth_middleware(request: Request, call_next):
 
 
 # Los middlewares se ejecutan en orden LIFO (último registrado = primero en ejecutarse).
-# auth_middleware debe ejecutarse DESPUÉS de SessionMiddleware (para que session exista),
+# auth_middleware debe ejecutarse DESPUÉS de SessionMiddleware (para que la sesión exista),
 # por eso se registra PRIMERO en el código.
 app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY)
