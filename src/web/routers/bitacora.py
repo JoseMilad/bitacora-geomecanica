@@ -265,19 +265,7 @@ async def editar_bitacora_save(request: Request, id: int):
         datos["imagen_path"] = imagen_path
 
     model = BitacoraModel()
-    # Verificar que el registro existe y obtener su índice
-    registros_list = model.db.obtener_bitacora()
-    indice = None
-    for i, r in enumerate(registros_list):
-        if r.get("id") == id:
-            indice = i
-            break
-
-    if indice is None:
-        _set_flash(request, "error", "Registro no encontrado.")
-        return RedirectResponse(url="/bitacora", status_code=303)
-
-    ok, msg = model.editar_registro(indice, datos)
+    ok, msg = model.editar_registro_por_id(id, datos)
     if ok:
         _set_flash(request, "success", msg)
     else:
@@ -293,18 +281,7 @@ async def eliminar_bitacora(request: Request, id: int):
         return RedirectResponse(url="/bitacora", status_code=303)
 
     model = BitacoraModel()
-    registros_list = model.db.obtener_bitacora()
-    indice = None
-    for i, r in enumerate(registros_list):
-        if r.get("id") == id:
-            indice = i
-            break
-
-    if indice is None:
-        _set_flash(request, "error", "Registro no encontrado.")
-        return RedirectResponse(url="/bitacora", status_code=303)
-
-    ok, msg = model.eliminar_registro(indice)
+    ok, msg = model.eliminar_registro_por_id(id)
     if ok:
         _set_flash(request, "success", msg)
     else:
