@@ -100,7 +100,7 @@ async def agregar_fila(
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)
 
-    nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte}
+    nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
     filas.append(nueva)
 
     ok, msg = model.guardar_estandar_sostenimiento(filas, sistema=sistema)
@@ -157,7 +157,7 @@ async def editar_fila(
     cols = columnas_estandar(sistema)
 
     if 0 <= indice < len(filas):
-        filas[indice] = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte}
+        filas[indice] = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
         ok, msg = model.guardar_estandar_sostenimiento(filas, sistema=sistema)
         if ok:
             _set_flash(request, "success", "Fila actualizada correctamente.")

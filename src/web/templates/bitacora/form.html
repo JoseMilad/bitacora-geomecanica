@@ -62,9 +62,7 @@
                 <input type="text" name="labor" id="inputLabor" class="form-control" required
                   autocomplete="off"
                   value="{{ registro.get('Labor', '') if registro else '' }}"
-                  placeholder="Escriba para buscar labor..."
-                  oninput="filtrarLabores(this.value)"
-                  onfocus="filtrarLabores(this.value)" />
+                  placeholder="Escriba para buscar labor..." />
                 <div id="dropdownLabores" class="list-group position-absolute w-100 shadow-sm" style="z-index:1050;max-height:200px;overflow-y:auto;display:none;">
                 </div>
               </div>
@@ -234,48 +232,8 @@
 <script>
 // ── Lista de labores para filtrado local ────────────────────────────────────
 const todasLabores = {{ labores | tojson }};
-
-function filtrarLabores(texto) {
-  const dropdown = document.getElementById('dropdownLabores');
-  dropdown.innerHTML = '';
-  if (!texto && document.activeElement.id !== 'inputLabor') {
-    dropdown.style.display = 'none';
-    return;
-  }
-
-  const filtradas = texto
-    ? todasLabores.filter(l => l.toLowerCase().includes(texto.toLowerCase()))
-    : todasLabores;
-
-  if (filtradas.length === 0) {
-    dropdown.style.display = 'none';
-    return;
-  }
-
-  filtradas.slice(0, 10).forEach(labor => {
-    const item = document.createElement('a');
-    item.href = '#';
-    item.className = 'list-group-item list-group-item-action py-2 px-3';
-    item.style.fontSize = '0.9rem';
-    item.textContent = labor;
-    item.addEventListener('click', function(e) {
-      e.preventDefault();
-      document.getElementById('inputLabor').value = labor;
-      dropdown.style.display = 'none';
-      autocompletarLabor(labor);
-    });
-    dropdown.appendChild(item);
-  });
-  dropdown.style.display = 'block';
-}
-
-// Cerrar dropdown al hacer click fuera
-document.addEventListener('click', function(e) {
-  const dropdown = document.getElementById('dropdownLabores');
-  const input = document.getElementById('inputLabor');
-  if (dropdown && input && !dropdown.contains(e.target) && e.target !== input) {
-    dropdown.style.display = 'none';
-  }
+initLaborTypeahead('inputLabor', 'dropdownLabores', todasLabores, {
+  onSelect: function(labor) { autocompletarLabor(labor); }
 });
 
 // Auto-calcular soporte al cambiar RMR (con debounce)

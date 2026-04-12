@@ -719,6 +719,27 @@ class BitacoraModel:
         except Exception as e:
             return False, f"Error al editar sostenimiento: {str(e)}"
 
+    def editar_sostenimiento_por_id(self, record_id: int, datos: dict) -> tuple:
+        """
+        Edita un registro de sostenimiento por su ID de base de datos.
+
+        Args:
+            record_id: ID primario del registro en SQLite
+            datos: Diccionario con los nuevos datos
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
+            exito, mensaje = self.db.editar_sostenimiento(record_id, datos)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
+        except Exception as e:
+            return False, f"Error al editar sostenimiento: {str(e)}"
+
     def eliminar_sostenimiento(self, indice: int) -> tuple:
         """
         Elimina un registro de sostenimiento por índice (0-based).
@@ -731,6 +752,26 @@ class BitacoraModel:
             if indice < 0 or indice >= len(registros):
                 return False, "Índice fuera de rango"
             record_id = registros[indice]["id"]
+            exito, mensaje = self.db.eliminar_sostenimiento(record_id)
+            if exito:
+                self._sincronizar_a_excel("Sostenimiento_Diario")
+            return exito, mensaje
+        except Exception as e:
+            return False, f"Error al eliminar sostenimiento: {str(e)}"
+
+    def eliminar_sostenimiento_por_id(self, record_id: int) -> tuple:
+        """
+        Elimina un registro de sostenimiento por su ID de base de datos.
+
+        Args:
+            record_id: ID primario del registro en SQLite
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            self._guardar_snapshot("Sostenimiento_Diario")
             exito, mensaje = self.db.eliminar_sostenimiento(record_id)
             if exito:
                 self._sincronizar_a_excel("Sostenimiento_Diario")

@@ -1,7 +1,7 @@
 """Router de Bitácora — CRUD completo."""
 import sys
 import uuid
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -18,6 +18,35 @@ from src.models.bitacora_model import BitacoraModel
 from src.utils.config import TURNOS, APP_VERSION, DATA_DIR
 from src.utils.config_manager import cargar_config
 from src.utils.helpers import _obtener_turno_automatico
+
+
+def _fecha_html_a_app(fecha_html: str) -> str:
+    """Convierte fecha de formato HTML (YYYY-MM-DD) a formato app (dd/mm/YYYY)."""
+    if not fecha_html:
+        return fecha_html
+    try:
+        dt = datetime.strptime(fecha_html, "%Y-%m-%d")
+        return dt.strftime("%d/%m/%Y")
+    except ValueError:
+        return fecha_html
+
+
+def _fecha_app_a_html(fecha_app: str) -> str:
+    """Convierte fecha de formato app (dd/mm/YYYY) a formato HTML (YYYY-MM-DD)."""
+    if not fecha_app:
+        return fecha_app
+    try:
+        dt = datetime.strptime(fecha_app, "%d/%m/%Y")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return fecha_app
+
+
+def _extraer_nombre_imagen(imagen_path: str) -> str:
+    """Extrae solo el nombre de archivo de una ruta de imagen completa."""
+    if not imagen_path:
+        return ""
+    return Path(imagen_path).name
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -85,10 +114,13 @@ async def listar_bitacora(
     page: int = 1,
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    # Convert HTML date format (YYYY-MM-DD) to app format (dd/mm/YYYY) for filtering
+    fi_app = _fecha_html_a_app(fecha_inicio) if fecha_inicio else None
+    ff_app = _fecha_html_a_app(fecha_fin) if fecha_fin else None
     df = model.buscar_registros(
         labor=labor,
-        fecha_inicio=fecha_inicio or None,
-        fecha_fin=fecha_fin or None,
+        fecha_inicio=fi_app,
+        fecha_fin=ff_app,
     )
 
     # Búsqueda global
@@ -195,7 +227,7 @@ async def nuevo_bitacora_save(request: Request):
             imagen_path = str(filepath)
 
     datos = {
-        "Fecha": fecha,
+        "Fecha": _fecha_html_a_app(fecha),
         "Turno": turno,
         "Labor": labor,
         "GSI": gsi,
@@ -281,7 +313,7 @@ async def duplicar_bitacora(request: Request, id: int):
         return RedirectResponse(url="/bitacora", status_code=303)
 
     datos = {
-        "Fecha": date.today().strftime("%Y-%m-%d"),
+        "Fecha": date.today().strftime("%d/%m/%Y"),
         "Turno": registro.get("Turno", ""),
         "Labor": registro.get("Labor", ""),
         "GSI": registro.get("GSI", ""),
@@ -316,6 +348,9 @@ async def editar_bitacora_form(request: Request, id: int):
     if registro is None:
         _set_flash(request, "error", "Registro no encontrado.")
         return RedirectResponse(url="/bitacora", status_code=303)
+
+    # Convert date for HTML date input (needs YYYY-MM-DD)
+    registro["Fecha"] = _fecha_app_a_html(registro.get("Fecha", ""))
 
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
@@ -359,7 +394,7 @@ async def editar_bitacora_save(request: Request, id: int):
             imagen_path = str(filepath)
 
     datos = {
-        "Fecha": fecha,
+        "Fecha": _fecha_html_a_app(fecha),
         "Turno": turno,
         "Labor": labor,
         "GSI": gsi,
@@ -451,9 +486,9 @@ async def servir_imagen(filename: str):
     """Sirve una imagen subida por su nombre de archivo."""
     import re
     from fastapi.responses import FileResponse
-    # Solo permitir nombres de archivo UUID hex de 32 caracteres con extensión de imagen
+    # Solo permitir nombres de archivo seguros con extensión de imagen
     safe_name = Path(filename).name
-    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
+    if not re.fullmatch(r"[a-zA-Z0-9_\-]+\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
         return JSONResponse({"error": "Nombre de archivo no válido"}, status_code=400)
     # Construir ruta segura usando solo el nombre validado
     resolved_upload = UPLOAD_DIR.resolve()
@@ -463,5 +498,10 @@ async def servir_imagen(filename: str):
         return JSONResponse({"error": "Acceso denegado"}, status_code=403)
     if filepath.exists():
         return FileResponse(str(filepath))
+    # Also check DATA_DIR root (for images saved by desktop app)
+    resolved_data = DATA_DIR.resolve()
+    alt_filepath = (resolved_data / safe_name).resolve()
+    if str(alt_filepath).startswith(str(resolved_data)) and alt_filepath.exists():
+        return FileResponse(str(alt_filepath))
     return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
 
