@@ -3660,7 +3660,8 @@ class VentanaRegistroFotografico(tk.Toplevel):
 
             # --- Fuente 1: imágenes en registros de bitácora ---
             import pandas as pd
-            df = self.model.obtener_bitacora()
+            _registros_bit = self.model.db.obtener_bitacora()
+            df = pd.DataFrame(_registros_bit) if _registros_bit else pd.DataFrame()
             if not df.empty:
                 df_labor = df[df["Labor"] == labor].copy()
                 if "imagen_path" in df_labor.columns:

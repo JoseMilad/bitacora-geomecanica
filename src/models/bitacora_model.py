@@ -691,14 +691,13 @@ class BitacoraModel:
             registros = self.db.obtener_sostenimiento(fecha=fecha, labor=labor)
             if registros:
                 df = pd.DataFrame(registros)
-                # Eliminar columnas internas de SQLite
-                for col in ("id", "created_at"):
-                    if col in df.columns:
-                        df = df.drop(columns=[col])
+                # Eliminar solo la columna interna de timestamp; mantener 'id' para referencias
+                if "created_at" in df.columns:
+                    df = df.drop(columns=["created_at"])
                 return df
-            return pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
+            return pd.DataFrame(columns=["id"] + COLUMNAS_SOSTENIMIENTO)
         except Exception:
-            return pd.DataFrame(columns=COLUMNAS_SOSTENIMIENTO)
+            return pd.DataFrame(columns=["id"] + COLUMNAS_SOSTENIMIENTO)
 
     def editar_sostenimiento(self, indice: int, datos: dict) -> tuple:
         """

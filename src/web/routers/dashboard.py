@@ -130,7 +130,7 @@ async def dashboard(
             break
 
     # Totales sostenimiento
-    totales_sost = model.obtener_totales_sostenimiento()
+    totales_sost = model.obtener_totales_sostenimiento(labor=labor_filter or None)
     total_shotcrete = 0.0
     if totales_sost is not None and not totales_sost.empty and col_principal in totales_sost.columns:
         total_shotcrete = float(totales_sost[col_principal].sum())
