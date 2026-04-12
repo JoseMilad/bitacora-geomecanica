@@ -373,17 +373,17 @@ async def servir_imagen(filename: str):
     """Sirve una imagen subida por su nombre de archivo."""
     import re
     from fastapi.responses import FileResponse
-    # Solo permitir nombres de archivo alfanuméricos con extensión de imagen
+    # Solo permitir nombres de archivo UUID hex de 32 caracteres con extensión de imagen
     safe_name = Path(filename).name
-    if not re.fullmatch(r"[a-fA-F0-9]+\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
+    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
         return JSONResponse({"error": "Nombre de archivo no válido"}, status_code=400)
-    filepath = UPLOAD_DIR / safe_name
+    # Construir ruta segura usando solo el nombre validado
+    resolved_upload = UPLOAD_DIR.resolve()
+    filepath = (resolved_upload / safe_name).resolve()
     # Verificar que la ruta resuelta está dentro de UPLOAD_DIR
-    try:
-        filepath.resolve().relative_to(UPLOAD_DIR.resolve())
-    except ValueError:
+    if not str(filepath).startswith(str(resolved_upload)):
         return JSONResponse({"error": "Acceso denegado"}, status_code=403)
-    if filepath.exists() and filepath.suffix.lower() in _ALLOWED_EXTENSIONS:
+    if filepath.exists():
         return FileResponse(str(filepath))
     return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
 

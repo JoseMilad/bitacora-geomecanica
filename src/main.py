@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.views.bitacora_ui import BitacoraApp
 from src.views.login_dialog import LoginDialog
 from src.utils.logger import LoggerBitacora
-from src.utils.config import PALETTE
+from src.utils.config import PALETTE, APP_VERSION
 
 
 class WelcomeScreen:
@@ -88,7 +88,7 @@ class WelcomeScreen:
 
         # Versión
         tk.Label(
-            container, text="v1.0.0",
+            container, text=f"v{APP_VERSION}",
             bg=bg, fg=PALETTE["sidebar_text"],
             font=("Segoe UI", 8),
         ).pack(pady=(15, 0))
