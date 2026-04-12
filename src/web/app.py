@@ -17,7 +17,7 @@ from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth, actividad
 from src.models.auth import inicializar_tabla_usuarios
 from src.utils.config import APP_VERSION
 
@@ -82,6 +82,7 @@ app.include_router(reportes.router, prefix="/reportes")
 app.include_router(configuracion.router, prefix="/configuracion")
 app.include_router(estandar.router, prefix="/estandar")
 app.include_router(clasificaciones.router, prefix="/clasificaciones")
+app.include_router(actividad.router)
 
 
 # ── Ruta raíz — Pantalla de bienvenida ────────────────────────────────────────

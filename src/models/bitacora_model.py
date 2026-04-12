@@ -307,6 +307,9 @@ class BitacoraModel:
             exito, mensaje = self.db.guardar_registro(datos)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                labor = datos.get("Labor", "")
+                self.db.registrar_actividad("sistema", "crear_registro",
+                                            f"Nuevo registro: {datos.get('Fecha', '')} - {labor}")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
@@ -328,6 +331,9 @@ class BitacoraModel:
             exito, mensaje = self.db.guardar_registro_forzado(datos)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                labor = datos.get("Labor", "")
+                self.db.registrar_actividad("sistema", "crear_registro",
+                                            f"Registro forzado: {datos.get('Fecha', '')} - {labor}")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
@@ -501,18 +507,23 @@ class BitacoraModel:
             fecha_fin (str): Filtro fecha fin (formato dd/mm/yyyy)
         
         Returns:
-            DataFrame: Registros filtrados
+            DataFrame: Registros filtrados (incluye id e imagen_path)
         """
+        # Columnas extra necesarias para identificar registros y mostrar imágenes
+        _COLS_EXTRA = ["id", "imagen_path"]
         try:
             registros = self.db.buscar_registros(labor, fecha_inicio, fecha_fin)
             if registros:
                 df = pd.DataFrame(registros)
-                cols_mostrar = [c for c in COLUMNAS_BITACORA if c in df.columns]
+                cols_mostrar = (
+                    [c for c in _COLS_EXTRA if c in df.columns]
+                    + [c for c in COLUMNAS_BITACORA if c in df.columns]
+                )
                 return df[cols_mostrar]
-            return pd.DataFrame(columns=COLUMNAS_BITACORA)
+            return pd.DataFrame(columns=_COLS_EXTRA + COLUMNAS_BITACORA)
         except Exception as e:
             print(f"Error al buscar: {str(e)}")
-            return pd.DataFrame(columns=COLUMNAS_BITACORA)
+            return pd.DataFrame(columns=_COLS_EXTRA + COLUMNAS_BITACORA)
 
     def editar_registro(self, indice: int, datos: dict) -> tuple:
         """
@@ -541,6 +552,29 @@ class BitacoraModel:
         except Exception as e:
             return False, f"Error al editar: {str(e)}"
 
+    def editar_registro_por_id(self, record_id: int, datos: dict) -> tuple:
+        """
+        Edita un registro de la bitácora por su ID de base de datos.
+
+        Args:
+            record_id: ID primario del registro en SQLite
+            datos: Diccionario con los nuevos datos (solo los campos a modificar)
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
+            exito, mensaje = self.db.editar_registro(record_id, datos)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+                self.db.registrar_actividad("sistema", "editar_registro",
+                                            f"Registro #{record_id} editado")
+            return exito, mensaje
+        except Exception as e:
+            return False, f"Error al editar: {str(e)}"
+
     def eliminar_registro(self, indice: int) -> tuple:
         """
         Elimina un registro de la bitácora por su índice (0-based).
@@ -562,6 +596,28 @@ class BitacoraModel:
             exito, mensaje = self.db.eliminar_registro(record_id)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+            return exito, mensaje
+        except Exception as e:
+            return False, f"Error al eliminar: {str(e)}"
+
+    def eliminar_registro_por_id(self, record_id: int) -> tuple:
+        """
+        Elimina un registro de la bitácora por su ID de base de datos.
+
+        Args:
+            record_id: ID primario del registro en SQLite
+
+        Returns:
+            tuple: (éxito: bool, mensaje: str)
+        """
+        try:
+            self._hacer_backup()
+            self._guardar_snapshot("Bitacora")
+            exito, mensaje = self.db.eliminar_registro(record_id)
+            if exito:
+                self._sincronizar_a_excel("Bitacora")
+                self.db.registrar_actividad("sistema", "eliminar_registro",
+                                            f"Registro #{record_id} eliminado")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al eliminar: {str(e)}"

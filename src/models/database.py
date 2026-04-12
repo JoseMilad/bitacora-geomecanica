@@ -96,6 +96,14 @@ class DatabaseManager:
                     descripcion     TEXT    DEFAULT '',
                     created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS actividad_log (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    usuario         TEXT    DEFAULT '',
+                    accion          TEXT    NOT NULL,
+                    detalle         TEXT    DEFAULT '',
+                    created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
+                );
             """)
             conn.commit()
         finally:
@@ -1164,6 +1172,56 @@ class DatabaseManager:
                 conn.close()
         except Exception as e:
             return False, f"Error al eliminar foto: {e}"
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  ACTIVIDAD LOG – registro de auditoría
+    # ══════════════════════════════════════════════════════════════════════
+
+    def registrar_actividad(self, usuario: str, accion: str, detalle: str = "") -> None:
+        """
+        Registra una actividad en el log de auditoría.
+
+        Args:
+            usuario: Nombre del usuario que realizó la acción.
+            accion: Tipo de acción (crear, editar, eliminar, etc.).
+            detalle: Descripción adicional de la acción.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                conn.execute(
+                    "INSERT INTO actividad_log (usuario, accion, detalle) VALUES (?, ?, ?)",
+                    (str(usuario)[:100], str(accion)[:50], str(detalle)[:500]),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"Error al registrar actividad: {e}")
+
+    def obtener_actividad_log(self, limite: int = 50) -> list[dict]:
+        """
+        Obtiene las últimas actividades registradas.
+
+        Args:
+            limite: Número máximo de registros a retornar.
+
+        Returns:
+            Lista de dicts con las actividades.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM actividad_log ORDER BY id DESC LIMIT ?",
+                    (min(limite, 500),),
+                ).fetchall()
+                return self._rows_to_list(rows)
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"Error al obtener actividad: {e}")
+            return []
 
 
 # ── Utilidades de módulo ─────────────────────────────────────────────────

@@ -323,6 +323,19 @@ class BitacoraApp:
         self.btn_oscuro.pack(fill="x", pady=1)
         aplicar_hover(self.btn_oscuro, PALETTE["sidebar_bg"], PALETTE["sidebar_active"])
 
+        # Espaciador para empujar el watermark al fondo
+        tk.Frame(sidebar, bg=PALETTE["sidebar_bg"]).pack(fill="both", expand=True)
+
+        # Watermark
+        tk.Label(
+            sidebar,
+            text="Powered by Milad",
+            font=("Segoe UI", 8),
+            bg=PALETTE["sidebar_bg"],
+            fg="#6b7fa0",
+            anchor="center",
+        ).pack(fill="x", pady=(0, 10))
+
         # ─── Panel de contenido derecho ─────────────────────────────────
         content = tk.Frame(container, bg=PALETTE["surface"])
         content.pack(side="left", fill="both", expand=True)
@@ -1201,7 +1214,7 @@ class VentanaHistorial:
         self._buscar_labor()
     
     def _buscar_labor(self):
-        """Busca registros según filtros y guarda los índices originales"""
+        """Busca registros según filtros y guarda los IDs de base de datos"""
         labor = self.buscar_var.get()
         fecha_inicio = self.fecha_inicio_var.get()
         fecha_fin = self.fecha_fin_var.get()
@@ -1209,14 +1222,18 @@ class VentanaHistorial:
         df = self.model.buscar_registros(labor, fecha_inicio, fecha_fin)
         self._df_actual = df.copy()
         self._todos_registros = df.copy()
-        self._indices_originales = list(df.index)
+        # Almacenar IDs de base de datos para cada fila
+        self._db_ids = list(df["id"]) if "id" in df.columns else list(df.index)
+        
+        # Columnas visibles en la tabla (sin id ni imagen_path)
+        cols_visibles = [c for c in df.columns if c not in ("id", "imagen_path")]
         
         for fila in self.tabla.get_children():
             self.tabla.delete(fila)
         
         for i, (_, row) in enumerate(df.iterrows()):
             tag = "odd" if i % 2 == 0 else "even"
-            self.tabla.insert("", "end", values=list(row), tags=(tag,))
+            self.tabla.insert("", "end", values=[row[c] for c in cols_visibles], tags=(tag,))
 
         total = len(df)
         self.lbl_contador.config(text=f"Mostrando {total} de {total} registros")
@@ -1233,37 +1250,41 @@ class VentanaHistorial:
         if not texto:
             df_filtrado = self._todos_registros
         else:
-            mask = self._todos_registros.apply(
+            # Solo buscar en columnas visibles (no en id ni imagen_path)
+            cols_buscar = [c for c in self._todos_registros.columns if c not in ("id", "imagen_path")]
+            mask = self._todos_registros[cols_buscar].apply(
                 lambda row: any(texto in str(v).lower() for v in row), axis=1
             )
             df_filtrado = self._todos_registros[mask]
 
         self._df_actual = df_filtrado.copy()
-        self._indices_originales = list(df_filtrado.index)
+        # Actualizar IDs de base de datos para filas filtradas
+        self._db_ids = list(df_filtrado["id"]) if "id" in df_filtrado.columns else list(df_filtrado.index)
 
+        cols_visibles = [c for c in df_filtrado.columns if c not in ("id", "imagen_path")]
         for i, (_, row) in enumerate(df_filtrado.iterrows()):
             tag = "odd" if i % 2 == 0 else "even"
-            self.tabla.insert("", "end", values=list(row), tags=(tag,))
+            self.tabla.insert("", "end", values=[row[c] for c in cols_visibles], tags=(tag,))
 
         total_all = len(self._todos_registros)
         total_vis = len(df_filtrado)
         self.lbl_contador.config(text=f"Mostrando {total_vis} de {total_all} registros")
 
-    def _obtener_indice_seleccionado(self):
-        """Devuelve el índice real del DataFrame para la fila seleccionada"""
+    def _obtener_id_seleccionado(self):
+        """Devuelve el ID de base de datos del registro seleccionado"""
         seleccion = self.tabla.selection()
         if not seleccion:
             messagebox.showwarning("Advertencia", "Seleccione un registro", parent=self.ventana)
             return None
         pos = self.tabla.index(seleccion[0])
-        if pos >= len(self._indices_originales):
+        if pos >= len(self._db_ids):
             return None
-        return self._indices_originales[pos]
+        return int(self._db_ids[pos])
 
     def _editar_registro(self):
         """Abre ventana emergente para editar el registro seleccionado"""
-        indice = self._obtener_indice_seleccionado()
-        if indice is None:
+        record_id = self._obtener_id_seleccionado()
+        if record_id is None:
             return
 
         seleccion = self.tabla.selection()
@@ -1335,7 +1356,7 @@ class VentanaHistorial:
                     nuevos[nombre] = entradas[nombre].get("1.0", tk.END).strip()
                 else:
                     nuevos[nombre] = entradas[nombre].get().strip()
-            exito, msg = self.model.editar_registro(indice, nuevos)
+            exito, msg = self.model.editar_registro_por_id(record_id, nuevos)
             if exito:
                 messagebox.showinfo("Éxito", msg, parent=ventana_editar)
                 ventana_editar.destroy()
@@ -1412,8 +1433,8 @@ class VentanaHistorial:
 
     def _eliminar_registro(self):
         """Elimina el registro seleccionado con confirmación"""
-        indice = self._obtener_indice_seleccionado()
-        if indice is None:
+        record_id = self._obtener_id_seleccionado()
+        if record_id is None:
             return
 
         confirmar = messagebox.askyesno(
@@ -1422,7 +1443,7 @@ class VentanaHistorial:
             parent=self.ventana
         )
         if confirmar:
-            exito, msg = self.model.eliminar_registro(indice)
+            exito, msg = self.model.eliminar_registro_por_id(record_id)
             if exito:
                 messagebox.showinfo("Éxito", msg, parent=self.ventana)
                 self._buscar_labor()
@@ -1440,6 +1461,10 @@ class VentanaHistorial:
         if df.empty:
             messagebox.showinfo("Info", "No hay datos para exportar", parent=self.ventana)
             return
+
+        # Excluir columnas internas del export
+        cols_export = [c for c in df.columns if c not in ("id", "imagen_path")]
+        df = df[cols_export]
 
         # Ordenar por labor numéricamente
         df = ordenar_df_por_labor(df)
