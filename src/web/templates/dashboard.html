@@ -87,7 +87,7 @@
         <i class="fa-solid fa-layer-group text-secondary fa-lg"></i>
       </div>
       <div>
-        <p class="kpi-label">Total Shotcrete (m³)</p>
+        <p class="kpi-label">Total {{ nombre_col_principal }}</p>
         <h3 class="kpi-value">{{ total_shotcrete }}</h3>
       </div>
     </div>
@@ -144,8 +144,12 @@
       </div>
       <div class="col-md-4">
         <label class="form-label small fw-semibold mb-1">Filtrar por Labor</label>
-        <input type="text" name="labor_filter" value="{{ labor_filter }}" class="form-control form-control-sm"
-          placeholder="Nombre de labor..." />
+        <div class="position-relative">
+          <input type="text" name="labor_filter" id="dashLaborFilter" value="{{ labor_filter }}"
+            class="form-control form-control-sm" autocomplete="off" placeholder="Escriba para buscar labor..." />
+          <div id="dropdownDashLaborFilter" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+        </div>
       </div>
       <div class="col-md-4 d-flex gap-2">
         <button type="submit" class="btn btn-sm btn-outline-secondary">
@@ -412,5 +416,14 @@ if (labelsSostFase.length > 0) {
   document.getElementById('chartSostFase').parentElement.innerHTML =
     '<p class="text-muted text-center py-4 small">Sin datos de fase</p>';
 }
+
+// Typeahead para filtro de labor en sección sostenimiento
+const _laboresDash = {{ labores_nombres | tojson }};
+initLaborTypeahead('dashLaborFilter', 'dropdownDashLaborFilter', _laboresDash, {
+  showAll: true,
+  onSelect: function() {
+    document.getElementById('dashLaborFilter').closest('form').submit();
+  }
+});
 </script>
 {% endblock %}
