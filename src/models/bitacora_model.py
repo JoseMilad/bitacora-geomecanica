@@ -687,6 +687,7 @@ class BitacoraModel:
         Returns:
             DataFrame con los registros
         """
+        _COLS_SOST_CON_ID = ["id"] + COLUMNAS_SOSTENIMIENTO
         try:
             registros = self.db.obtener_sostenimiento(fecha=fecha, labor=labor)
             if registros:
@@ -695,9 +696,9 @@ class BitacoraModel:
                 if "created_at" in df.columns:
                     df = df.drop(columns=["created_at"])
                 return df
-            return pd.DataFrame(columns=["id"] + COLUMNAS_SOSTENIMIENTO)
+            return pd.DataFrame(columns=_COLS_SOST_CON_ID)
         except Exception:
-            return pd.DataFrame(columns=["id"] + COLUMNAS_SOSTENIMIENTO)
+            return pd.DataFrame(columns=_COLS_SOST_CON_ID)
 
     def editar_sostenimiento(self, indice: int, datos: dict) -> tuple:
         """
