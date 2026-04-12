@@ -1,6 +1,7 @@
 """Router de Bitácora — CRUD completo."""
 import sys
 import uuid
+from datetime import date
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -271,7 +272,6 @@ async def duplicar_bitacora(request: Request, id: int):
         _set_flash(request, "error", "Registro no encontrado.")
         return RedirectResponse(url="/bitacora", status_code=303)
 
-    from datetime import date
     datos = {
         "Fecha": date.today().strftime("%Y-%m-%d"),
         "Turno": registro.get("Turno", ""),
