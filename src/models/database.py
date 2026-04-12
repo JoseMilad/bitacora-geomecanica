@@ -136,15 +136,18 @@ class DatabaseManager:
 
     def _migrate_empresa_id(self, conn: sqlite3.Connection) -> None:
         """Adds empresa_id column to existing tables if they lack it."""
-        tables = [
+        allowed_tables = {
             "bitacora", "labores", "estandar_sostenimiento",
             "sostenimiento_diario", "registro_fotografico", "actividad_log",
-        ]
-        for table in tables:
-            cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        }
+        for table in allowed_tables:
+            cols = [row[1] for row in conn.execute(
+                "SELECT * FROM pragma_table_info(?)", (table,)
+            ).fetchall()]
             if "empresa_id" not in cols:
+                # Table name is from hardcoded allowed_tables set, safe for interpolation
                 conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN empresa_id INTEGER DEFAULT 1"
+                    f"ALTER TABLE [{table}] ADD COLUMN empresa_id INTEGER DEFAULT 1"
                 )
         # Remove UNIQUE constraint on labores.labor (now unique per empresa)
         # This is handled naturally since new tables have no UNIQUE on labor alone

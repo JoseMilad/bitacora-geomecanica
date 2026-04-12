@@ -27,7 +27,7 @@ function initLaborTypeahead(inputId, dropdownId, laboresList, options) {
       : laboresList;
 
     if (opts.showAll) {
-      var allItem = document.createElement('a');
+      const allItem = document.createElement('a');
       allItem.href = '#';
       allItem.className = 'list-group-item list-group-item-action py-2 px-3';
       allItem.style.fontSize = '0.9rem';
@@ -47,7 +47,7 @@ function initLaborTypeahead(inputId, dropdownId, laboresList, options) {
     }
 
     filtradas.slice(0, opts.maxResults).forEach(function(labor) {
-      var item = document.createElement('a');
+      const item = document.createElement('a');
       item.href = '#';
       item.className = 'list-group-item list-group-item-action py-2 px-3';
       item.style.fontSize = '0.9rem';
