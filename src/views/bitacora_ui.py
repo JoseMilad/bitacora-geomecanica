@@ -48,7 +48,7 @@ def _crear_estilos_pdf():
     estilos["titulo"] = ParagraphStyle(
         "PdfTitulo",
         parent=base["Title"],
-        fontSize=16,
+        fontSize=14,
         textColor=_PDF_HEADER_BG,
         spaceAfter=4,
         alignment=TA_LEFT,
@@ -76,6 +76,14 @@ def _crear_estilos_pdf():
         parent=base["Normal"],
         fontSize=8,
         leading=11,
+    )
+    estilos["header_cell"] = ParagraphStyle(
+        "PdfHeaderCell",
+        parent=base["Normal"],
+        fontSize=8,
+        leading=11,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
     )
     estilos["pie"] = ParagraphStyle(
         "PdfPie",
@@ -125,7 +133,7 @@ def _construir_bloque_header_pdf(estilos, titulo_principal, lineas_info):
     # Recuadro de título con fondo oscuro usando una tabla de 1 celda
     estilos_banner = ParagraphStyle(
         "Banner", parent=estilos["titulo"],
-        textColor=colors.white, fontSize=14
+        textColor=colors.white, fontSize=11
     )
     tabla_titulo = Table(
         [[Paragraph(titulo_principal, estilos_banner)]],
@@ -133,21 +141,21 @@ def _construir_bloque_header_pdf(estilos, titulo_principal, lineas_info):
     )
     tabla_titulo.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), _PDF_HEADER_BG),
-        ("TOPPADDING",    (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 14),
+        ("TOPPADDING",    (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
     ]))
     elementos.append(tabla_titulo)
-    elementos.append(Spacer(1, 6))
+    elementos.append(Spacer(1, 4))
 
     # Metadatos
     for linea in lineas_info:
         elementos.append(Paragraph(linea, estilos["subtitulo"]))
 
-    elementos.append(Spacer(1, 4))
-    elementos.append(HRFlowable(width="100%", thickness=1.5, color=_PDF_ACCENT))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 3))
+    elementos.append(HRFlowable(width="100%", thickness=1, color=_PDF_ACCENT))
+    elementos.append(Spacer(1, 6))
     return elementos
 
 

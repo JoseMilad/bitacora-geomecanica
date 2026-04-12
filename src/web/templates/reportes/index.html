@@ -21,12 +21,12 @@
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Labor</label>
-          <select id="bit_labor" class="form-select">
-            <option value="">Todas las labores</option>
-            {% for l in labores %}
-            <option value="{{ l }}">{{ l }}</option>
-            {% endfor %}
-          </select>
+          <div class="position-relative">
+            <input type="text" id="bit_labor" class="form-control" autocomplete="off"
+              placeholder="Escriba para buscar labor..." />
+            <div id="dropdownBitLabor" class="list-group position-absolute w-100 shadow-sm"
+              style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+          </div>
         </div>
         <div class="mt-auto d-flex gap-2 flex-wrap">
           <button type="button" class="btn btn-success flex-grow-1"
@@ -59,12 +59,12 @@
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Labor</label>
-          <select id="sost_labor" class="form-select">
-            <option value="">Todas las labores</option>
-            {% for l in labores %}
-            <option value="{{ l }}">{{ l }}</option>
-            {% endfor %}
-          </select>
+          <div class="position-relative">
+            <input type="text" id="sost_labor" class="form-control" autocomplete="off"
+              placeholder="Escriba para buscar labor..." />
+            <div id="dropdownSostLabor" class="list-group position-absolute w-100 shadow-sm"
+              style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+          </div>
         </div>
         <div class="mt-auto d-flex gap-2 flex-wrap">
           <button type="button" class="btn btn-success flex-grow-1"
@@ -141,6 +141,10 @@
 
 {% block extra_scripts %}
 <script>
+const _laboresReporte = {{ labores | tojson }};
+initLaborTypeahead('bit_labor', 'dropdownBitLabor', _laboresReporte, { showAll: true });
+initLaborTypeahead('sost_labor', 'dropdownSostLabor', _laboresReporte, { showAll: true });
+
 function exportar(tipo, formato) {
   const fi  = document.getElementById(tipo + '_fi').value;
   const ff  = document.getElementById(tipo + '_ff').value;

@@ -37,6 +37,14 @@ def _is_admin(request: Request) -> bool:
     return user is not None and user.get("rol") == "admin"
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 def _validar_sistema(sistema: str) -> str:
     """Valida y sanea el sistema devolviendo solo IDs alfanuméricos permitidos."""
     activas = obtener_clasificaciones_activas()
@@ -55,7 +63,7 @@ async def ver_estandar(request: Request, sistema: str = ""):
     if not sistema or sistema not in activas:
         sistema = activas[0] if activas else "RMR"
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)
@@ -87,7 +95,7 @@ async def agregar_fila(
     tipo: str = Form("Temporal"),
     soporte: str = Form(...),
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)
@@ -115,7 +123,7 @@ async def eliminar_fila(
         _set_flash(request, "error", "Solo los administradores pueden eliminar estándares.")
         return RedirectResponse(url="/estandar", status_code=303)
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
 
@@ -143,7 +151,7 @@ async def editar_fila(
     tipo: str = Form("Temporal"),
     soporte: str = Form(...),
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)

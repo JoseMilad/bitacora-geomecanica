@@ -116,7 +116,6 @@ async def guardar_configuracion(request: Request):
     # ── Otras opciones ────────────────────────────────────────────────────────
     config["backup_automatico"] = (form.get("backup_automatico") == "on")
     config["modo_oscuro"] = (form.get("modo_oscuro") == "on")
-    config["password_edicion"] = form.get("password_edicion", "admin1234").strip() or "admin1234"
 
     if guardar_config(config):
         _set_flash(request, "success", "Configuración guardada correctamente.")

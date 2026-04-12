@@ -20,14 +20,16 @@ from utils.config import DATA_DIR
 class DatabaseManager:
     """Gestiona todas las operaciones CRUD contra la base de datos SQLite."""
 
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None, empresa_id: int = 1):
         """
         Inicializa el gestor y crea las tablas si no existen.
 
         Args:
             db_path: Ruta al archivo .db. Por defecto ``data/bitacora.db``.
+            empresa_id: ID de la empresa activa para multi-tenant.
         """
         self.db_path = Path(db_path) if db_path else DATA_DIR / "bitacora.db"
+        self.empresa_id = empresa_id
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
@@ -46,8 +48,15 @@ class DatabaseManager:
         conn = self._get_connection()
         try:
             conn.executescript("""
+                CREATE TABLE IF NOT EXISTS empresas (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre      TEXT    NOT NULL UNIQUE,
+                    created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS bitacora (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa_id      INTEGER DEFAULT 1,
                     fecha           TEXT    NOT NULL,
                     turno           TEXT    NOT NULL,
                     labor           TEXT    NOT NULL,
@@ -61,17 +70,20 @@ class DatabaseManager:
 
                 CREATE TABLE IF NOT EXISTS labores (
                     id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                    labor             TEXT    NOT NULL UNIQUE,
+                    empresa_id        INTEGER DEFAULT 1,
+                    labor             TEXT    NOT NULL,
                     gsi               TEXT    DEFAULT '',
                     rmr               TEXT    DEFAULT '',
                     soporte           TEXT    DEFAULT '',
                     tipo              TEXT    DEFAULT 'Temporal',
                     fase              TEXT    DEFAULT '',
-                    clasificacion_kpi TEXT    DEFAULT ''
+                    clasificacion_kpi TEXT    DEFAULT '',
+                    UNIQUE(empresa_id, labor)
                 );
 
                 CREATE TABLE IF NOT EXISTS estandar_sostenimiento (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa_id  INTEGER DEFAULT 1,
                     sistema     TEXT    NOT NULL,
                     valor_min   REAL    NOT NULL,
                     valor_max   REAL    NOT NULL,
@@ -81,6 +93,7 @@ class DatabaseManager:
 
                 CREATE TABLE IF NOT EXISTS sostenimiento_diario (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa_id      INTEGER DEFAULT 1,
                     fecha           TEXT    NOT NULL,
                     turno           TEXT    NOT NULL,
                     labor           TEXT    NOT NULL,
@@ -91,6 +104,7 @@ class DatabaseManager:
 
                 CREATE TABLE IF NOT EXISTS registro_fotografico (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa_id      INTEGER DEFAULT 1,
                     labor           TEXT    NOT NULL,
                     imagen_path     TEXT    NOT NULL,
                     descripcion     TEXT    DEFAULT '',
@@ -99,6 +113,7 @@ class DatabaseManager:
 
                 CREATE TABLE IF NOT EXISTS actividad_log (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa_id      INTEGER DEFAULT 1,
                     usuario         TEXT    DEFAULT '',
                     accion          TEXT    NOT NULL,
                     detalle         TEXT    DEFAULT '',
@@ -106,8 +121,37 @@ class DatabaseManager:
                 );
             """)
             conn.commit()
+
+            # ── Migration: add empresa_id to existing tables if missing ──
+            self._migrate_empresa_id(conn)
+            # ── Ensure default empresa exists ──
+            row = conn.execute("SELECT COUNT(*) as cnt FROM empresas").fetchone()
+            if row["cnt"] == 0:
+                conn.execute(
+                    "INSERT INTO empresas (id, nombre) VALUES (1, 'Empresa Principal')"
+                )
+                conn.commit()
         finally:
             conn.close()
+
+    def _migrate_empresa_id(self, conn: sqlite3.Connection) -> None:
+        """Adds empresa_id column to existing tables if they lack it."""
+        allowed_tables = {
+            "bitacora", "labores", "estandar_sostenimiento",
+            "sostenimiento_diario", "registro_fotografico", "actividad_log",
+        }
+        for table in allowed_tables:
+            cols = [row[1] for row in conn.execute(
+                "SELECT * FROM pragma_table_info(?)", (table,)
+            ).fetchall()]
+            if "empresa_id" not in cols:
+                # Table name is from hardcoded allowed_tables set, safe for interpolation
+                conn.execute(
+                    f"ALTER TABLE [{table}] ADD COLUMN empresa_id INTEGER DEFAULT 1"
+                )
+        # Remove UNIQUE constraint on labores.labor (now unique per empresa)
+        # This is handled naturally since new tables have no UNIQUE on labor alone
+        conn.commit()
 
     # ── Helpers internos ─────────────────────────────────────────────────
 
@@ -142,11 +186,12 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 cur = conn.execute(
-                    "SELECT id FROM bitacora WHERE fecha=? AND turno=? AND labor=?",
+                    "SELECT id FROM bitacora WHERE fecha=? AND turno=? AND labor=? AND empresa_id=?",
                     (
                         datos.get("Fecha", ""),
                         datos.get("Turno", ""),
                         datos.get("Labor", ""),
+                        self.empresa_id,
                     ),
                 )
                 if cur.fetchone():
@@ -182,10 +227,11 @@ class DatabaseManager:
     def _insertar_bitacora(self, conn: sqlite3.Connection, datos: dict) -> tuple[bool, str]:
         """Inserta una fila en la tabla bitacora."""
         conn.execute(
-            """INSERT INTO bitacora (fecha, turno, labor, gsi, rmr, soporte,
+            """INSERT INTO bitacora (empresa_id, fecha, turno, labor, gsi, rmr, soporte,
                                      observaciones, imagen_path)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                self.empresa_id,
                 datos.get("Fecha", ""),
                 datos.get("Turno", ""),
                 datos.get("Labor", ""),
@@ -209,7 +255,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                rows = conn.execute("SELECT * FROM bitacora ORDER BY id").fetchall()
+                rows = conn.execute(
+                    "SELECT * FROM bitacora WHERE empresa_id=? ORDER BY id",
+                    (self.empresa_id,),
+                ).fetchall()
                 return [
                     {
                         "id": r["id"],
@@ -248,7 +297,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                rows = conn.execute("SELECT * FROM bitacora ORDER BY id").fetchall()
+                rows = conn.execute(
+                    "SELECT * FROM bitacora WHERE empresa_id=? ORDER BY id",
+                    (self.empresa_id,),
+                ).fetchall()
                 resultados: list[dict] = []
                 for r in rows:
                     registro = {
@@ -299,7 +351,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                cur = conn.execute("SELECT id FROM bitacora WHERE id=?", (record_id,))
+                cur = conn.execute(
+                    "SELECT id FROM bitacora WHERE id=? AND empresa_id=?",
+                    (record_id, self.empresa_id),
+                )
                 if not cur.fetchone():
                     return False, "Registro no encontrado"
 
@@ -325,9 +380,9 @@ class DatabaseManager:
                 if not sets:
                     return False, "No hay campos para actualizar"
 
-                vals.append(record_id)
+                vals.extend([record_id, self.empresa_id])
                 conn.execute(
-                    f"UPDATE bitacora SET {', '.join(sets)} WHERE id=?",
+                    f"UPDATE bitacora SET {', '.join(sets)} WHERE id=? AND empresa_id=?",
                     vals,
                 )
                 conn.commit()
@@ -350,7 +405,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                cur = conn.execute("DELETE FROM bitacora WHERE id=?", (record_id,))
+                cur = conn.execute(
+                    "DELETE FROM bitacora WHERE id=? AND empresa_id=?",
+                    (record_id, self.empresa_id),
+                )
                 conn.commit()
                 if cur.rowcount == 0:
                     return False, "Registro no encontrado"
@@ -369,7 +427,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                rows = conn.execute("SELECT labor FROM labores ORDER BY labor").fetchall()
+                rows = conn.execute(
+                    "SELECT labor FROM labores WHERE empresa_id=? ORDER BY labor",
+                    (self.empresa_id,),
+                ).fetchall()
                 return [r["labor"] for r in rows]
             finally:
                 conn.close()
@@ -403,15 +464,19 @@ class DatabaseManager:
 
             conn = self._get_connection()
             try:
+                existing = conn.execute(
+                    "SELECT id FROM labores WHERE labor=? AND empresa_id=?",
+                    (nombre, self.empresa_id),
+                ).fetchone()
+                if existing:
+                    return False, f"La labor '{nombre}' ya existe"
                 conn.execute(
-                    """INSERT INTO labores (labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi),
+                    """INSERT INTO labores (empresa_id, labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (self.empresa_id, nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi),
                 )
                 conn.commit()
                 return True, f"Labor '{nombre}' agregada correctamente"
-            except sqlite3.IntegrityError:
-                return False, f"La labor '{nombre}' ya existe"
             finally:
                 conn.close()
         except Exception as e:
@@ -427,7 +492,10 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                cur = conn.execute("DELETE FROM labores WHERE labor=?", (nombre,))
+                cur = conn.execute(
+                    "DELETE FROM labores WHERE labor=? AND empresa_id=?",
+                    (nombre, self.empresa_id),
+                )
                 conn.commit()
                 if cur.rowcount == 0:
                     return False, f"La labor '{nombre}' no existe"
@@ -449,7 +517,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 row = conn.execute(
-                    "SELECT * FROM labores WHERE labor=?", (nombre,)
+                    "SELECT * FROM labores WHERE labor=? AND empresa_id=?",
+                    (nombre, self.empresa_id),
                 ).fetchone()
                 if not row:
                     return None
@@ -484,7 +553,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 cur = conn.execute(
-                    "SELECT id FROM labores WHERE labor=?", (nombre_original,)
+                    "SELECT id FROM labores WHERE labor=? AND empresa_id=?",
+                    (nombre_original, self.empresa_id),
                 )
                 if not cur.fetchone():
                     return False, f"La labor '{nombre_original}' no existe"
@@ -511,8 +581,9 @@ class DatabaseManager:
                     return False, "No hay campos para actualizar"
 
                 vals.append(nombre_original)
+                vals.append(self.empresa_id)
                 conn.execute(
-                    f"UPDATE labores SET {', '.join(sets)} WHERE labor=?",
+                    f"UPDATE labores SET {', '.join(sets)} WHERE labor=? AND empresa_id=?",
                     vals,
                 )
                 conn.commit()
@@ -542,8 +613,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM estandar_sostenimiento WHERE sistema=? ORDER BY valor_min",
-                    (sistema,),
+                    "SELECT * FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=? ORDER BY valor_min",
+                    (sistema, self.empresa_id),
                 ).fetchall()
                 return [
                     {
@@ -581,14 +652,16 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 conn.execute(
-                    "DELETE FROM estandar_sostenimiento WHERE sistema=?", (sistema,)
+                    "DELETE FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=?",
+                    (sistema, self.empresa_id),
                 )
                 for fila in datos:
                     conn.execute(
                         """INSERT INTO estandar_sostenimiento
-                               (sistema, valor_min, valor_max, tipo, soporte)
-                           VALUES (?, ?, ?, ?, ?)""",
+                               (empresa_id, sistema, valor_min, valor_max, tipo, soporte)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
                         (
+                            self.empresa_id,
                             sistema,
                             float(fila.get(col_min, 0)),
                             float(fila.get(col_max, 0)),
@@ -623,9 +696,9 @@ class DatabaseManager:
                 # Primero intentar filtrar por tipo
                 row = conn.execute(
                     """SELECT soporte FROM estandar_sostenimiento
-                       WHERE sistema=? AND tipo=? AND valor_min<=? AND valor_max>=?
+                       WHERE sistema=? AND tipo=? AND valor_min<=? AND valor_max>=? AND empresa_id=?
                        LIMIT 1""",
-                    (sistema, tipo, valor, valor),
+                    (sistema, tipo, valor, valor, self.empresa_id),
                 ).fetchone()
 
                 if row:
@@ -634,9 +707,9 @@ class DatabaseManager:
                 # Fallback: sin filtro de tipo
                 row = conn.execute(
                     """SELECT soporte FROM estandar_sostenimiento
-                       WHERE sistema=? AND valor_min<=? AND valor_max>=?
+                       WHERE sistema=? AND valor_min<=? AND valor_max>=? AND empresa_id=?
                        LIMIT 1""",
-                    (sistema, valor, valor),
+                    (sistema, valor, valor, self.empresa_id),
                 ).fetchone()
 
                 return row["soporte"] if row else ""
@@ -667,11 +740,12 @@ class DatabaseManager:
             try:
                 cur = conn.execute(
                     """SELECT id FROM sostenimiento_diario
-                       WHERE fecha=? AND turno=? AND labor=?""",
+                       WHERE fecha=? AND turno=? AND labor=? AND empresa_id=?""",
                     (
                         datos.get("Fecha", ""),
                         datos.get("Turno", ""),
                         datos.get("Labor", ""),
+                        self.empresa_id,
                     ),
                 )
                 if cur.fetchone():
@@ -709,9 +783,10 @@ class DatabaseManager:
         datos_dinamicos = {k: v for k, v in datos.items() if k not in claves_base}
 
         conn.execute(
-            """INSERT INTO sostenimiento_diario (fecha, turno, labor, datos_json, observaciones)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO sostenimiento_diario (empresa_id, fecha, turno, labor, datos_json, observaciones)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
+                self.empresa_id,
                 datos.get("Fecha", ""),
                 datos.get("Turno", ""),
                 datos.get("Labor", ""),
@@ -742,7 +817,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM sostenimiento_diario ORDER BY id"
+                    "SELECT * FROM sostenimiento_diario WHERE empresa_id=? ORDER BY id",
+                    (self.empresa_id,),
                 ).fetchall()
 
                 resultados: list[dict] = []
@@ -793,7 +869,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 row = conn.execute(
-                    "SELECT * FROM sostenimiento_diario WHERE id=?", (record_id,)
+                    "SELECT * FROM sostenimiento_diario WHERE id=? AND empresa_id=?",
+                    (record_id, self.empresa_id),
                 ).fetchone()
                 if not row:
                     return False, "Registro no encontrado"
@@ -817,7 +894,7 @@ class DatabaseManager:
                 conn.execute(
                     """UPDATE sostenimiento_diario
                        SET fecha=?, turno=?, labor=?, datos_json=?, observaciones=?
-                       WHERE id=?""",
+                       WHERE id=? AND empresa_id=?""",
                     (
                         fecha,
                         turno,
@@ -825,6 +902,7 @@ class DatabaseManager:
                         json.dumps(existentes, ensure_ascii=False),
                         observaciones,
                         record_id,
+                        self.empresa_id,
                     ),
                 )
                 conn.commit()
@@ -848,7 +926,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 cur = conn.execute(
-                    "DELETE FROM sostenimiento_diario WHERE id=?", (record_id,)
+                    "DELETE FROM sostenimiento_diario WHERE id=? AND empresa_id=?",
+                    (record_id, self.empresa_id),
                 )
                 conn.commit()
                 if cur.rowcount == 0:
@@ -1037,8 +1116,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 row = conn.execute(
-                    "SELECT * FROM bitacora WHERE labor=? ORDER BY id DESC LIMIT 1",
-                    (labor,),
+                    "SELECT * FROM bitacora WHERE labor=? AND empresa_id=? ORDER BY id DESC LIMIT 1",
+                    (labor, self.empresa_id),
                 ).fetchone()
                 if not row:
                     return None
@@ -1073,8 +1152,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT labor FROM labores WHERE labor LIKE ? ORDER BY labor LIMIT 5",
-                    (f"%{texto}%",),
+                    "SELECT labor FROM labores WHERE labor LIKE ? AND empresa_id=? ORDER BY labor LIMIT 5",
+                    (f"%{texto}%", self.empresa_id),
                 ).fetchall()
                 return [r["labor"] for r in rows]
             finally:
@@ -1104,9 +1183,9 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 conn.execute(
-                    """INSERT INTO registro_fotografico (labor, imagen_path, descripcion)
-                       VALUES (?, ?, ?)""",
-                    (labor, imagen_path, descripcion),
+                    """INSERT INTO registro_fotografico (empresa_id, labor, imagen_path, descripcion)
+                       VALUES (?, ?, ?, ?)""",
+                    (self.empresa_id, labor, imagen_path, descripcion),
                 )
                 conn.commit()
                 return True, "Foto guardada exitosamente"
@@ -1129,8 +1208,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM registro_fotografico WHERE labor=? ORDER BY id",
-                    (labor,),
+                    "SELECT * FROM registro_fotografico WHERE labor=? AND empresa_id=? ORDER BY id",
+                    (labor, self.empresa_id),
                 ).fetchall()
                 return [
                     {
@@ -1162,7 +1241,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 cur = conn.execute(
-                    "DELETE FROM registro_fotografico WHERE id=?", (foto_id,)
+                    "DELETE FROM registro_fotografico WHERE id=? AND empresa_id=?",
+                    (foto_id, self.empresa_id),
                 )
                 conn.commit()
                 if cur.rowcount == 0:
@@ -1190,8 +1270,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 conn.execute(
-                    "INSERT INTO actividad_log (usuario, accion, detalle) VALUES (?, ?, ?)",
-                    (str(usuario)[:100], str(accion)[:50], str(detalle)[:500]),
+                    "INSERT INTO actividad_log (empresa_id, usuario, accion, detalle) VALUES (?, ?, ?, ?)",
+                    (self.empresa_id, str(usuario)[:100], str(accion)[:50], str(detalle)[:500]),
                 )
                 conn.commit()
             finally:
@@ -1213,8 +1293,8 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM actividad_log ORDER BY id DESC LIMIT ?",
-                    (min(limite, 500),),
+                    "SELECT * FROM actividad_log WHERE empresa_id=? ORDER BY id DESC LIMIT ?",
+                    (self.empresa_id, min(limite, 500)),
                 ).fetchall()
                 return self._rows_to_list(rows)
             finally:
@@ -1222,6 +1302,37 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error al obtener actividad: {e}")
             return []
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  EMPRESAS – CRUD
+    # ══════════════════════════════════════════════════════════════════════
+
+    def obtener_empresas(self) -> list[dict]:
+        """Retorna la lista de todas las empresas."""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("SELECT * FROM empresas ORDER BY id").fetchall()
+            return self._rows_to_list(rows)
+        finally:
+            conn.close()
+
+    def crear_empresa(self, nombre: str) -> tuple[bool, str]:
+        """Crea una nueva empresa."""
+        nombre = nombre.strip()
+        if not nombre:
+            return False, "El nombre de la empresa es requerido."
+        conn = self._get_connection()
+        try:
+            existing = conn.execute("SELECT id FROM empresas WHERE nombre = ?", (nombre,)).fetchone()
+            if existing:
+                return False, f"La empresa '{nombre}' ya existe."
+            conn.execute("INSERT INTO empresas (nombre) VALUES (?)", (nombre,))
+            conn.commit()
+            return True, f"Empresa '{nombre}' creada correctamente."
+        except Exception as e:
+            return False, f"Error al crear empresa: {e}"
+        finally:
+            conn.close()
 
 
 # ── Utilidades de módulo ─────────────────────────────────────────────────

@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password    TEXT    NOT NULL,
     nombre      TEXT    DEFAULT '',
     rol         TEXT    DEFAULT 'usuario',
+    empresa_id  INTEGER DEFAULT 1,
     activo      INTEGER DEFAULT 1,
     created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
 );
@@ -74,13 +75,18 @@ def inicializar_tabla_usuarios(db_path: str | Path | None = None) -> None:
     conn = _get_conn(db_path)
     try:
         conn.execute(_CREATE_TABLE)
+        # Migration: add empresa_id column if missing
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
+        if "empresa_id" not in cols:
+            conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INTEGER DEFAULT 1")
+            conn.commit()
         # Verificar si ya existe algún usuario
         row = conn.execute("SELECT COUNT(*) as cnt FROM usuarios").fetchone()
         if row["cnt"] == 0:
             # Crear usuario admin por defecto
             conn.execute(
-                "INSERT INTO usuarios (username, password, nombre, rol) VALUES (?, ?, ?, ?)",
-                ("admin", _hash_password("admin1234"), "Administrador", "admin"),
+                "INSERT INTO usuarios (username, password, nombre, rol, empresa_id) VALUES (?, ?, ?, ?, ?)",
+                ("admin", _hash_password("admin1234"), "Administrador", "admin", 1),
             )
             conn.commit()
     finally:
@@ -109,6 +115,7 @@ def autenticar_usuario(username: str, password: str, db_path: str | Path | None 
             "username": row["username"],
             "nombre": row["nombre"],
             "rol": row["rol"],
+            "empresa_id": row["empresa_id"] if "empresa_id" in row.keys() else 1,
         }
     finally:
         conn.close()
@@ -131,6 +138,7 @@ def crear_usuario(
     password: str,
     nombre: str = "",
     rol: str = "usuario",
+    empresa_id: int = 1,
     db_path: str | Path | None = None,
     activo: int = 1,
 ) -> tuple[bool, str]:
@@ -153,8 +161,8 @@ def crear_usuario(
         if row:
             return False, f"El usuario '{username}' ya existe."
         conn.execute(
-            "INSERT INTO usuarios (username, password, nombre, rol, activo) VALUES (?, ?, ?, ?, ?)",
-            (username, _hash_password(password), nombre.strip(), rol, activo),
+            "INSERT INTO usuarios (username, password, nombre, rol, empresa_id, activo) VALUES (?, ?, ?, ?, ?, ?)",
+            (username, _hash_password(password), nombre.strip(), rol, empresa_id, activo),
         )
         conn.commit()
         return True, f"Usuario '{username}' creado correctamente."

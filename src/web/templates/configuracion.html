@@ -160,21 +160,6 @@
           </label>
         </div>
 
-        <hr />
-        <div class="mb-0">
-          <label class="form-label fw-semibold">
-            <i class="fa-solid fa-lock me-1"></i>Contraseña para editar registros &gt;24h
-          </label>
-          <div class="input-group">
-            <input type="password" name="password_edicion" id="pwdEdicion"
-              class="form-control"
-              value="{{ config.get('password_edicion', 'admin1234') }}" />
-            <button class="btn btn-outline-secondary" type="button"
-              onclick="togglePwd()">
-              <i class="fa-solid fa-eye" id="eyeIcon"></i>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -194,17 +179,4 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-function togglePwd() {
-  const inp = document.getElementById('pwdEdicion');
-  const ico = document.getElementById('eyeIcon');
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    ico.className = 'fa-solid fa-eye-slash';
-  } else {
-    inp.type = 'password';
-    ico.className = 'fa-solid fa-eye';
-  }
-}
-</script>
 {% endblock %}

@@ -9,12 +9,12 @@
     <form method="get" action="/bitacora" class="row g-3 align-items-end">
       <div class="col-md-3">
         <label class="form-label fw-semibold">Labor</label>
-        <select name="labor" class="form-select">
-          <option value="">Todas las labores</option>
-          {% for l in labores %}
-          <option value="{{ l }}" {% if labor == l %}selected{% endif %}>{{ l }}</option>
-          {% endfor %}
-        </select>
+        <div class="position-relative">
+          <input type="text" name="labor" id="filterLabor" class="form-control" autocomplete="off"
+            value="{{ labor }}" placeholder="Escriba para buscar labor..." />
+          <div id="dropdownFilterLabor" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+        </div>
       </div>
       <div class="col-md-2">
         <label class="form-label fw-semibold">Fecha inicio</label>
@@ -187,7 +187,7 @@
               <td class="text-center">
                 {% if r.get('imagen_path') %}
                 <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-ver-imagen"
-                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] | urlencode }}"
+                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').replace('\\', '/').split('/')[-1] | urlencode }}"
                   title="Ver imagen">
                   <i class="fa-solid fa-image me-1"></i><small>Ver foto</small>
                 </button>
@@ -314,6 +314,10 @@
 
 {% block extra_scripts %}
 <script>
+// Labor filter typeahead
+const _labores = {{ labores | tojson }};
+initLaborTypeahead('filterLabor', 'dropdownFilterLabor', _labores, { showAll: true });
+
 // Use event delegation to avoid inline onclick + XSS risk
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.btn-ver-imagen');
