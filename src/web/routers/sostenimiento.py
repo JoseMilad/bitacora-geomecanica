@@ -1,5 +1,6 @@
 """Router de Sostenimiento Diario — CRUD completo."""
 import sys
+from datetime import datetime
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -15,6 +16,28 @@ from src.models.bitacora_model import BitacoraModel
 from src.utils.config import TURNOS, APP_VERSION, COLUMNAS_SOSTENIMIENTO
 from src.utils.config_manager import DEFAULTS, cargar_config
 from src.utils.helpers import _obtener_turno_automatico
+
+
+def _fecha_html_a_app(fecha_html: str) -> str:
+    """Convierte fecha de formato HTML (YYYY-MM-DD) a formato app (dd/mm/YYYY)."""
+    if not fecha_html:
+        return fecha_html
+    try:
+        dt = datetime.strptime(fecha_html, "%Y-%m-%d")
+        return dt.strftime("%d/%m/%Y")
+    except ValueError:
+        return fecha_html
+
+
+def _fecha_app_a_html(fecha_app: str) -> str:
+    """Convierte fecha de formato app (dd/mm/YYYY) a formato HTML (YYYY-MM-DD)."""
+    if not fecha_app:
+        return fecha_app
+    try:
+        dt = datetime.strptime(fecha_app, "%d/%m/%Y")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return fecha_app
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -64,8 +87,9 @@ async def listar_sostenimiento(
     labor: str = "",
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    fecha_app = _fecha_html_a_app(fecha) if fecha else None
     df = model.obtener_sostenimiento(
-        fecha=fecha or None,
+        fecha=fecha_app,
         labor=labor or None,
     )
     registros = df.to_dict(orient="records") if not df.empty else []
@@ -96,9 +120,11 @@ async def totales_sostenimiento(
     labor: str = "",
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    fi_app = _fecha_html_a_app(fecha_inicio) if fecha_inicio else None
+    ff_app = _fecha_html_a_app(fecha_fin) if fecha_fin else None
     df = model.obtener_totales_sostenimiento(
-        fecha_inicio=fecha_inicio or None,
-        fecha_fin=fecha_fin or None,
+        fecha_inicio=fi_app,
+        fecha_fin=ff_app,
         labor=labor or None,
     )
     totales = df.to_dict(orient="records") if df is not None and not df.empty else []
@@ -152,7 +178,7 @@ async def nuevo_sostenimiento_save(request: Request):
     forzar = form.get("forzar", "")
 
     datos = {
-        "Fecha": fecha,
+        "Fecha": _fecha_html_a_app(fecha),
         "Turno": turno,
         "Labor": labor,
         "Observaciones": observaciones,
@@ -223,6 +249,9 @@ async def editar_sostenimiento_form(request: Request, id: int):
         except Exception:
             pass
 
+    # Convert date for HTML date input (needs YYYY-MM-DD)
+    registro["Fecha"] = _fecha_app_a_html(registro.get("Fecha", ""))
+
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "sostenimiento/form.html", context={
@@ -249,7 +278,7 @@ async def editar_sostenimiento_save(request: Request, id: int):
     observaciones = form.get("observaciones", "")
 
     datos = {
-        "Fecha": fecha,
+        "Fecha": _fecha_html_a_app(fecha),
         "Turno": turno,
         "Labor": labor,
         "Observaciones": observaciones,
@@ -263,18 +292,7 @@ async def editar_sostenimiento_save(request: Request, id: int):
             datos[col] = 0
 
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
-    registros_list = model.db.obtener_sostenimiento()
-    indice = None
-    for i, r in enumerate(registros_list):
-        if r.get("id") == id:
-            indice = i
-            break
-
-    if indice is None:
-        _set_flash(request, "error", "Registro no encontrado.")
-        return RedirectResponse(url="/sostenimiento", status_code=303)
-
-    ok, msg = model.editar_sostenimiento(indice, datos)
+    ok, msg = model.editar_sostenimiento_por_id(id, datos)
     if ok:
         _set_flash(request, "success", msg)
     else:
@@ -290,18 +308,7 @@ async def eliminar_sostenimiento(request: Request, id: int):
         return RedirectResponse(url="/sostenimiento", status_code=303)
 
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
-    registros_list = model.db.obtener_sostenimiento()
-    indice = None
-    for i, r in enumerate(registros_list):
-        if r.get("id") == id:
-            indice = i
-            break
-
-    if indice is None:
-        _set_flash(request, "error", "Registro no encontrado.")
-        return RedirectResponse(url="/sostenimiento", status_code=303)
-
-    ok, msg = model.eliminar_sostenimiento(indice)
+    ok, msg = model.eliminar_sostenimiento_por_id(id)
     if ok:
         _set_flash(request, "success", msg)
     else:

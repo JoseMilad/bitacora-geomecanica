@@ -98,13 +98,13 @@ async def nueva_labor_save(
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.agregar_labor(
-        nombre_labor=nombre,
-        gsi=gsi,
-        rmr=rmr,
-        soporte=soporte,
+        nombre_labor=nombre.upper(),
+        gsi=gsi.upper(),
+        rmr=rmr.upper(),
+        soporte=soporte.upper(),
         tipo=tipo,
-        fase=fase,
-        clasificacion_kpi=clasificacion_kpi,
+        fase=fase.upper(),
+        clasificacion_kpi=clasificacion_kpi.upper(),
     )
     if ok:
         _set_flash(request, "success", msg)
@@ -113,8 +113,10 @@ async def nueva_labor_save(
         "request": request,
         "app_version": APP_VERSION,
         "labor": {
-            "Labor": nombre, "GSI": gsi, "RMR": rmr, "Soporte": soporte,
-            "Tipo": tipo, "Fase": fase, "Clasificacion_KPI": clasificacion_kpi,
+            "Labor": nombre.upper(), "GSI": gsi.upper(), "RMR": rmr.upper(),
+            "Soporte": soporte.upper(),
+            "Tipo": tipo, "Fase": fase.upper(),
+            "Clasificacion_KPI": clasificacion_kpi.upper(),
         },
         "action": "/labores/nueva",
         "titulo": "Nueva Labor",
@@ -182,12 +184,12 @@ async def editar_labor_save(
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     nuevos_datos = {
         "Labor": nombre,
-        "GSI": gsi,
-        "RMR": rmr,
-        "Soporte": soporte,
+        "GSI": gsi.upper(),
+        "RMR": rmr.upper(),
+        "Soporte": soporte.upper(),
         "Tipo": tipo,
-        "Fase": fase,
-        "Clasificacion_KPI": clasificacion_kpi,
+        "Fase": fase.upper(),
+        "Clasificacion_KPI": clasificacion_kpi.upper(),
     }
     ok, msg = model.db.editar_labor(nombre, nuevos_datos)
     if ok:
