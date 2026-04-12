@@ -16,8 +16,10 @@
             {% if not labor %}
             <div class="col-12">
               <label class="form-label fw-semibold">Nombre de Labor <span class="text-danger">*</span></label>
-              <input type="text" name="nombre" class="form-control" required
-                placeholder="Ej: Galería Principal Norte" />
+              <input type="text" name="nombre" id="inputNombreLabor" class="form-control" required
+                placeholder="Ej: TJ01 Galería Principal Norte"
+                oninput="detectarClasificacion(this.value)" />
+              <small class="text-muted">El tipo y fase se detectarán automáticamente según el prefijo del nombre.</small>
             </div>
             {% else %}
             <div class="col-12">
@@ -50,24 +52,35 @@
             <!-- Tipo -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Tipo</label>
-              <select name="tipo" class="form-select">
+              <select name="tipo" id="selectTipo" class="form-select">
                 <option value="Temporal" {% if not labor or labor.get('Tipo') == 'Temporal' %}selected{% endif %}>Temporal</option>
                 <option value="Permanente" {% if labor and labor.get('Tipo') == 'Permanente' %}selected{% endif %}>Permanente</option>
               </select>
+              <small id="infoTipoAuto" class="text-success" style="display:none;">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Detectado automáticamente
+              </small>
             </div>
             <!-- Fase -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Fase</label>
-              <input type="text" name="fase" class="form-control"
+              <input type="text" name="fase" id="inputFase" class="form-control"
                 value="{{ labor.get('Fase', '') if labor else '' }}"
                 placeholder="Fase de minado" />
+              <small id="infoFaseAuto" class="text-success" style="display:none;">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Detectada automáticamente
+              </small>
             </div>
-            <!-- Clasificación KPI -->
+            <!-- Clasificación KPI — Próximamente -->
             <div class="col-md-4">
-              <label class="form-label fw-semibold">Clasificación KPI</label>
+              <label class="form-label fw-semibold">
+                Clasificación KPI
+                <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">Próximamente</span>
+              </label>
               <input type="text" name="clasificacion_kpi" class="form-control"
                 value="{{ labor.get('Clasificacion_KPI', '') if labor else '' }}"
-                placeholder="Clasificación KPI" />
+                placeholder="No disponible aún"
+                disabled title="Esta función estará disponible próximamente" />
+              <input type="hidden" name="clasificacion_kpi" value="{{ labor.get('Clasificacion_KPI', '') if labor else '' }}" />
             </div>
           </div>
 
@@ -84,4 +97,39 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let _detectTimer = null;
+async function detectarClasificacion(nombre) {
+  clearTimeout(_detectTimer);
+  if (!nombre || nombre.length < 2) return;
+  _detectTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`/labores/detectar-clasificacion?nombre=${encodeURIComponent(nombre)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const selectTipo = document.getElementById('selectTipo');
+      const inputFase = document.getElementById('inputFase');
+      const infoTipo = document.getElementById('infoTipoAuto');
+      const infoFase = document.getElementById('infoFaseAuto');
+      if (data.tipo && selectTipo) {
+        selectTipo.value = data.tipo;
+        if (infoTipo) infoTipo.style.display = 'inline';
+      } else {
+        if (infoTipo) infoTipo.style.display = 'none';
+      }
+      if (data.fase && inputFase) {
+        inputFase.value = data.fase;
+        if (infoFase) infoFase.style.display = 'inline';
+      } else {
+        if (infoFase) infoFase.style.display = 'none';
+      }
+    } catch(e) {
+      console.warn('detectarClasificacion error:', e);
+    }
+  }, 400);
+}
+</script>
 {% endblock %}

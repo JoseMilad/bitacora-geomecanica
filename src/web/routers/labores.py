@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import APP_VERSION
+from src.utils.clasificaciones import detectar_clasificacion, cargar_clasificaciones
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -107,6 +108,20 @@ async def nueva_labor_save(
         "flash": {"tipo": "error", "mensaje": msg},
         "active_page": "labores",
     })
+
+
+# ── Detectar clasificación por nombre (para autocompletado en el formulario) ──
+@router.get("/detectar-clasificacion")
+async def detectar_clasificacion_route(nombre: str = ""):
+    """Detecta el tipo y fase de una labor a partir de su nombre y el mapa de clasificaciones."""
+    if not nombre:
+        return JSONResponse({"tipo": "", "fase": ""})
+    # Intentar primero Temporal, luego Permanente
+    for tipo in ("Temporal", "Permanente"):
+        clasificacion, fase = detectar_clasificacion(nombre, tipo)
+        if clasificacion:
+            return JSONResponse({"tipo": tipo, "fase": fase, "clasificacion": clasificacion})
+    return JSONResponse({"tipo": "", "fase": ""})
 
 
 # ── Datos JSON (para autocompletado en formularios) ───────────────────────────

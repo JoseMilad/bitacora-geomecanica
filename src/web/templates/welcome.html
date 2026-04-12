@@ -112,6 +112,13 @@
     <h1 class="welcome-title">Bitácora Geomecánica</h1>
     <p class="welcome-subtitle">Plataforma empresarial para gestión de bitácora geomecánica minera</p>
 
+    {% set flash = request.session.pop('flash', None) %}
+    {% if flash and flash.mensaje %}
+    <div class="alert alert-{{ 'success' if flash.tipo == 'success' else ('warning' if flash.tipo == 'warning' else 'danger') }} mb-3" style="max-width:500px;margin:0 auto 1rem auto;">
+      {{ flash.mensaje }}
+    </div>
+    {% endif %}
+
     {% if user %}
     <!-- Usuario autenticado: mostrar saludo y menú de navegación -->
     <div class="user-greeting">

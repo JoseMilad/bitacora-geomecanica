@@ -7,6 +7,45 @@
 {% endblock %}
 
 {% block content %}
+<!-- Filtro de período -->
+<div class="card shadow-sm border-0 mt-3 mb-1">
+  <div class="card-body py-2">
+    <form method="get" action="/dashboard" class="row g-2 align-items-end">
+      <!-- Mantener filtros de sostenimiento al cambiar período -->
+      <input type="hidden" name="sost_col" value="{{ sost_col }}" />
+      <input type="hidden" name="labor_filter" value="{{ labor_filter }}" />
+      <div class="col-auto">
+        <label class="form-label small fw-semibold mb-1">
+          <i class="fa-solid fa-calendar me-1"></i>Desde
+        </label>
+        <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control form-control-sm" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-semibold mb-1">Hasta</label>
+        <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control form-control-sm" />
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="fa-solid fa-filter me-1"></i>Filtrar período
+        </button>
+        {% if fecha_inicio or fecha_fin %}
+        <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-xmark me-1"></i>Limpiar
+        </a>
+        {% endif %}
+      </div>
+      {% if fecha_inicio or fecha_fin %}
+      <div class="col-auto">
+        <span class="badge bg-info text-dark">
+          <i class="fa-solid fa-filter me-1"></i>
+          Período: {{ fecha_inicio or '…' }} → {{ fecha_fin or '…' }}
+        </span>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
 <!-- KPI Cards -->
 <div class="row g-4 mt-1">
   <div class="col-sm-6 col-xl-3">
@@ -37,7 +76,7 @@
         <i class="fa-solid fa-calendar-days text-accent fa-lg"></i>
       </div>
       <div>
-        <p class="kpi-label">Registros Último Mes</p>
+        <p class="kpi-label">{{ kpi_periodo_label }}</p>
         <h3 class="kpi-value">{{ registros_mes }}</h3>
       </div>
     </div>
@@ -88,6 +127,9 @@
 <div class="card shadow-sm border-0 mb-3">
   <div class="card-body py-2">
     <form method="get" action="/dashboard" class="row g-2 align-items-end">
+      <!-- Mantener filtro de período -->
+      <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}" />
+      <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}" />
       <div class="col-md-4">
         <label class="form-label small fw-semibold mb-1">Tipo de Soporte</label>
         <select name="sost_col" class="form-select form-select-sm" onchange="this.form.submit()">

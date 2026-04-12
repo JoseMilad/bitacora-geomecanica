@@ -199,18 +199,13 @@ async def nuevo_bitacora_save(request: Request):
 @router.get("/{id}/editar", response_class=HTMLResponse)
 async def editar_bitacora_form(request: Request, id: int):
     model = BitacoraModel()
-    df = model.obtener_bitacora()
     registro = None
-    indice_real = None
 
-    if not df.empty:
-        # Buscar por posición (índice 0-based en el DataFrame)
-        registros_list = model.db.obtener_bitacora()
-        for i, r in enumerate(registros_list):
-            if r.get("id") == id or (not r.get("id") and i == id):
-                registro = r
-                indice_real = i
-                break
+    registros_list = model.db.obtener_bitacora()
+    for r in registros_list:
+        if r.get("id") == id:
+            registro = r
+            break
 
     if registro is None:
         _set_flash(request, "error", "Registro no encontrado.")
@@ -270,7 +265,7 @@ async def editar_bitacora_save(request: Request, id: int):
         datos["imagen_path"] = imagen_path
 
     model = BitacoraModel()
-    # Encontrar índice en el DataFrame (0-based)
+    # Verificar que el registro existe y obtener su índice
     registros_list = model.db.obtener_bitacora()
     indice = None
     for i, r in enumerate(registros_list):

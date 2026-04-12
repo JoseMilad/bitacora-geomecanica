@@ -138,24 +138,85 @@
               <input type="file" name="imagen" class="form-control" accept="image/*"
                 id="inputImagen" onchange="previsualizarImagen(this)" />
               <small class="text-muted">Formatos aceptados: JPG, PNG, GIF, WEBP. Tamaño máximo recomendado: 5 MB</small>
+
+              <!-- Vista previa + editor de imagen -->
               <div id="previewImagen" class="mt-2" style="display:none;">
-                <img id="imgPreview" src="" alt="Vista previa" class="img-thumbnail" style="max-height:200px;" />
-                <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="limpiarImagen()">
-                  <i class="fa-solid fa-xmark me-1"></i>Quitar
-                </button>
+                <div class="card border shadow-sm">
+                  <div class="card-header bg-light border-bottom py-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="fw-semibold small"><i class="fa-solid fa-pen-to-square me-1"></i>Editor de imagen</span>
+                      <!-- Herramienta -->
+                      <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary active" id="btnHerramientaLapiz"
+                          onclick="setHerramienta('lapiz')" title="Lápiz (dibujar)">
+                          <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnHerramientaLinea"
+                          onclick="setHerramienta('linea')" title="Línea recta">
+                          <i class="fa-solid fa-minus"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnHerramientaRectangulo"
+                          onclick="setHerramienta('rectangulo')" title="Rectángulo">
+                          <i class="fa-regular fa-square"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnHerramientaTexto"
+                          onclick="setHerramienta('texto')" title="Texto">
+                          <i class="fa-solid fa-font"></i>
+                        </button>
+                      </div>
+                      <!-- Color -->
+                      <label class="small mb-0" title="Color de trazo">
+                        <i class="fa-solid fa-palette me-1"></i>
+                        <input type="color" id="colorTrazo" value="#ff0000" style="width:32px;height:24px;padding:1px;border-radius:4px;cursor:pointer;" />
+                      </label>
+                      <!-- Tamaño de trazo -->
+                      <label class="small mb-0 d-flex align-items-center gap-1" title="Grosor">
+                        <i class="fa-solid fa-pen-ruler"></i>
+                        <input type="range" id="tamañoTrazo" min="1" max="20" value="3" style="width:70px;" />
+                        <span id="tamañoValor">3</span>px
+                      </label>
+                      <!-- Acciones -->
+                      <button type="button" class="btn btn-sm btn-outline-warning" onclick="deshacerUltimaAccion()" title="Deshacer">
+                        <i class="fa-solid fa-rotate-left"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-danger" onclick="limpiarAnotaciones()" title="Limpiar anotaciones">
+                        <i class="fa-solid fa-eraser me-1"></i>Limpiar
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="limpiarImagen()">
+                        <i class="fa-solid fa-xmark me-1"></i>Quitar foto
+                      </button>
+                    </div>
+                  </div>
+                  <div class="card-body p-1 text-center bg-dark position-relative" style="overflow:auto;">
+                    <canvas id="editorCanvas" style="cursor:crosshair;max-width:100%;display:block;margin:0 auto;"></canvas>
+                  </div>
+                  <div class="card-footer bg-light py-1">
+                    <small class="text-muted">
+                      <i class="fa-solid fa-circle-info me-1"></i>
+                      Dibuja sobre la imagen antes de guardar. Los cambios se incluirán en el registro.
+                    </small>
+                  </div>
+                </div>
               </div>
+
               {% if registro and registro.get('imagen_path') %}
               <div class="mt-2">
                 <small class="text-muted">Imagen actual:</small>
-                <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
-                  alt="Imagen actual" class="img-thumbnail d-block mt-1" style="max-height:150px;" />
+                <div>
+                  <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+                    alt="Imagen actual" class="img-thumbnail mt-1" style="max-height:150px;" />
+                  <small class="text-muted d-block mt-1">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Selecciona un nuevo archivo solo si deseas reemplazar la imagen actual.
+                  </small>
+                </div>
               </div>
               {% endif %}
             </div>
           </div>
 
           <div class="mt-4 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary" id="btnGuardar">
               <i class="fa-solid fa-save me-1"></i>Guardar
             </button>
             <a href="/bitacora" class="btn btn-outline-secondary">
@@ -171,7 +232,7 @@
 
 {% block extra_scripts %}
 <script>
-// Lista de labores para filtrado local
+// ── Lista de labores para filtrado local ────────────────────────────────────
 const todasLabores = {{ labores | tojson }};
 
 function filtrarLabores(texto) {
@@ -242,15 +303,31 @@ async function calcularSoporte() {
   }
 }
 
-// ── Vista previa de imagen ───────────────────────────────────────
+// ── Editor de imagen en canvas ──────────────────────────────────────────────
+let _canvas = null;
+let _ctx = null;
+let _dibujando = false;
+let _herramienta = 'lapiz';
+let _historial = [];
+let _startX = 0, _startY = 0;
+let _snapAnotaciones = null; // snapshot de anotaciones actuales
+
+function setHerramienta(h) {
+  _herramienta = h;
+  ['lapiz','linea','rectangulo','texto'].forEach(t => {
+    const btn = document.getElementById('btnHerramienta' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.classList.toggle('active', t === h);
+  });
+  if (_canvas) _canvas.style.cursor = h === 'texto' ? 'text' : 'crosshair';
+}
+
 function previsualizarImagen(input) {
   const preview = document.getElementById('previewImagen');
-  const img = document.getElementById('imgPreview');
   if (input.files && input.files[0]) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      img.src = e.target.result;
       preview.style.display = 'block';
+      _inicializarEditor(e.target.result, input.files[0].name);
     };
     reader.readAsDataURL(input.files[0]);
   } else {
@@ -258,12 +335,173 @@ function previsualizarImagen(input) {
   }
 }
 
+function _inicializarEditor(dataUrl, filename) {
+  _canvas = document.getElementById('editorCanvas');
+  _ctx = _canvas.getContext('2d');
+  _historial = [];
+  const img = new Image();
+  img.onload = function() {
+    _canvas.width = img.width;
+    _canvas.height = img.height;
+    _ctx.drawImage(img, 0, 0);
+    _historial.push(_canvas.toDataURL());
+    _snapAnotaciones = null;
+    _canvas._baseImg = img;
+  };
+  img.src = dataUrl;
+  // Event listeners
+  _canvas.removeEventListener('mousedown', _onMouseDown);
+  _canvas.removeEventListener('mousemove', _onMouseMove);
+  _canvas.removeEventListener('mouseup', _onMouseUp);
+  _canvas.addEventListener('mousedown', _onMouseDown);
+  _canvas.addEventListener('mousemove', _onMouseMove);
+  _canvas.addEventListener('mouseup', _onMouseUp);
+  _canvas.addEventListener('mouseleave', _onMouseUp);
+  // Touch
+  _canvas.removeEventListener('touchstart', _onTouchStart);
+  _canvas.removeEventListener('touchmove', _onTouchMove);
+  _canvas.removeEventListener('touchend', _onMouseUp);
+  _canvas.addEventListener('touchstart', _onTouchStart, { passive: false });
+  _canvas.addEventListener('touchmove', _onTouchMove, { passive: false });
+  _canvas.addEventListener('touchend', _onMouseUp);
+
+  // Sincronizar input grosor
+  const rangeEl = document.getElementById('tamañoTrazo');
+  const valEl = document.getElementById('tamañoValor');
+  rangeEl.oninput = () => { valEl.textContent = rangeEl.value; };
+}
+
+function _getPos(e) {
+  const rect = _canvas.getBoundingClientRect();
+  const scaleX = _canvas.width / rect.width;
+  const scaleY = _canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+  };
+}
+function _getTouchPos(e) {
+  const t = e.touches[0];
+  return _getPos(t);
+}
+
+function _onTouchStart(e) { e.preventDefault(); _onMouseDown({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); }
+function _onTouchMove(e) { e.preventDefault(); _onMouseMove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); }
+
+function _colorTrazo() { return document.getElementById('colorTrazo').value; }
+function _grosor() { return parseInt(document.getElementById('tamañoTrazo').value) || 3; }
+
+function _onMouseDown(e) {
+  if (!_canvas) return;
+  _dibujando = true;
+  const pos = _getPos(e);
+  _startX = pos.x; _startY = pos.y;
+  if (_herramienta === 'lapiz') {
+    _ctx.beginPath();
+    _ctx.moveTo(_startX, _startY);
+  } else if (_herramienta === 'texto') {
+    _dibujando = false;
+    const txt = prompt('Ingrese el texto:');
+    if (txt) {
+      _ctx.font = `bold ${_grosor() * 6 + 12}px sans-serif`;
+      _ctx.fillStyle = _colorTrazo();
+      _ctx.fillText(txt, _startX, _startY);
+      _historial.push(_canvas.toDataURL());
+    }
+  } else {
+    // Para línea/rectángulo: guardar snapshot del estado actual
+    _snapAnotaciones = _canvas.toDataURL();
+  }
+}
+
+function _onMouseMove(e) {
+  if (!_dibujando || !_canvas) return;
+  const pos = _getPos(e);
+  _ctx.strokeStyle = _colorTrazo();
+  _ctx.lineWidth = _grosor();
+  _ctx.lineCap = 'round';
+  _ctx.lineJoin = 'round';
+
+  if (_herramienta === 'lapiz') {
+    _ctx.lineTo(pos.x, pos.y);
+    _ctx.stroke();
+  } else if (_herramienta === 'linea' || _herramienta === 'rectangulo') {
+    // Restaurar snapshot y redibujar la forma preview
+    const tmpImg = new Image();
+    tmpImg.onload = function() {
+      _ctx.clearRect(0, 0, _canvas.width, _canvas.height);
+      _ctx.drawImage(tmpImg, 0, 0);
+      _ctx.strokeStyle = _colorTrazo();
+      _ctx.lineWidth = _grosor();
+      _ctx.lineCap = 'round';
+      if (_herramienta === 'linea') {
+        _ctx.beginPath();
+        _ctx.moveTo(_startX, _startY);
+        _ctx.lineTo(pos.x, pos.y);
+        _ctx.stroke();
+      } else {
+        _ctx.strokeRect(_startX, _startY, pos.x - _startX, pos.y - _startY);
+      }
+    };
+    tmpImg.src = _snapAnotaciones;
+  }
+}
+
+function _onMouseUp(e) {
+  if (!_dibujando || !_canvas) return;
+  _dibujando = false;
+  if (_herramienta === 'lapiz') {
+    _ctx.closePath();
+  }
+  _historial.push(_canvas.toDataURL());
+  _snapAnotaciones = _canvas.toDataURL();
+}
+
+function deshacerUltimaAccion() {
+  if (_historial.length <= 1) return;
+  _historial.pop();
+  const img = new Image();
+  img.onload = function() {
+    _ctx.clearRect(0, 0, _canvas.width, _canvas.height);
+    _ctx.drawImage(img, 0, 0);
+    _snapAnotaciones = _canvas.toDataURL();
+  };
+  img.src = _historial[_historial.length - 1];
+}
+
+function limpiarAnotaciones() {
+  if (!_canvas || !_canvas._baseImg) return;
+  _ctx.clearRect(0, 0, _canvas.width, _canvas.height);
+  _ctx.drawImage(_canvas._baseImg, 0, 0);
+  _historial = [_canvas.toDataURL()];
+  _snapAnotaciones = _canvas.toDataURL();
+}
+
 function limpiarImagen() {
   const input = document.getElementById('inputImagen');
   const preview = document.getElementById('previewImagen');
   input.value = '';
   preview.style.display = 'none';
+  _canvas = null;
+  _ctx = null;
+  _historial = [];
 }
+
+// Al guardar el formulario: convertir canvas a Blob y reemplazar el input file
+document.getElementById('btnGuardar').closest('form').addEventListener('submit', async function(evt) {
+  if (!_canvas || _historial.length === 0) return; // sin imagen editada
+  evt.preventDefault();
+  // Convertir canvas a blob
+  _canvas.toBlob(async function(blob) {
+    if (!blob) { evt.target.submit(); return; }
+    const input = document.getElementById('inputImagen');
+    const dt = new DataTransfer();
+    const ext = (input.files[0]?.name || 'imagen.png').replace(/.*\./, '');
+    dt.items.add(new File([blob], `imagen_editada.${ext || 'png'}`, { type: blob.type }));
+    input.files = dt.files;
+    evt.target.submit();
+  }, 'image/png');
+});
 </script>
 {% endblock %}
 

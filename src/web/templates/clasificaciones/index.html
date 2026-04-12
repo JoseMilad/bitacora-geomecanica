@@ -125,41 +125,15 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-header bg-white border-0 fw-semibold">
         <i class="fa-solid fa-chart-pie me-2 text-secondary"></i>Clasificaciones KPI
+        <span class="badge bg-warning text-dark ms-2" style="font-size:0.65rem;">Próximamente</span>
       </div>
-      <div class="card-body">
-        <p class="text-muted small mb-2">
-          Las clasificaciones KPI se asignan a las labores para agrupar reportes.
+      <div class="card-body d-flex flex-column align-items-center justify-content-center text-center py-4">
+        <i class="fa-solid fa-clock fa-3x text-warning mb-3"></i>
+        <h6 class="fw-semibold mb-2">Función en desarrollo</h6>
+        <p class="text-muted small mb-0">
+          La clasificación KPI estará disponible próximamente.<br>
+          Esta sección se habilitará una vez que se defina la estructura de KPIs.
         </p>
-        {% if kpis %}
-        <ul class="list-group list-group-flush mb-3">
-          {% for kpi in kpis %}
-          <li class="list-group-item d-flex justify-content-between align-items-center py-2">
-            <span>{{ kpi }}</span>
-            {% if is_admin %}
-            <form method="POST" action="/clasificaciones/kpi/eliminar" class="d-inline"
-              onsubmit="return confirm('¿Eliminar KPI {{ kpi }}?')">
-              <input type="hidden" name="nombre_kpi" value="{{ kpi }}" />
-              <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </form>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-muted small mb-3">No hay clasificaciones KPI definidas.</p>
-        {% endif %}
-
-        <form method="POST" action="/clasificaciones/kpi/agregar">
-          <div class="input-group input-group-sm">
-            <input type="text" name="nombre_kpi" class="form-control"
-              placeholder="Ej: Producción" required />
-            <button type="submit" class="btn btn-primary">
-              <i class="fa-solid fa-plus me-1"></i>Agregar
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   </div>

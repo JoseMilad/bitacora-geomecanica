@@ -132,6 +132,7 @@ def crear_usuario(
     nombre: str = "",
     rol: str = "usuario",
     db_path: str | Path | None = None,
+    activo: int = 1,
 ) -> tuple[bool, str]:
     """
     Crea un nuevo usuario.
@@ -152,8 +153,8 @@ def crear_usuario(
         if row:
             return False, f"El usuario '{username}' ya existe."
         conn.execute(
-            "INSERT INTO usuarios (username, password, nombre, rol) VALUES (?, ?, ?, ?)",
-            (username, _hash_password(password), nombre.strip(), rol),
+            "INSERT INTO usuarios (username, password, nombre, rol, activo) VALUES (?, ?, ?, ?, ?)",
+            (username, _hash_password(password), nombre.strip(), rol, activo),
         )
         conn.commit()
         return True, f"Usuario '{username}' creado correctamente."
