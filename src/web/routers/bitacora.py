@@ -1,5 +1,6 @@
 """Router de Bitácora — CRUD completo."""
 import sys
+import uuid
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -8,17 +9,25 @@ for _p in (str(_ROOT), str(_ROOT / "src")):
         sys.path.insert(0, _p)
 
 from typing import Optional
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
-from src.utils.config import TURNOS, APP_VERSION
+from src.utils.config import TURNOS, APP_VERSION, DATA_DIR
 from src.utils.config_manager import cargar_config
 from src.utils.helpers import _obtener_turno_automatico
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
+
+PAGE_SIZE = 50
+
+# Directorio para imágenes subidas
+UPLOAD_DIR = DATA_DIR / "images"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
 PAGE_SIZE = 50
 
@@ -127,17 +136,29 @@ async def nuevo_bitacora_form(request: Request):
 
 # ── Nuevo registro — guardar ──────────────────────────────────────────────────
 @router.post("/nuevo")
-async def nuevo_bitacora_save(
-    request: Request,
-    fecha: str = Form(...),
-    turno: str = Form(...),
-    labor: str = Form(...),
-    gsi: str = Form(""),
-    rmr: str = Form(""),
-    soporte: str = Form(""),
-    observaciones: str = Form(""),
-    forzar: str = Form(""),
-):
+async def nuevo_bitacora_save(request: Request):
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    labor = form.get("labor", "")
+    gsi = form.get("gsi", "")
+    rmr = form.get("rmr", "")
+    soporte = form.get("soporte", "")
+    observaciones = form.get("observaciones", "")
+    forzar = form.get("forzar", "")
+
+    # Procesar imagen subida
+    imagen_path = ""
+    imagen_file = form.get("imagen")
+    if imagen_file and hasattr(imagen_file, "filename") and imagen_file.filename:
+        ext = Path(imagen_file.filename).suffix.lower()
+        if ext in _ALLOWED_EXTENSIONS:
+            filename = f"{uuid.uuid4().hex}{ext}"
+            filepath = UPLOAD_DIR / filename
+            content = await imagen_file.read()
+            filepath.write_bytes(content)
+            imagen_path = str(filepath)
+
     datos = {
         "Fecha": fecha,
         "Turno": turno,
@@ -146,6 +167,7 @@ async def nuevo_bitacora_save(
         "RMR": rmr,
         "Soporte": soporte,
         "Observaciones": observaciones,
+        "imagen_path": imagen_path,
     }
     model = BitacoraModel()
     if forzar == "1":
@@ -215,17 +237,28 @@ async def editar_bitacora_form(request: Request, id: int):
 
 # ── Editar — guardar ──────────────────────────────────────────────────────────
 @router.post("/{id}/editar")
-async def editar_bitacora_save(
-    request: Request,
-    id: int,
-    fecha: str = Form(...),
-    turno: str = Form(...),
-    labor: str = Form(...),
-    gsi: str = Form(""),
-    rmr: str = Form(""),
-    soporte: str = Form(""),
-    observaciones: str = Form(""),
-):
+async def editar_bitacora_save(request: Request, id: int):
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    labor = form.get("labor", "")
+    gsi = form.get("gsi", "")
+    rmr = form.get("rmr", "")
+    soporte = form.get("soporte", "")
+    observaciones = form.get("observaciones", "")
+
+    # Procesar imagen subida
+    imagen_path = ""
+    imagen_file = form.get("imagen")
+    if imagen_file and hasattr(imagen_file, "filename") and imagen_file.filename:
+        ext = Path(imagen_file.filename).suffix.lower()
+        if ext in _ALLOWED_EXTENSIONS:
+            filename = f"{uuid.uuid4().hex}{ext}"
+            filepath = UPLOAD_DIR / filename
+            content = await imagen_file.read()
+            filepath.write_bytes(content)
+            imagen_path = str(filepath)
+
     datos = {
         "Fecha": fecha,
         "Turno": turno,
@@ -235,6 +268,9 @@ async def editar_bitacora_save(
         "Soporte": soporte,
         "Observaciones": observaciones,
     }
+    if imagen_path:
+        datos["imagen_path"] = imagen_path
+
     model = BitacoraModel()
     # Encontrar índice en el DataFrame (0-based)
     registros_list = model.db.obtener_bitacora()
@@ -331,4 +367,17 @@ async def calcular_soporte(rmr: str = "", labor: str = ""):
             tipo = str(datos["Tipo"])
     soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR") or ""
     return JSONResponse({"soporte": soporte})
+
+
+# ── Servir imágenes ───────────────────────────────────────────────────────────
+@router.get("/imagen/{filename}")
+async def servir_imagen(filename: str):
+    """Sirve una imagen subida por su nombre de archivo."""
+    from fastapi.responses import FileResponse
+    # Solo permitir nombres de archivo simples (sin rutas)
+    safe_name = Path(filename).name
+    filepath = UPLOAD_DIR / safe_name
+    if filepath.exists() and filepath.suffix.lower() in _ALLOWED_EXTENSIONS:
+        return FileResponse(str(filepath))
+    return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
 

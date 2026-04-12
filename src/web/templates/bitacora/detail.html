@@ -45,6 +45,16 @@
 
           <dt class="col-sm-4">Observaciones</dt>
           <dd class="col-sm-8">{{ registro.get('Observaciones','—') }}</dd>
+
+          {% if registro.get('imagen_path') %}
+          <dt class="col-sm-4">Registro Fotográfico</dt>
+          <dd class="col-sm-8">
+            <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}" target="_blank">
+              <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+                alt="Registro fotográfico" class="img-thumbnail" style="max-height:300px;" />
+            </a>
+          </dd>
+          {% endif %}
         </dl>
       </div>
     </div>

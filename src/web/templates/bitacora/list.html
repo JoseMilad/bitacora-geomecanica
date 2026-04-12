@@ -93,6 +93,7 @@
             {% for cid in clasif_activas %}{% if cid not in ('GSI','RMR') %}<th>{{ cid }}</th>{% endif %}{% endfor %}
             <th>Soporte</th>
             <th>Observaciones</th>
+            <th>Foto</th>
             <th class="text-center">Acciones</th>
           </tr>
         </thead>
@@ -113,6 +114,15 @@
               <td><small>{{ r.get('Soporte', '') }}</small></td>
               <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:80] }}{% if (r.get('Observaciones', '') or '')|length > 80 %}…{% endif %}</td>
               <td class="text-center">
+                {% if r.get('imagen_path') %}
+                <a href="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] }}" target="_blank" title="Ver imagen">
+                  <i class="fa-solid fa-image text-primary"></i>
+                </a>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
                 <div class="btn-group btn-group-sm">
                   <a href="/bitacora/{{ r.get('id', loop.index0) }}/editar" class="btn btn-outline-primary" title="Editar">
                     <i class="fa-solid fa-pen"></i>
@@ -129,7 +139,7 @@
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="{{ 5 + (clasif_activas | length) }}" class="text-center text-muted py-5">
+            <tr><td colspan="{{ 6 + (clasif_activas | length) }}" class="text-center text-muted py-5">
               <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
               No se encontraron registros
             </td></tr>

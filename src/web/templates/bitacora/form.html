@@ -33,7 +33,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ action }}">
+        <form method="POST" action="{{ action }}" enctype="multipart/form-data">
           <div class="row g-3">
             <!-- Fecha -->
             <div class="col-md-4">
@@ -129,6 +129,29 @@
               <textarea name="observaciones" class="form-control" rows="3"
                 placeholder="Observaciones opcionales">{{ registro.get('Observaciones','') if registro else '' }}</textarea>
             </div>
+
+            <!-- Registro Fotográfico -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                <i class="fa-solid fa-camera me-1"></i>Registro Fotográfico
+              </label>
+              <input type="file" name="imagen" class="form-control" accept="image/*"
+                id="inputImagen" onchange="previsualizarImagen(this)" />
+              <small class="text-muted">Formatos aceptados: JPG, PNG, GIF, WEBP. Tamaño máximo recomendado: 5 MB</small>
+              <div id="previewImagen" class="mt-2" style="display:none;">
+                <img id="imgPreview" src="" alt="Vista previa" class="img-thumbnail" style="max-height:200px;" />
+                <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="limpiarImagen()">
+                  <i class="fa-solid fa-xmark me-1"></i>Quitar
+                </button>
+              </div>
+              {% if registro and registro.get('imagen_path') %}
+              <div class="mt-2">
+                <small class="text-muted">Imagen actual:</small>
+                <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+                  alt="Imagen actual" class="img-thumbnail d-block mt-1" style="max-height:150px;" />
+              </div>
+              {% endif %}
+            </div>
           </div>
 
           <div class="mt-4 d-flex gap-2">
@@ -217,6 +240,29 @@ async function calcularSoporte() {
   } catch (e) {
     console.warn('calcularSoporte error:', e);
   }
+}
+
+// ── Vista previa de imagen ───────────────────────────────────────
+function previsualizarImagen(input) {
+  const preview = document.getElementById('previewImagen');
+  const img = document.getElementById('imgPreview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function limpiarImagen() {
+  const input = document.getElementById('inputImagen');
+  const preview = document.getElementById('previewImagen');
+  input.value = '';
+  preview.style.display = 'none';
 }
 </script>
 {% endblock %}
