@@ -1462,6 +1462,10 @@ class VentanaHistorial:
             messagebox.showinfo("Info", "No hay datos para exportar", parent=self.ventana)
             return
 
+        # Excluir columnas internas del export
+        cols_export = [c for c in df.columns if c not in ("id", "imagen_path")]
+        df = df[cols_export]
+
         # Ordenar por labor numéricamente
         df = ordenar_df_por_labor(df)
 
