@@ -50,6 +50,7 @@
                   <td><code>{{ datos.prefijo }}</code></td>
                   <td>{{ datos.fase or '—' }}</td>
                   <td class="text-center">
+                    {% if is_admin %}
                     <form method="POST" action="/clasificaciones/eliminar" class="d-inline"
                       onsubmit="return confirm('¿Eliminar clasificación {{ nombre }}?')">
                       <input type="hidden" name="nombre" value="{{ nombre }}" />
@@ -58,6 +59,7 @@
                         <i class="fa-solid fa-trash"></i>
                       </button>
                     </form>
+                    {% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -133,6 +135,7 @@
           {% for kpi in kpis %}
           <li class="list-group-item d-flex justify-content-between align-items-center py-2">
             <span>{{ kpi }}</span>
+            {% if is_admin %}
             <form method="POST" action="/clasificaciones/kpi/eliminar" class="d-inline"
               onsubmit="return confirm('¿Eliminar KPI {{ kpi }}?')">
               <input type="hidden" name="nombre_kpi" value="{{ kpi }}" />
@@ -140,6 +143,7 @@
                 <i class="fa-solid fa-trash"></i>
               </button>
             </form>
+            {% endif %}
           </li>
           {% endfor %}
         </ul>

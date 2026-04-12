@@ -31,6 +31,12 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
+
+
 def _config_clasificaciones():
     """Devuelve las clasificaciones activas desde la configuración."""
     config = cargar_config()
@@ -76,6 +82,7 @@ async def listar_bitacora(
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     clasif_activas = _config_clasificaciones()
+    is_admin = _is_admin(request)
 
     return templates.TemplateResponse(request, "bitacora/list.html", context={
         "request": request,
@@ -92,6 +99,7 @@ async def listar_bitacora(
         "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
+        "is_admin": is_admin,
     })
 
 
@@ -251,6 +259,10 @@ async def editar_bitacora_save(
 # ── Eliminar ──────────────────────────────────────────────────────────────────
 @router.post("/{id}/eliminar")
 async def eliminar_bitacora(request: Request, id: int):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar registros.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
     model = BitacoraModel()
     registros_list = model.db.obtener_bitacora()
     indice = None
@@ -290,6 +302,10 @@ async def archivar_periodo(
     fecha_inicio: str = Form(...),
     fecha_fin: str = Form(...),
 ):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden archivar períodos.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
     model = BitacoraModel()
     ok, msg, _ = model.archivar_periodo(fecha_inicio, fecha_fin)
     if ok:

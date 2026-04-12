@@ -28,6 +28,12 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
+
+
 def _campos_sost():
     """Devuelve los campos activos de sostenimiento desde la config viva."""
     config = cargar_config()
@@ -69,6 +75,7 @@ async def listar_sostenimiento(
         "labor": labor,
         "flash": flash,
         "active_page": "sostenimiento",
+        "is_admin": _is_admin(request),
     })
 
 
@@ -270,6 +277,10 @@ async def editar_sostenimiento_save(request: Request, id: int):
 # ── Eliminar ──────────────────────────────────────────────────────────────────
 @router.post("/{id}/eliminar")
 async def eliminar_sostenimiento(request: Request, id: int):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar registros.")
+        return RedirectResponse(url="/sostenimiento", status_code=303)
+
     model = BitacoraModel()
     registros_list = model.db.obtener_sostenimiento()
     indice = None

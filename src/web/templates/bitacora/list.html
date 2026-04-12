@@ -47,6 +47,7 @@
     {{ total }} registro{% if total != 1 %}s{% endif %} encontrado{% if total != 1 %}s{% endif %}
   </p>
   <div class="d-flex gap-2 flex-wrap">
+    {% if is_admin %}
     <!-- Deshacer -->
     <form method="POST" action="/bitacora/deshacer" class="d-inline">
       <button type="submit" class="btn btn-sm btn-outline-warning"
@@ -60,6 +61,7 @@
       data-bs-toggle="modal" data-bs-target="#modalArchivar" title="Archivar período">
       <i class="fa-solid fa-box-archive me-1"></i>Archivar
     </button>
+    {% endif %}
     <!-- Exportar PDF -->
     <a href="/reportes/pdf/bitacora?labor={{ labor }}&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}"
        class="btn btn-sm btn-outline-danger" title="Exportar PDF">
@@ -115,11 +117,13 @@
                   <a href="/bitacora/{{ r.get('id', loop.index0) }}/editar" class="btn btn-outline-primary" title="Editar">
                     <i class="fa-solid fa-pen"></i>
                   </a>
+                  {% if is_admin %}
                   <button type="button" class="btn btn-outline-danger"
                     onclick="confirmarEliminacion('{{ r.get('id', loop.index0) }}', 'bitacora')"
                     title="Eliminar">
                     <i class="fa-solid fa-trash"></i>
                   </button>
+                  {% endif %}
                 </div>
               </td>
             </tr>
