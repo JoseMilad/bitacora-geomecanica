@@ -323,6 +323,19 @@ class BitacoraApp:
         self.btn_oscuro.pack(fill="x", pady=1)
         aplicar_hover(self.btn_oscuro, PALETTE["sidebar_bg"], PALETTE["sidebar_active"])
 
+        # Espaciador para empujar el watermark al fondo
+        tk.Frame(sidebar, bg=PALETTE["sidebar_bg"]).pack(fill="both", expand=True)
+
+        # Watermark
+        tk.Label(
+            sidebar,
+            text="Powered by Milad",
+            font=("Segoe UI", 8),
+            bg=PALETTE["sidebar_bg"],
+            fg="#6b7fa0",
+            anchor="center",
+        ).pack(fill="x", pady=(0, 10))
+
         # ─── Panel de contenido derecho ─────────────────────────────────
         content = tk.Frame(container, bg=PALETTE["surface"])
         content.pack(side="left", fill="both", expand=True)

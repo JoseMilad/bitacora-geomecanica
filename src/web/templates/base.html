@@ -22,8 +22,13 @@
       </div>
       <ul class="sidebar-nav">
         <li>
+          <a href="/" class="sidebar-link {% if active_page == 'inicio' %}active{% endif %}">
+            <i class="fa-solid fa-house me-2"></i><span>Inicio</span>
+          </a>
+        </li>
+        <li>
           <a href="/dashboard" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">
-            <i class="fa-solid fa-house me-2"></i><span>Dashboard</span>
+            <i class="fa-solid fa-chart-line me-2"></i><span>Dashboard</span>
           </a>
         </li>
         <li>
@@ -71,9 +76,6 @@
         </button>
         <h5 class="mb-0 fw-semibold">{% block page_title %}Bitácora Geomecánica{% endblock %}</h5>
         <div class="ms-auto d-flex align-items-center gap-3">
-          <a href="/" class="btn btn-sm btn-outline-secondary" title="Página de inicio">
-            <i class="fa-solid fa-house me-1"></i><span class="d-none d-md-inline">Inicio</span>
-          </a>
           <button class="btn btn-sm btn-outline-secondary" id="darkModeToggle" title="Alternar modo oscuro">
             <i class="fa-solid fa-moon" id="darkModeIcon"></i>
           </button>
