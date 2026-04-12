@@ -77,7 +77,8 @@ class DatabaseManager:
                     soporte           TEXT    DEFAULT '',
                     tipo              TEXT    DEFAULT 'Temporal',
                     fase              TEXT    DEFAULT '',
-                    clasificacion_kpi TEXT    DEFAULT ''
+                    clasificacion_kpi TEXT    DEFAULT '',
+                    UNIQUE(empresa_id, labor)
                 );
 
                 CREATE TABLE IF NOT EXISTS estandar_sostenimiento (
