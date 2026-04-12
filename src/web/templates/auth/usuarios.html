@@ -19,6 +19,7 @@
               <th>Usuario</th>
               <th>Nombre</th>
               <th>Rol</th>
+              <th>Empresa</th>
               <th>Estado</th>
               <th>Creado</th>
               <th class="text-center">Acciones</th>
@@ -34,6 +35,13 @@
                 <span class="badge {{ 'bg-primary' if u.rol == 'admin' else 'bg-secondary' }}">
                   {{ u.rol }}
                 </span>
+              </td>
+              <td>
+                {% set emp_name = '' %}
+                {% for e in empresas %}
+                  {% if e.id == u.get('empresa_id', 1) %}{% set emp_name = e.nombre %}{% endif %}
+                {% endfor %}
+                <small>{{ emp_name or 'Empresa Principal' }}</small>
               </td>
               <td>
                 {% if u.activo %}
@@ -141,6 +149,14 @@
               <option value="admin">Administrador</option>
             </select>
           </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Empresa</label>
+            <select name="empresa_id" class="form-select">
+              {% for e in empresas %}
+              <option value="{{ e.id }}">{{ e.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
           <button type="submit" class="btn btn-primary w-100">
             <i class="fa-solid fa-plus me-1"></i>Crear usuario
           </button>
@@ -151,9 +167,12 @@
 
 </div>
 
-<div class="mt-4">
+<div class="mt-4 d-flex gap-2">
   <a href="/dashboard" class="btn btn-outline-secondary">
     <i class="fa-solid fa-arrow-left me-1"></i>Volver al Dashboard
+  </a>
+  <a href="/auth/empresas" class="btn btn-outline-primary">
+    <i class="fa-solid fa-building me-1"></i>Gestionar Empresas
   </a>
 </div>
 {% endblock %}

@@ -20,6 +20,7 @@ from src.models.auth import (
     editar_usuario,
     eliminar_usuario,
 )
+from src.models.database import DatabaseManager
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -134,11 +135,14 @@ async def listar_usuarios(request: Request):
 
     inicializar_tabla_usuarios()
     usuarios = obtener_usuarios()
+    db = DatabaseManager()
+    empresas = db.obtener_empresas()
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "auth/usuarios.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "usuarios": usuarios,
+        "empresas": empresas,
         "current_user": user,
         "flash": flash,
         "active_page": "usuarios",
@@ -152,13 +156,14 @@ async def crear_usuario_submit(
     password: str = Form(...),
     nombre: str = Form(""),
     rol: str = Form("usuario"),
+    empresa_id: int = Form(1),
 ):
     user = get_current_user(request)
     if not user or user.get("rol") != "admin":
         _set_flash(request, "error", "Acceso denegado.")
         return RedirectResponse(url="/dashboard", status_code=303)
 
-    ok, msg = crear_usuario(username, password, nombre, rol)
+    ok, msg = crear_usuario(username, password, nombre, rol, empresa_id=empresa_id)
     _set_flash(request, "success" if ok else "error", msg)
     return RedirectResponse(url="/auth/usuarios", status_code=303)
 
@@ -194,3 +199,39 @@ async def eliminar_usuario_submit(request: Request, user_id: int):
     ok, msg = eliminar_usuario(user_id)
     _set_flash(request, "success" if ok else "error", msg)
     return RedirectResponse(url="/auth/usuarios", status_code=303)
+
+
+# ── Gestión de empresas (solo admin) ─────────────────────────────────────────
+@router.get("/empresas", response_class=HTMLResponse)
+async def listar_empresas(request: Request):
+    user = get_current_user(request)
+    if not user or user.get("rol") != "admin":
+        _set_flash(request, "error", "Acceso denegado. Se requiere rol de administrador.")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    db = DatabaseManager()
+    empresas = db.obtener_empresas()
+    flash = _get_flash(request)
+    return templates.TemplateResponse(request, "auth/empresas.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "empresas": empresas,
+        "flash": flash,
+        "active_page": "empresas",
+    })
+
+
+@router.post("/empresas/crear")
+async def crear_empresa_submit(
+    request: Request,
+    nombre: str = Form(...),
+):
+    user = get_current_user(request)
+    if not user or user.get("rol") != "admin":
+        _set_flash(request, "error", "Acceso denegado.")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    db = DatabaseManager()
+    ok, msg = db.crear_empresa(nombre)
+    _set_flash(request, "success" if ok else "error", msg)
+    return RedirectResponse(url="/auth/empresas", status_code=303)
