@@ -29,8 +29,6 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 _ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
-PAGE_SIZE = 50
-
 
 def _get_flash(request: Request) -> dict:
     return request.session.pop("flash", None) or {}
@@ -373,10 +371,18 @@ async def calcular_soporte(rmr: str = "", labor: str = ""):
 @router.get("/imagen/{filename}")
 async def servir_imagen(filename: str):
     """Sirve una imagen subida por su nombre de archivo."""
+    import re
     from fastapi.responses import FileResponse
-    # Solo permitir nombres de archivo simples (sin rutas)
+    # Solo permitir nombres de archivo alfanuméricos con extensión de imagen
     safe_name = Path(filename).name
+    if not re.fullmatch(r"[a-fA-F0-9]+\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
+        return JSONResponse({"error": "Nombre de archivo no válido"}, status_code=400)
     filepath = UPLOAD_DIR / safe_name
+    # Verificar que la ruta resuelta está dentro de UPLOAD_DIR
+    try:
+        filepath.resolve().relative_to(UPLOAD_DIR.resolve())
+    except ValueError:
+        return JSONResponse({"error": "Acceso denegado"}, status_code=403)
     if filepath.exists() and filepath.suffix.lower() in _ALLOWED_EXTENSIONS:
         return FileResponse(str(filepath))
     return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)

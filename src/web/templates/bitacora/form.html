@@ -177,7 +177,7 @@ const todasLabores = {{ labores | tojson }};
 function filtrarLabores(texto) {
   const dropdown = document.getElementById('dropdownLabores');
   dropdown.innerHTML = '';
-  if (!texto && !document.activeElement.id !== 'inputLabor') {
+  if (!texto && document.activeElement.id !== 'inputLabor') {
     dropdown.style.display = 'none';
     return;
   }
