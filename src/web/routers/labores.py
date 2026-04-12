@@ -26,6 +26,12 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
+
+
 # ── Listar labores ────────────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -45,6 +51,7 @@ async def listar_labores(request: Request, q: str = ""):
         "q": q,
         "flash": flash,
         "active_page": "labores",
+        "is_admin": _is_admin(request),
     })
 
 
@@ -165,6 +172,10 @@ async def editar_labor_save(
 # ── Eliminar labor ────────────────────────────────────────────────────────────
 @router.post("/{nombre}/eliminar")
 async def eliminar_labor(request: Request, nombre: str):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar labores.")
+        return RedirectResponse(url="/labores", status_code=303)
+
     model = BitacoraModel()
     ok, msg = model.eliminar_labor(nombre)
     if ok:

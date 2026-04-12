@@ -31,6 +31,12 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
+
+
 # ── Listar clasificaciones de labor ───────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -45,6 +51,7 @@ async def listar_clasificaciones(request: Request):
         "kpis": kpis,
         "flash": flash,
         "active_page": "clasificaciones",
+        "is_admin": _is_admin(request),
     })
 
 
@@ -81,6 +88,10 @@ async def eliminar_clasificacion(
     nombre: str = Form(...),
     tipo: str = Form(...),
 ):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar clasificaciones.")
+        return RedirectResponse(url="/clasificaciones", status_code=303)
+
     clasificaciones = cargar_clasificaciones()
     mapa = clasificaciones.get(tipo, {})
     if nombre in mapa:
@@ -124,6 +135,10 @@ async def eliminar_kpi(
     request: Request,
     nombre_kpi: str = Form(...),
 ):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar clasificaciones KPI.")
+        return RedirectResponse(url="/clasificaciones", status_code=303)
+
     kpis = cargar_clasificaciones_kpi()
     if nombre_kpi in kpis:
         kpis.remove(nombre_kpi)

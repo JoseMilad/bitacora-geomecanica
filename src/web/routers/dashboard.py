@@ -29,7 +29,7 @@ def _get_flash(request: Request) -> dict:
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, sost_col: str = "", labor_filter: str = ""):
     model = BitacoraModel()
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
@@ -52,11 +52,28 @@ async def dashboard(request: Request):
         except Exception:
             registros_mes = 0
 
+    # Configuración de sostenimiento
+    config = cargar_config()
+    activos_sost = config.get("sostenimientos_activos", DEFAULTS["sostenimientos_activos"])
+    if not activos_sost:
+        activos_sost = list(DEFAULTS["sostenimientos_activos"])
+    cols_sost = [s["columna"] for s in activos_sost if isinstance(s, dict)]
+
+    # Determinar columna de sostenimiento seleccionada
+    col_principal = sost_col if sost_col and sost_col in cols_sost else (cols_sost[0] if cols_sost else "Shotcrete_m3")
+
+    # Nombre display de la columna principal
+    nombre_col_principal = col_principal
+    for s in activos_sost:
+        if isinstance(s, dict) and s.get("columna") == col_principal:
+            nombre_col_principal = s.get("display", col_principal)
+            break
+
     # Totales sostenimiento
     totales_sost = model.obtener_totales_sostenimiento()
     total_shotcrete = 0.0
-    if totales_sost is not None and not totales_sost.empty and "Shotcrete_m3" in totales_sost.columns:
-        total_shotcrete = float(totales_sost["Shotcrete_m3"].sum())
+    if totales_sost is not None and not totales_sost.empty and col_principal in totales_sost.columns:
+        total_shotcrete = float(totales_sost[col_principal].sum())
 
     # Últimos 10 registros
     ultimos_10 = []
@@ -91,32 +108,25 @@ async def dashboard(request: Request):
     flash = _get_flash(request)
 
     # ── Datos para gráfico de sostenimiento ───────────────────────────────────
-    config = cargar_config()
-    activos_sost = config.get("sostenimientos_activos", DEFAULTS["sostenimientos_activos"])
-    if not activos_sost:
-        activos_sost = list(DEFAULTS["sostenimientos_activos"])
-    cols_sost = [s["columna"] for s in activos_sost if isinstance(s, dict)]
-
-    # Totales por labor (para chart de barras)
+    # Totales por labor (para chart de barras) con filtro de labor
     labels_sost_labor, data_sost_labor = [], []
     try:
         df_sost_full = model.obtener_sostenimiento()
-        if not df_sost_full.empty and cols_sost:
-            col_principal = cols_sost[0]  # Shotcrete_m3 o el primer activo
-            if col_principal in df_sost_full.columns:
-                grp = df_sost_full.groupby("Labor")[col_principal].sum().sort_values(ascending=False).head(10)
-                labels_sost_labor = grp.index.tolist()
-                data_sost_labor = [round(float(v), 2) for v in grp.values.tolist()]
+        if labor_filter and not df_sost_full.empty:
+            df_sost_full = df_sost_full[df_sost_full["Labor"].str.contains(labor_filter, case=False, na=False)]
+        if not df_sost_full.empty and col_principal in df_sost_full.columns:
+            grp = df_sost_full.groupby("Labor")[col_principal].sum().sort_values(ascending=False).head(10)
+            labels_sost_labor = grp.index.tolist()
+            data_sost_labor = [round(float(v), 2) for v in grp.values.tolist()]
     except Exception:
         pass
 
     # Totales por tipo de labor (pie chart)
     labels_sost_tipo, data_sost_tipo = [], []
     try:
-        if not df_sost_full.empty and cols_sost:
-            col_principal = cols_sost[0]
+        if not df_sost_full.empty and col_principal in df_sost_full.columns:
             df_labores = model._leer_labores_df()
-            if not df_labores.empty and "Tipo" in df_labores.columns and col_principal in df_sost_full.columns:
+            if not df_labores.empty and "Tipo" in df_labores.columns:
                 mapa_tipo = df_labores.set_index("Labor")["Tipo"].to_dict()
                 df_tmp = df_sost_full.copy()
                 df_tmp["Tipo"] = df_tmp["Labor"].map(mapa_tipo).fillna("Sin clasificar")
@@ -130,10 +140,9 @@ async def dashboard(request: Request):
     # Totales por fase de labor (bar chart)
     labels_sost_fase, data_sost_fase = [], []
     try:
-        if not df_sost_full.empty and cols_sost:
-            col_principal = cols_sost[0]
+        if not df_sost_full.empty and col_principal in df_sost_full.columns:
             df_labores = model._leer_labores_df()
-            if not df_labores.empty and "Fase" in df_labores.columns and col_principal in df_sost_full.columns:
+            if not df_labores.empty and "Fase" in df_labores.columns:
                 mapa_fase = df_labores.set_index("Labor")["Fase"].to_dict()
                 df_tmp2 = df_sost_full.copy()
                 df_tmp2["Fase"] = df_tmp2["Labor"].map(mapa_fase).fillna("Sin fase")
@@ -144,8 +153,8 @@ async def dashboard(request: Request):
     except Exception:
         pass
 
-    # Nombre del sostenimiento principal para etiquetas
-    nombre_col_principal = activos_sost[0]["display"] if activos_sost else "Sostenimiento"
+    # Lista de labores para el filtro
+    labores_nombres = model.obtener_labores_guardadas()
 
     return templates.TemplateResponse(request, "dashboard.html", context={
         "request": request,
@@ -166,6 +175,10 @@ async def dashboard(request: Request):
         "labels_sost_fase": labels_sost_fase,
         "data_sost_fase": data_sost_fase,
         "nombre_col_principal": nombre_col_principal,
+        "activos_sost": activos_sost,
+        "sost_col": col_principal,
+        "labor_filter": labor_filter,
+        "labores_nombres": labores_nombres,
         "flash": flash,
         "active_page": "dashboard",
     })

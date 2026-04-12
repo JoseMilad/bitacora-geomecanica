@@ -32,7 +32,7 @@
           </a>
         </li>
         <li>
-          <a href="/labores" class="sidebar-link {% if active_page == 'labores' %}active{% endif %}">
+          <a href="/labores" class="sidebar-link {% if active_page in ('labores', 'clasificaciones') %}active{% endif %}">
             <i class="fa-solid fa-hard-hat me-2"></i><span>Labores</span>
           </a>
         </li>
@@ -44,11 +44,6 @@
         <li>
           <a href="/estandar" class="sidebar-link {% if active_page == 'estandar' %}active{% endif %}">
             <i class="fa-solid fa-table me-2"></i><span>Estándar</span>
-          </a>
-        </li>
-        <li>
-          <a href="/clasificaciones" class="sidebar-link {% if active_page == 'clasificaciones' %}active{% endif %}">
-            <i class="fa-solid fa-tags me-2"></i><span>Clasificaciones</span>
           </a>
         </li>
         <li>

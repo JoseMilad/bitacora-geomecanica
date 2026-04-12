@@ -83,6 +83,42 @@
 <h6 class="text-muted text-uppercase fw-semibold mt-4 mb-3" style="font-size:0.75rem;letter-spacing:0.06em;">
   <i class="fa-solid fa-layer-group me-2"></i>Dashboard de Sostenimiento — {{ nombre_col_principal }}
 </h6>
+
+<!-- Filtros de Sostenimiento -->
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-body py-2">
+    <form method="get" action="/dashboard" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Tipo de Soporte</label>
+        <select name="sost_col" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for s in activos_sost %}
+            {% if s is mapping %}
+            <option value="{{ s.columna }}" {% if sost_col == s.columna %}selected{% endif %}>
+              {{ s.display }}
+            </option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Filtrar por Labor</label>
+        <input type="text" name="labor_filter" value="{{ labor_filter }}" class="form-control form-control-sm"
+          placeholder="Nombre de labor..." />
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-filter me-1"></i>Filtrar
+        </button>
+        {% if sost_col or labor_filter %}
+        <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-xmark me-1"></i>Limpiar
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="row g-4">
   <!-- Totales por Labor -->
   <div class="col-lg-6">

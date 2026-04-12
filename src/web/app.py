@@ -19,6 +19,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth
 from src.models.auth import inicializar_tabla_usuarios
+from src.utils.config import APP_VERSION
 
 # ── Instancia principal ───────────────────────────────────────────────────────
 app = FastAPI(
@@ -41,14 +42,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # ── Middleware de autenticación ───────────────────────────────────────────────
 # Rutas públicas que NO requieren autenticación
-_PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/static", "/docs", "/openapi.json", "/redoc"}
+_PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/auth/registro", "/static", "/docs", "/openapi.json", "/redoc", "/"}
 
 
 async def auth_middleware(request: Request, call_next):
     """Redirige a login si el usuario no está autenticado."""
     path = request.url.path
     # Permitir rutas públicas y archivos estáticos
-    if any(path.startswith(p) for p in _PUBLIC_PATHS):
+    if path == "/" or any(path.startswith(p) for p in _PUBLIC_PATHS if p != "/"):
         return await call_next(request)
     # Verificar sesión
     user = request.session.get("user")
@@ -83,7 +84,13 @@ app.include_router(estandar.router, prefix="/estandar")
 app.include_router(clasificaciones.router, prefix="/clasificaciones")
 
 
-# ── Ruta raíz ─────────────────────────────────────────────────────────────────
+# ── Ruta raíz — Pantalla de bienvenida ────────────────────────────────────────
 @app.get("/", include_in_schema=False)
-async def root():
-    return RedirectResponse(url="/dashboard")
+async def root(request: Request):
+    """Siempre muestra la pantalla de bienvenida. El usuario elige a dónde ir."""
+    user = request.session.get("user")
+    return templates.TemplateResponse(request, "welcome.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "user": user,
+    })

@@ -33,7 +33,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ action }}">
+        <form method="POST" action="{{ action }}" enctype="multipart/form-data">
           <div class="row g-3">
             <!-- Fecha -->
             <div class="col-md-4">
@@ -58,16 +58,16 @@
             <!-- Labor -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Labor <span class="text-danger">*</span></label>
-              <select name="labor" id="selectLabor" class="form-select" required
-                onchange="autocompletarLabor(this.value)">
-                <option value="">Seleccionar labor...</option>
-                {% for l in labores %}
-                <option value="{{ l }}"
-                  {% if registro and registro.get('Labor') == l %}selected{% endif %}>
-                  {{ l }}
-                </option>
-                {% endfor %}
-              </select>
+              <div class="position-relative">
+                <input type="text" name="labor" id="inputLabor" class="form-control" required
+                  autocomplete="off"
+                  value="{{ registro.get('Labor', '') if registro else '' }}"
+                  placeholder="Escriba para buscar labor..."
+                  oninput="filtrarLabores(this.value)"
+                  onfocus="filtrarLabores(this.value)" />
+                <div id="dropdownLabores" class="list-group position-absolute w-100 shadow-sm" style="z-index:1050;max-height:200px;overflow-y:auto;display:none;">
+                </div>
+              </div>
               <small id="infoUltimoRegistro" class="text-muted"></small>
             </div>
 
@@ -129,6 +129,29 @@
               <textarea name="observaciones" class="form-control" rows="3"
                 placeholder="Observaciones opcionales">{{ registro.get('Observaciones','') if registro else '' }}</textarea>
             </div>
+
+            <!-- Registro Fotográfico -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                <i class="fa-solid fa-camera me-1"></i>Registro Fotográfico
+              </label>
+              <input type="file" name="imagen" class="form-control" accept="image/*"
+                id="inputImagen" onchange="previsualizarImagen(this)" />
+              <small class="text-muted">Formatos aceptados: JPG, PNG, GIF, WEBP. Tamaño máximo recomendado: 5 MB</small>
+              <div id="previewImagen" class="mt-2" style="display:none;">
+                <img id="imgPreview" src="" alt="Vista previa" class="img-thumbnail" style="max-height:200px;" />
+                <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="limpiarImagen()">
+                  <i class="fa-solid fa-xmark me-1"></i>Quitar
+                </button>
+              </div>
+              {% if registro and registro.get('imagen_path') %}
+              <div class="mt-2">
+                <small class="text-muted">Imagen actual:</small>
+                <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+                  alt="Imagen actual" class="img-thumbnail d-block mt-1" style="max-height:150px;" />
+              </div>
+              {% endif %}
+            </div>
           </div>
 
           <div class="mt-4 d-flex gap-2">
@@ -148,6 +171,52 @@
 
 {% block extra_scripts %}
 <script>
+// Lista de labores para filtrado local
+const todasLabores = {{ labores | tojson }};
+
+function filtrarLabores(texto) {
+  const dropdown = document.getElementById('dropdownLabores');
+  dropdown.innerHTML = '';
+  if (!texto && document.activeElement.id !== 'inputLabor') {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  const filtradas = texto
+    ? todasLabores.filter(l => l.toLowerCase().includes(texto.toLowerCase()))
+    : todasLabores;
+
+  if (filtradas.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  filtradas.slice(0, 10).forEach(labor => {
+    const item = document.createElement('a');
+    item.href = '#';
+    item.className = 'list-group-item list-group-item-action py-2 px-3';
+    item.style.fontSize = '0.9rem';
+    item.textContent = labor;
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      document.getElementById('inputLabor').value = labor;
+      dropdown.style.display = 'none';
+      autocompletarLabor(labor);
+    });
+    dropdown.appendChild(item);
+  });
+  dropdown.style.display = 'block';
+}
+
+// Cerrar dropdown al hacer click fuera
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('dropdownLabores');
+  const input = document.getElementById('inputLabor');
+  if (dropdown && input && !dropdown.contains(e.target) && e.target !== input) {
+    dropdown.style.display = 'none';
+  }
+});
+
 // Auto-calcular soporte al cambiar RMR (con debounce)
 let _calcTimer = null;
 function calcularSoporteAuto() {
@@ -158,7 +227,7 @@ function calcularSoporteAuto() {
 async function calcularSoporte() {
   const rmr = document.getElementById('inputRMR')?.value?.trim();
   if (!rmr) return;
-  const labor = document.getElementById('selectLabor')?.value || '';
+  const labor = document.getElementById('inputLabor')?.value || '';
   try {
     const params = new URLSearchParams({ rmr, labor });
     const res = await fetch(`/bitacora/calcular-soporte?${params}`);
@@ -171,6 +240,29 @@ async function calcularSoporte() {
   } catch (e) {
     console.warn('calcularSoporte error:', e);
   }
+}
+
+// ── Vista previa de imagen ───────────────────────────────────────
+function previsualizarImagen(input) {
+  const preview = document.getElementById('previewImagen');
+  const img = document.getElementById('imgPreview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function limpiarImagen() {
+  const input = document.getElementById('inputImagen');
+  const preview = document.getElementById('previewImagen');
+  input.value = '';
+  preview.style.display = 'none';
 }
 </script>
 {% endblock %}

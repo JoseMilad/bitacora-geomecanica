@@ -1,5 +1,6 @@
 """Router de Bitácora — CRUD completo."""
 import sys
+import uuid
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -8,12 +9,12 @@ for _p in (str(_ROOT), str(_ROOT / "src")):
         sys.path.insert(0, _p)
 
 from typing import Optional
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from src.models.bitacora_model import BitacoraModel
-from src.utils.config import TURNOS, APP_VERSION
+from src.utils.config import TURNOS, APP_VERSION, DATA_DIR
 from src.utils.config_manager import cargar_config
 from src.utils.helpers import _obtener_turno_automatico
 
@@ -22,6 +23,12 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 PAGE_SIZE = 50
 
+# Directorio para imágenes subidas
+UPLOAD_DIR = DATA_DIR / "images"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+
 
 def _get_flash(request: Request) -> dict:
     return request.session.pop("flash", None) or {}
@@ -29,6 +36,12 @@ def _get_flash(request: Request) -> dict:
 
 def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
+
+
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
 
 
 def _config_clasificaciones():
@@ -76,6 +89,7 @@ async def listar_bitacora(
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     clasif_activas = _config_clasificaciones()
+    is_admin = _is_admin(request)
 
     return templates.TemplateResponse(request, "bitacora/list.html", context={
         "request": request,
@@ -92,6 +106,7 @@ async def listar_bitacora(
         "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
+        "is_admin": is_admin,
     })
 
 
@@ -119,17 +134,29 @@ async def nuevo_bitacora_form(request: Request):
 
 # ── Nuevo registro — guardar ──────────────────────────────────────────────────
 @router.post("/nuevo")
-async def nuevo_bitacora_save(
-    request: Request,
-    fecha: str = Form(...),
-    turno: str = Form(...),
-    labor: str = Form(...),
-    gsi: str = Form(""),
-    rmr: str = Form(""),
-    soporte: str = Form(""),
-    observaciones: str = Form(""),
-    forzar: str = Form(""),
-):
+async def nuevo_bitacora_save(request: Request):
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    labor = form.get("labor", "")
+    gsi = form.get("gsi", "")
+    rmr = form.get("rmr", "")
+    soporte = form.get("soporte", "")
+    observaciones = form.get("observaciones", "")
+    forzar = form.get("forzar", "")
+
+    # Procesar imagen subida
+    imagen_path = ""
+    imagen_file = form.get("imagen")
+    if imagen_file and hasattr(imagen_file, "filename") and imagen_file.filename:
+        ext = Path(imagen_file.filename).suffix.lower()
+        if ext in _ALLOWED_EXTENSIONS:
+            filename = f"{uuid.uuid4().hex}{ext}"
+            filepath = UPLOAD_DIR / filename
+            content = await imagen_file.read()
+            filepath.write_bytes(content)
+            imagen_path = str(filepath)
+
     datos = {
         "Fecha": fecha,
         "Turno": turno,
@@ -138,6 +165,7 @@ async def nuevo_bitacora_save(
         "RMR": rmr,
         "Soporte": soporte,
         "Observaciones": observaciones,
+        "imagen_path": imagen_path,
     }
     model = BitacoraModel()
     if forzar == "1":
@@ -207,17 +235,28 @@ async def editar_bitacora_form(request: Request, id: int):
 
 # ── Editar — guardar ──────────────────────────────────────────────────────────
 @router.post("/{id}/editar")
-async def editar_bitacora_save(
-    request: Request,
-    id: int,
-    fecha: str = Form(...),
-    turno: str = Form(...),
-    labor: str = Form(...),
-    gsi: str = Form(""),
-    rmr: str = Form(""),
-    soporte: str = Form(""),
-    observaciones: str = Form(""),
-):
+async def editar_bitacora_save(request: Request, id: int):
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    labor = form.get("labor", "")
+    gsi = form.get("gsi", "")
+    rmr = form.get("rmr", "")
+    soporte = form.get("soporte", "")
+    observaciones = form.get("observaciones", "")
+
+    # Procesar imagen subida
+    imagen_path = ""
+    imagen_file = form.get("imagen")
+    if imagen_file and hasattr(imagen_file, "filename") and imagen_file.filename:
+        ext = Path(imagen_file.filename).suffix.lower()
+        if ext in _ALLOWED_EXTENSIONS:
+            filename = f"{uuid.uuid4().hex}{ext}"
+            filepath = UPLOAD_DIR / filename
+            content = await imagen_file.read()
+            filepath.write_bytes(content)
+            imagen_path = str(filepath)
+
     datos = {
         "Fecha": fecha,
         "Turno": turno,
@@ -227,6 +266,9 @@ async def editar_bitacora_save(
         "Soporte": soporte,
         "Observaciones": observaciones,
     }
+    if imagen_path:
+        datos["imagen_path"] = imagen_path
+
     model = BitacoraModel()
     # Encontrar índice en el DataFrame (0-based)
     registros_list = model.db.obtener_bitacora()
@@ -251,6 +293,10 @@ async def editar_bitacora_save(
 # ── Eliminar ──────────────────────────────────────────────────────────────────
 @router.post("/{id}/eliminar")
 async def eliminar_bitacora(request: Request, id: int):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar registros.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
     model = BitacoraModel()
     registros_list = model.db.obtener_bitacora()
     indice = None
@@ -290,6 +336,10 @@ async def archivar_periodo(
     fecha_inicio: str = Form(...),
     fecha_fin: str = Form(...),
 ):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden archivar períodos.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
     model = BitacoraModel()
     ok, msg, _ = model.archivar_periodo(fecha_inicio, fecha_fin)
     if ok:
@@ -315,4 +365,25 @@ async def calcular_soporte(rmr: str = "", labor: str = ""):
             tipo = str(datos["Tipo"])
     soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR") or ""
     return JSONResponse({"soporte": soporte})
+
+
+# ── Servir imágenes ───────────────────────────────────────────────────────────
+@router.get("/imagen/{filename}")
+async def servir_imagen(filename: str):
+    """Sirve una imagen subida por su nombre de archivo."""
+    import re
+    from fastapi.responses import FileResponse
+    # Solo permitir nombres de archivo UUID hex de 32 caracteres con extensión de imagen
+    safe_name = Path(filename).name
+    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|jpeg|png|gif|bmp|webp)", safe_name):
+        return JSONResponse({"error": "Nombre de archivo no válido"}, status_code=400)
+    # Construir ruta segura usando solo el nombre validado
+    resolved_upload = UPLOAD_DIR.resolve()
+    filepath = (resolved_upload / safe_name).resolve()
+    # Verificar que la ruta resuelta está dentro de UPLOAD_DIR
+    if not str(filepath).startswith(str(resolved_upload)):
+        return JSONResponse({"error": "Acceso denegado"}, status_code=403)
+    if filepath.exists():
+        return FileResponse(str(filepath))
+    return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
 

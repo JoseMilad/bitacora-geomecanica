@@ -31,6 +31,12 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
     request.session["flash"] = {"tipo": tipo, "mensaje": mensaje}
 
 
+def _is_admin(request: Request) -> bool:
+    """Verifica si el usuario actual es administrador."""
+    user = request.session.get("user")
+    return user is not None and user.get("rol") == "admin"
+
+
 def _validar_sistema(sistema: str) -> str:
     """Valida y sanea el sistema devolviendo solo IDs alfanuméricos permitidos."""
     activas = obtener_clasificaciones_activas()
@@ -105,6 +111,10 @@ async def eliminar_fila(
     sistema: str = Form(...),
     indice: int = Form(...),
 ):
+    if not _is_admin(request):
+        _set_flash(request, "error", "Solo los administradores pueden eliminar estándares.")
+        return RedirectResponse(url="/estandar", status_code=303)
+
     model = BitacoraModel()
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
