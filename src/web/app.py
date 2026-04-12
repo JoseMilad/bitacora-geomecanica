@@ -87,11 +87,10 @@ app.include_router(clasificaciones.router, prefix="/clasificaciones")
 # ── Ruta raíz — Pantalla de bienvenida ────────────────────────────────────────
 @app.get("/", include_in_schema=False)
 async def root(request: Request):
-    """Muestra la pantalla de bienvenida o redirige al dashboard si ya está autenticado."""
+    """Siempre muestra la pantalla de bienvenida. El usuario elige a dónde ir."""
     user = request.session.get("user")
-    if user:
-        return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(request, "welcome.html", context={
         "request": request,
         "app_version": APP_VERSION,
+        "user": user,
     })
