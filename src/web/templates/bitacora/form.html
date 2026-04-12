@@ -496,7 +496,7 @@ document.getElementById('btnGuardar').closest('form').addEventListener('submit',
     if (!blob) { evt.target.submit(); return; }
     const input = document.getElementById('inputImagen');
     const dt = new DataTransfer();
-    const ext = (input.files[0]?.name || 'imagen.png').replace(/.*\./, '');
+    const ext = ((input.files[0]?.name || 'imagen.png').replace(/.*\./, '') || 'png');
     dt.items.add(new File([blob], `imagen_editada.${ext || 'png'}`, { type: blob.type }));
     input.files = dt.files;
     evt.target.submit();

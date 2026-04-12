@@ -28,6 +28,19 @@ def _get_flash(request: Request) -> dict:
     return msg or {}
 
 
+def _parse_fecha(x) -> datetime | None:
+    """Convierte una fecha en varios formatos a datetime, o None si no es válida."""
+    if not x:
+        return None
+    s = str(x)[:10]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
@@ -63,17 +76,6 @@ async def dashboard(
     df_bit_filtrado = df_bit
     if not df_bit.empty and "Fecha" in df_bit.columns and (fecha_inicio_dt or fecha_fin_dt):
         try:
-            def _parse_fecha(x):
-                if not x:
-                    return None
-                s = str(x)[:10]
-                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-                    try:
-                        return datetime.strptime(s, fmt)
-                    except ValueError:
-                        continue
-                return None
-
             df_temp = df_bit.copy()
             df_temp["_fecha"] = df_temp["Fecha"].apply(_parse_fecha)
             mask = pd.Series([True] * len(df_temp), index=df_temp.index)
@@ -94,21 +96,10 @@ async def dashboard(
     registros_mes = 0
     if not df_bit_filtrado.empty and "Fecha" in df_bit_filtrado.columns:
         try:
-            def _parse_fecha_kpi(x):
-                if not x:
-                    return None
-                s = str(x)[:10]
-                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-                    try:
-                        return datetime.strptime(s, fmt)
-                    except ValueError:
-                        continue
-                return None
-
             if fecha_inicio_dt or fecha_fin_dt:
                 registros_mes = len(df_bit_filtrado)
             else:
-                fechas = df_bit_filtrado["Fecha"].apply(_parse_fecha_kpi)
+                fechas = df_bit_filtrado["Fecha"].apply(_parse_fecha)
                 registros_mes = int((fechas >= hace_un_mes).sum())
         except Exception:
             registros_mes = 0
@@ -153,19 +144,8 @@ async def dashboard(
     labels_fechas, data_fechas = [], []
     if not df_bit_filtrado.empty and "Fecha" in df_bit_filtrado.columns:
         try:
-            def _parse_fecha_chart(x):
-                if not x:
-                    return None
-                s = str(x)[:10]
-                for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-                    try:
-                        return datetime.strptime(s, fmt)
-                    except ValueError:
-                        continue
-                return None
-
             df_temp = df_bit_filtrado.copy()
-            df_temp["_fecha"] = df_temp["Fecha"].apply(_parse_fecha_chart)
+            df_temp["_fecha"] = df_temp["Fecha"].apply(_parse_fecha)
             df_temp = df_temp[df_temp["_fecha"].notna()]
 
             if fecha_inicio_dt or fecha_fin_dt:

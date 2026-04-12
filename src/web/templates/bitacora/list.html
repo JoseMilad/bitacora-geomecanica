@@ -115,8 +115,8 @@
               <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:80] }}{% if (r.get('Observaciones', '') or '')|length > 80 %}…{% endif %}</td>
               <td class="text-center">
                 {% if r.get('imagen_path') %}
-                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1"
-                  onclick="verImagen('/bitacora/imagen/{{ r.get(\'imagen_path\', \'\').split(\'/\')[-1] }}')"
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-ver-imagen"
+                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] | urlencode }}"
                   title="Ver imagen">
                   <i class="fa-solid fa-image me-1"></i><small>Ver foto</small>
                 </button>
@@ -234,10 +234,15 @@
 
 {% block extra_scripts %}
 <script>
-function verImagen(url) {
+// Use event delegation to avoid inline onclick + XSS risk
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-ver-imagen');
+  if (!btn) return;
+  const url = btn.dataset.url;
+  if (!url) return;
   document.getElementById('imgModalViewer').src = url;
   document.getElementById('btnDescargarImagen').href = url;
   new bootstrap.Modal(document.getElementById('modalVerImagen')).show();
-}
+});
 </script>
 {% endblock %}
