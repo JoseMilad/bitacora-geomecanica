@@ -28,27 +28,79 @@ def _get_flash(request: Request) -> dict:
     return msg or {}
 
 
+def _parse_fecha(x) -> datetime | None:
+    """Convierte una fecha en varios formatos a datetime, o None si no es válida."""
+    if not x:
+        return None
+    s = str(x)[:10]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, sost_col: str = "", labor_filter: str = ""):
+async def dashboard(
+    request: Request,
+    sost_col: str = "",
+    labor_filter: str = "",
+    fecha_inicio: str = "",
+    fecha_fin: str = "",
+):
     model = BitacoraModel()
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
     df_bit = model.obtener_bitacora()
-    total_registros = len(df_bit)
+
+    # Filtro de período para KPIs y gráficos
+    hoy = datetime.today()
+    hace_un_mes = hoy - timedelta(days=30)
+
+    # Parsear fechas del filtro si fueron proporcionadas
+    fecha_inicio_dt = None
+    fecha_fin_dt = None
+    if fecha_inicio:
+        try:
+            fecha_inicio_dt = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        except ValueError:
+            fecha_inicio = ""
+    if fecha_fin:
+        try:
+            fecha_fin_dt = datetime.strptime(fecha_fin, "%Y-%m-%d")
+        except ValueError:
+            fecha_fin = ""
+
+    # Aplicar filtro de período al DataFrame principal si se especificó
+    df_bit_filtrado = df_bit
+    if not df_bit.empty and "Fecha" in df_bit.columns and (fecha_inicio_dt or fecha_fin_dt):
+        try:
+            df_temp = df_bit.copy()
+            df_temp["_fecha"] = df_temp["Fecha"].apply(_parse_fecha)
+            mask = pd.Series([True] * len(df_temp), index=df_temp.index)
+            if fecha_inicio_dt:
+                mask &= df_temp["_fecha"] >= fecha_inicio_dt
+            if fecha_fin_dt:
+                mask &= df_temp["_fecha"] <= fecha_fin_dt
+            df_bit_filtrado = df_bit[mask]
+        except Exception:
+            df_bit_filtrado = df_bit
+
+    total_registros = len(df_bit_filtrado)
 
     labores_df = model._leer_labores_df()
     total_labores = len(labores_df)
 
-    # Registros del último mes
-    hoy = datetime.today()
-    hace_un_mes = hoy - timedelta(days=30)
+    # Registros del período seleccionado (o último mes si no hay filtro)
     registros_mes = 0
-    if not df_bit.empty and "Fecha" in df_bit.columns:
+    if not df_bit_filtrado.empty and "Fecha" in df_bit_filtrado.columns:
         try:
-            fechas = df_bit["Fecha"].apply(
-                lambda x: datetime.strptime(str(x)[:10], "%Y-%m-%d") if x else None
-            )
-            registros_mes = int((fechas >= hace_un_mes).sum())
+            if fecha_inicio_dt or fecha_fin_dt:
+                registros_mes = len(df_bit_filtrado)
+            else:
+                fechas = df_bit_filtrado["Fecha"].apply(_parse_fecha)
+                registros_mes = int((fechas >= hace_un_mes).sum())
         except Exception:
             registros_mes = 0
 
@@ -75,31 +127,39 @@ async def dashboard(request: Request, sost_col: str = "", labor_filter: str = ""
     if totales_sost is not None and not totales_sost.empty and col_principal in totales_sost.columns:
         total_shotcrete = float(totales_sost[col_principal].sum())
 
-    # Últimos 10 registros
+    # Últimos 10 registros (del período filtrado)
     ultimos_10 = []
-    if not df_bit.empty:
-        ultimos_10 = df_bit.tail(10).iloc[::-1].to_dict(orient="records")
+    if not df_bit_filtrado.empty:
+        ultimos_10 = df_bit_filtrado.tail(10).iloc[::-1].to_dict(orient="records")
 
     # ── Datos para gráficos ───────────────────────────────────────────────────
-    # Top 10 labores por registros
+    # Top 10 labores por registros (período filtrado)
     labels_labores, data_labores = [], []
-    if not df_bit.empty and "Labor" in df_bit.columns:
-        top_labores = df_bit["Labor"].value_counts().head(10)
+    if not df_bit_filtrado.empty and "Labor" in df_bit_filtrado.columns:
+        top_labores = df_bit_filtrado["Labor"].value_counts().head(10)
         labels_labores = top_labores.index.tolist()
         data_labores = top_labores.values.tolist()
 
-    # Registros por fecha (últimos 30 días)
+    # Registros por fecha (período filtrado o últimos 30 días)
     labels_fechas, data_fechas = [], []
-    if not df_bit.empty and "Fecha" in df_bit.columns:
+    if not df_bit_filtrado.empty and "Fecha" in df_bit_filtrado.columns:
         try:
-            df_temp = df_bit.copy()
-            df_temp["_fecha"] = df_temp["Fecha"].apply(
-                lambda x: datetime.strptime(str(x)[:10], "%Y-%m-%d") if x else None
-            )
-            df_temp = df_temp[df_temp["_fecha"] >= hace_un_mes]
+            df_temp = df_bit_filtrado.copy()
+            df_temp["_fecha"] = df_temp["Fecha"].apply(_parse_fecha)
+            df_temp = df_temp[df_temp["_fecha"].notna()]
+
+            if fecha_inicio_dt or fecha_fin_dt:
+                # Usar el rango del filtro
+                inicio_chart = fecha_inicio_dt or df_temp["_fecha"].min()
+                fin_chart = fecha_fin_dt or df_temp["_fecha"].max()
+            else:
+                inicio_chart = hace_un_mes
+                fin_chart = hoy
+
+            df_temp = df_temp[(df_temp["_fecha"] >= inicio_chart) & (df_temp["_fecha"] <= fin_chart)]
             conteo = df_temp.groupby(df_temp["_fecha"].dt.strftime("%Y-%m-%d")).size()
-            # Rellenar días sin registros
-            fecha_range = [(hace_un_mes + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
+            n_dias = max(1, (fin_chart - inicio_chart).days + 1)
+            fecha_range = [(inicio_chart + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n_dias)]
             labels_fechas = fecha_range
             data_fechas = [int(conteo.get(d, 0)) for d in fecha_range]
         except Exception:
@@ -162,6 +222,7 @@ async def dashboard(request: Request, sost_col: str = "", labor_filter: str = ""
         "total_registros": total_registros,
         "total_labores": total_labores,
         "registros_mes": registros_mes,
+        "kpi_periodo_label": "Período filtrado" if (fecha_inicio or fecha_fin) else "Último mes",
         "total_shotcrete": round(total_shotcrete, 2),
         "ultimos_10": ultimos_10,
         "labels_labores": labels_labores,
@@ -178,6 +239,8 @@ async def dashboard(request: Request, sost_col: str = "", labor_filter: str = ""
         "activos_sost": activos_sost,
         "sost_col": col_principal,
         "labor_filter": labor_filter,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
         "labores_nombres": labores_nombres,
         "flash": flash,
         "active_page": "dashboard",

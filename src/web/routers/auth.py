@@ -49,7 +49,7 @@ def require_admin(request: Request) -> bool:
 async def registro_form(request: Request):
     """Formulario de registro de nuevos usuarios."""
     if get_current_user(request):
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/", status_code=303)
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "auth/registro.html", context={
         "request": request,
@@ -70,9 +70,15 @@ async def registro_submit(
         _set_flash(request, "error", "Las contraseñas no coinciden.")
         return RedirectResponse(url="/auth/registro", status_code=303)
 
-    ok, msg = crear_usuario(username.strip(), password, nombre.strip(), rol="usuario")
+    # Crear usuario inactivo — requiere aprobación del administrador
+    ok, msg = crear_usuario(username.strip(), password, nombre.strip(), rol="usuario", activo=0)
     if ok:
-        _set_flash(request, "success", f"{msg} Ahora puede iniciar sesión.")
+        _set_flash(
+            request,
+            "success",
+            f"Solicitud de registro enviada. Su cuenta está pendiente de aprobación por un administrador. "
+            "Podrá iniciar sesión una vez que sea activada.",
+        )
         return RedirectResponse(url="/auth/login", status_code=303)
     _set_flash(request, "error", msg)
     return RedirectResponse(url="/auth/registro", status_code=303)
@@ -81,9 +87,9 @@ async def registro_submit(
 # ── Login ─────────────────────────────────────────────────────────────────────
 @router.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
-    # Si ya está autenticado, redirigir al dashboard
+    # Si ya está autenticado, redirigir a la página de inicio
     if get_current_user(request):
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/", status_code=303)
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "auth/login.html", context={
         "request": request,
@@ -104,7 +110,7 @@ async def login_submit(
     if user:
         request.session["user"] = user
         _set_flash(request, "success", f"Bienvenido, {user['nombre'] or user['username']}.")
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/", status_code=303)
     _set_flash(request, "error", "Usuario o contraseña incorrectos.")
     return RedirectResponse(url="/auth/login", status_code=303)
 
@@ -115,7 +121,7 @@ async def login_submit(
 async def logout(request: Request):
     request.session.pop("user", None)
     _set_flash(request, "success", "Sesión cerrada correctamente.")
-    return RedirectResponse(url="/auth/login", status_code=303)
+    return RedirectResponse(url="/", status_code=303)
 
 
 # ── Gestión de usuarios (solo admin) ─────────────────────────────────────────

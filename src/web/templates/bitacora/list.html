@@ -115,9 +115,11 @@
               <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:80] }}{% if (r.get('Observaciones', '') or '')|length > 80 %}…{% endif %}</td>
               <td class="text-center">
                 {% if r.get('imagen_path') %}
-                <a href="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] }}" target="_blank" title="Ver imagen">
-                  <i class="fa-solid fa-image text-primary"></i>
-                </a>
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-ver-imagen"
+                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] | urlencode }}"
+                  title="Ver imagen">
+                  <i class="fa-solid fa-image me-1"></i><small>Ver foto</small>
+                </button>
                 {% else %}
                 <span class="text-muted">—</span>
                 {% endif %}
@@ -173,6 +175,28 @@
 </nav>
 {% endif %}
 
+<!-- Modal: Ver imagen -->
+<div class="modal fade" id="modalVerImagen" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title"><i class="fa-solid fa-image me-2"></i>Registro Fotográfico</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center p-2">
+        <img id="imgModalViewer" src="" alt="Imagen del registro"
+          class="img-fluid rounded" style="max-height:70vh;" />
+      </div>
+      <div class="modal-footer border-0">
+        <a id="btnDescargarImagen" href="#" download class="btn btn-sm btn-outline-primary">
+          <i class="fa-solid fa-download me-1"></i>Descargar
+        </a>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Archivar período -->
 <div class="modal fade" id="modalArchivar" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -208,3 +232,17 @@
 </div>
 {% endblock %}
 
+{% block extra_scripts %}
+<script>
+// Use event delegation to avoid inline onclick + XSS risk
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-ver-imagen');
+  if (!btn) return;
+  const url = btn.dataset.url;
+  if (!url) return;
+  document.getElementById('imgModalViewer').src = url;
+  document.getElementById('btnDescargarImagen').href = url;
+  new bootstrap.Modal(document.getElementById('modalVerImagen')).show();
+});
+</script>
+{% endblock %}
