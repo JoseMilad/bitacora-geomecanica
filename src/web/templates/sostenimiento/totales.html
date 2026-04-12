@@ -17,12 +17,12 @@
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">Labor</label>
-        <select name="labor" class="form-select">
-          <option value="">Todas</option>
-          {% for l in labores %}
-          <option value="{{ l }}" {% if labor == l %}selected{% endif %}>{{ l }}</option>
-          {% endfor %}
-        </select>
+        <div class="position-relative">
+          <input type="text" name="labor" id="filterLaborTotales" class="form-control" autocomplete="off"
+            value="{{ labor }}" placeholder="Escriba para buscar labor..." />
+          <div id="dropdownFilterLaborTotales" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+        </div>
       </div>
       <div class="col-md-3 d-flex gap-2">
         <button type="submit" class="btn btn-primary flex-grow-1">
@@ -84,4 +84,11 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const _laboresTotales = {{ labores | tojson }};
+initLaborTypeahead('filterLaborTotales', 'dropdownFilterLaborTotales', _laboresTotales, { showAll: true });
+</script>
 {% endblock %}
