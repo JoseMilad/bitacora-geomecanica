@@ -187,7 +187,7 @@
               <td class="text-center">
                 {% if r.get('imagen_path') %}
                 <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-ver-imagen"
-                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').split('/')[-1] | urlencode }}"
+                  data-url="/bitacora/imagen/{{ r.get('imagen_path', '').replace('\\', '/').split('/')[-1] | urlencode }}"
                   title="Ver imagen">
                   <i class="fa-solid fa-image me-1"></i><small>Ver foto</small>
                 </button>

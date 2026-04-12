@@ -43,7 +43,7 @@ def _crear_estilos_pdf():
     estilos = {}
     estilos["titulo"] = ParagraphStyle(
         "PdfTitulo", parent=base["Title"],
-        fontSize=16, textColor=_PDF_HEADER_BG,
+        fontSize=14, textColor=_PDF_HEADER_BG,
         spaceAfter=4, alignment=TA_LEFT, fontName="Helvetica-Bold",
     )
     estilos["subtitulo"] = ParagraphStyle(
@@ -58,6 +58,11 @@ def _crear_estilos_pdf():
     )
     estilos["normal"] = ParagraphStyle(
         "PdfNormal", parent=base["Normal"], fontSize=8, leading=11,
+    )
+    estilos["header_cell"] = ParagraphStyle(
+        "PdfHeaderCell", parent=base["Normal"],
+        fontSize=8, leading=11, textColor=colors.white,
+        fontName="Helvetica-Bold",
     )
     estilos["pie"] = ParagraphStyle(
         "PdfPie", parent=base["Normal"],
@@ -107,23 +112,23 @@ def _construir_header_pdf(estilos, titulo, lineas_info):
     elementos = []
     banner_style = ParagraphStyle(
         "Banner", parent=estilos["titulo"],
-        textColor=colors.white, fontSize=14,
+        textColor=colors.white, fontSize=11,
     )
     tabla_titulo = Table([[Paragraph(titulo, banner_style)]], colWidths=["100%"])
     tabla_titulo.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), _PDF_HEADER_BG),
-        ("TOPPADDING",    (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 14),
+        ("TOPPADDING",    (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
     ]))
     elementos.append(tabla_titulo)
-    elementos.append(Spacer(1, 6))
+    elementos.append(Spacer(1, 4))
     for linea in lineas_info:
         elementos.append(Paragraph(linea, estilos["subtitulo"]))
-    elementos.append(Spacer(1, 4))
-    elementos.append(HRFlowable(width="100%", thickness=1.5, color=_PDF_ACCENT))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 3))
+    elementos.append(HRFlowable(width="100%", thickness=1, color=_PDF_ACCENT))
+    elementos.append(Spacer(1, 6))
     return elementos
 
 
@@ -172,7 +177,7 @@ def _generar_pdf_bitacora(df, fi_str: str = "", ff_str: str = "") -> bytes:
         topMargin=2*cm, bottomMargin=2*cm,
     )
 
-    header_row = [Paragraph(c, estilos["normal"]) for c in cols_mostrar]
+    header_row = [Paragraph(c, estilos["header_cell"]) for c in cols_mostrar]
     data = [header_row]
     for _, row in df.iterrows():
         data.append([
@@ -220,7 +225,7 @@ def _generar_pdf_sostenimiento(df, fi_str: str = "", ff_str: str = "") -> bytes:
         topMargin=2*cm, bottomMargin=2*cm,
     )
 
-    header_row = [Paragraph(c.replace("_", " "), estilos["normal"]) for c in cols_mostrar]
+    header_row = [Paragraph(c.replace("_", " "), estilos["header_cell"]) for c in cols_mostrar]
     data = [header_row]
     for _, row in df.iterrows():
         data.append([

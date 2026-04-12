@@ -92,12 +92,12 @@
           {% if registro.get('imagen_path') %}
           <dt class="col-sm-4">Registro Fotográfico</dt>
           <dd class="col-sm-8">
-            <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}" target="_blank">
-              <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+            <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').replace('\\', '/').split('/')[-1] }}" target="_blank">
+              <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').replace('\\', '/').split('/')[-1] }}"
                 alt="Registro fotográfico" class="img-thumbnail" style="max-height:400px;" />
             </a>
             <div class="mt-2">
-              <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+              <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').replace('\\', '/').split('/')[-1] }}"
                 download class="btn btn-sm btn-outline-primary">
                 <i class="fa-solid fa-download me-1"></i>Descargar imagen
               </a>

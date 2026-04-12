@@ -39,11 +39,16 @@ def _is_admin(request: Request) -> bool:
 async def listar_labores(request: Request, q: str = ""):
     model = BitacoraModel()
     if q:
-        df = model.filtrar_labores(q)
+        # filtrar_labores returns a list of labor names; fetch full data for each
+        nombres = model.filtrar_labores(q)
+        labores = []
+        for nombre in nombres:
+            datos = model.obtener_datos_labor(nombre)
+            if datos:
+                labores.append(datos)
     else:
         df = model._leer_labores_df()
-
-    labores = df.to_dict(orient="records") if not df.empty else []
+        labores = df.to_dict(orient="records") if not df.empty else []
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "labores/list.html", context={
         "request": request,
