@@ -3,7 +3,21 @@
 {% block page_title %}Clasificaciones de Labor & KPI{% endblock %}
 
 {% block content %}
-<div class="row g-4 mt-1">
+<!-- Pestañas: Catálogo / Clasificaciones -->
+<ul class="nav nav-tabs mt-3 mb-3">
+  <li class="nav-item">
+    <a class="nav-link" href="/labores">
+      <i class="fa-solid fa-hard-hat me-1"></i>Catálogo de Labores
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link active" href="/clasificaciones">
+      <i class="fa-solid fa-tags me-1"></i>Clasificaciones
+    </a>
+  </li>
+</ul>
+
+<div class="row g-4">
 
   <!-- ── Clasificaciones de Labor (Temporal / Permanente) ──────────── -->
   <div class="col-lg-8">
@@ -149,8 +163,8 @@
 </div>
 
 <div class="mt-4">
-  <a href="/dashboard" class="btn btn-outline-secondary">
-    <i class="fa-solid fa-arrow-left me-1"></i>Volver al Dashboard
+  <a href="/labores" class="btn btn-outline-secondary">
+    <i class="fa-solid fa-arrow-left me-1"></i>Volver a Labores
   </a>
 </div>
 {% endblock %}
