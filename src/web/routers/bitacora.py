@@ -454,7 +454,9 @@ async def archivar_periodo(
         return RedirectResponse(url="/bitacora", status_code=303)
 
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
-    ok, msg, _ = model.archivar_periodo(fecha_inicio, fecha_fin)
+    fi_app = _fecha_html_a_app(fecha_inicio)
+    ff_app = _fecha_html_a_app(fecha_fin)
+    ok, msg, _ = model.archivar_periodo(fi_app, ff_app)
     if ok:
         _set_flash(request, "success", msg)
     else:
