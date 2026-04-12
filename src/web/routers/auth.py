@@ -44,6 +44,40 @@ def require_admin(request: Request) -> bool:
     return user is not None and user.get("rol") == "admin"
 
 
+# ── Registro ──────────────────────────────────────────────────────────────────
+@router.get("/registro", response_class=HTMLResponse)
+async def registro_form(request: Request):
+    """Formulario de registro de nuevos usuarios."""
+    if get_current_user(request):
+        return RedirectResponse(url="/dashboard", status_code=303)
+    flash = _get_flash(request)
+    return templates.TemplateResponse(request, "auth/registro.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "flash": flash,
+    })
+
+
+@router.post("/registro")
+async def registro_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
+    nombre: str = Form(""),
+):
+    if password != password2:
+        _set_flash(request, "error", "Las contraseñas no coinciden.")
+        return RedirectResponse(url="/auth/registro", status_code=303)
+
+    ok, msg = crear_usuario(username.strip(), password, nombre.strip(), rol="usuario")
+    if ok:
+        _set_flash(request, "success", f"{msg} Ahora puede iniciar sesión.")
+        return RedirectResponse(url="/auth/login", status_code=303)
+    _set_flash(request, "error", msg)
+    return RedirectResponse(url="/auth/registro", status_code=303)
+
+
 # ── Login ─────────────────────────────────────────────────────────────────────
 @router.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):

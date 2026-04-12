@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Iniciar Sesión — Bitácora Geomecánica</title>
+  <title>Registro — Bitácora Geomecánica</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="/static/css/custom.css" />
@@ -30,7 +30,7 @@
     .login-footer {
       text-align: center;
       padding: 0.75rem 2rem 1.5rem;
-      font-size: 0.75rem;
+      font-size: 0.85rem;
       color: var(--text-muted);
     }
   </style>
@@ -38,9 +38,9 @@
 <body>
   <div class="login-card card border-0">
     <div class="login-header">
-      <i class="fa-solid fa-mountain-sun d-block"></i>
-      <h4>Bitácora Geomecánica</h4>
-      <small>Plataforma de gestión minera</small>
+      <i class="fa-solid fa-user-plus d-block"></i>
+      <h4>Crear Cuenta</h4>
+      <small>Regístrate para acceder a la plataforma</small>
     </div>
     <div class="login-body">
       {% if flash and flash.mensaje %}
@@ -51,47 +51,62 @@
       </div>
       {% endif %}
 
-      <form method="POST" action="/auth/login">
+      <form method="POST" action="/auth/registro">
         <div class="mb-3">
           <label class="form-label">
-            <i class="fa-solid fa-user me-1"></i>Usuario
+            <i class="fa-solid fa-id-card me-1"></i>Nombre completo
           </label>
-          <input type="text" name="username" class="form-control" placeholder="Ingrese su usuario"
+          <input type="text" name="nombre" class="form-control" placeholder="Ingrese su nombre"
+            autocomplete="name" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            <i class="fa-solid fa-user me-1"></i>Usuario <span class="text-danger">*</span>
+          </label>
+          <input type="text" name="username" class="form-control" placeholder="Elija un nombre de usuario"
             required autofocus autocomplete="username" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            <i class="fa-solid fa-lock me-1"></i>Contraseña <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <input type="password" name="password" id="regPwd1" class="form-control"
+              placeholder="Mínimo 4 caracteres" required autocomplete="new-password" />
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePwd('regPwd1','regPwdIcon1')">
+              <i class="fa-solid fa-eye" id="regPwdIcon1"></i>
+            </button>
+          </div>
         </div>
         <div class="mb-4">
           <label class="form-label">
-            <i class="fa-solid fa-lock me-1"></i>Contraseña
+            <i class="fa-solid fa-lock me-1"></i>Confirmar Contraseña <span class="text-danger">*</span>
           </label>
           <div class="input-group">
-            <input type="password" name="password" id="loginPwd" class="form-control"
-              placeholder="Ingrese su contraseña" required autocomplete="current-password" />
-            <button class="btn btn-outline-secondary" type="button" onclick="toggleLoginPwd()">
-              <i class="fa-solid fa-eye" id="loginPwdIcon"></i>
+            <input type="password" name="password2" id="regPwd2" class="form-control"
+              placeholder="Repita la contraseña" required autocomplete="new-password" />
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePwd('regPwd2','regPwdIcon2')">
+              <i class="fa-solid fa-eye" id="regPwdIcon2"></i>
             </button>
           </div>
         </div>
         <button type="submit" class="btn btn-primary w-100 py-2">
-          <i class="fa-solid fa-right-to-bracket me-2"></i>Iniciar Sesión
+          <i class="fa-solid fa-user-plus me-2"></i>Crear Cuenta
         </button>
       </form>
     </div>
     <div class="login-footer">
-      <div class="mb-2">
-        <a href="/auth/registro" class="text-decoration-none">
-          <i class="fa-solid fa-user-plus me-1"></i>¿No tienes cuenta? Regístrate
-        </a>
-      </div>
-      <i class="fa-solid fa-circle-info me-1"></i>
-      v{{ app_version }} · Usuario por defecto: <code>admin</code> / <code>admin1234</code>
+      <a href="/auth/login" class="text-decoration-none">
+        <i class="fa-solid fa-arrow-left me-1"></i>¿Ya tienes cuenta? Iniciar sesión
+      </a>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-  function toggleLoginPwd() {
-    const inp = document.getElementById('loginPwd');
-    const ico = document.getElementById('loginPwdIcon');
+  function togglePwd(inputId, iconId) {
+    const inp = document.getElementById(inputId);
+    const ico = document.getElementById(iconId);
     if (inp.type === 'password') {
       inp.type = 'text';
       ico.className = 'fa-solid fa-eye-slash';
