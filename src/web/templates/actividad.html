@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Actividad — Bitácora Geomecánica{% endblock %}
+{% block page_title %}Log de Actividad{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">
+      <i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Actividad Reciente
+    </span>
+    <span class="badge bg-primary">{{ actividades | length }} registros</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:180px;">Fecha / Hora</th>
+            <th style="width:120px;">Acción</th>
+            <th>Detalle</th>
+            <th style="width:120px;">Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if actividades %}
+            {% for a in actividades %}
+            <tr>
+              <td class="text-muted small">
+                <i class="fa-regular fa-clock me-1"></i>{{ a.get('created_at', '') }}
+              </td>
+              <td>
+                {% set accion = a.get('accion', '') %}
+                {% if 'crear' in accion %}
+                  <span class="badge bg-success"><i class="fa-solid fa-plus me-1"></i>Crear</span>
+                {% elif 'editar' in accion %}
+                  <span class="badge bg-primary"><i class="fa-solid fa-pen me-1"></i>Editar</span>
+                {% elif 'eliminar' in accion %}
+                  <span class="badge bg-danger"><i class="fa-solid fa-trash me-1"></i>Eliminar</span>
+                {% elif 'duplicar' in accion %}
+                  <span class="badge" style="background:#8b5cf6;"><i class="fa-solid fa-copy me-1"></i>Duplicar</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ accion }}</span>
+                {% endif %}
+              </td>
+              <td>{{ a.get('detalle', '') }}</td>
+              <td class="text-muted small">
+                <i class="fa-solid fa-user me-1"></i>{{ a.get('usuario', 'sistema') }}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-5">
+                <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+                No hay actividad registrada aún
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

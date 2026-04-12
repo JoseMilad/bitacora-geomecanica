@@ -307,6 +307,9 @@ class BitacoraModel:
             exito, mensaje = self.db.guardar_registro(datos)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                labor = datos.get("Labor", "")
+                self.db.registrar_actividad("sistema", "crear_registro",
+                                            f"Nuevo registro: {datos.get('Fecha', '')} - {labor}")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
@@ -328,6 +331,9 @@ class BitacoraModel:
             exito, mensaje = self.db.guardar_registro_forzado(datos)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                labor = datos.get("Labor", "")
+                self.db.registrar_actividad("sistema", "crear_registro",
+                                            f"Registro forzado: {datos.get('Fecha', '')} - {labor}")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
@@ -563,6 +569,8 @@ class BitacoraModel:
             exito, mensaje = self.db.editar_registro(record_id, datos)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                self.db.registrar_actividad("sistema", "editar_registro",
+                                            f"Registro #{record_id} editado")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al editar: {str(e)}"
@@ -608,6 +616,8 @@ class BitacoraModel:
             exito, mensaje = self.db.eliminar_registro(record_id)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
+                self.db.registrar_actividad("sistema", "eliminar_registro",
+                                            f"Registro #{record_id} eliminado")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al eliminar: {str(e)}"

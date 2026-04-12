@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center mt-3">
-  <div class="col-lg-7">
+  <div class="col-lg-8">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
         <span class="fw-semibold">
@@ -14,13 +14,19 @@
           <a href="/bitacora/{{ registro.get('id') }}/editar" class="btn btn-sm btn-outline-primary">
             <i class="fa-solid fa-pen me-1"></i>Editar
           </a>
+          <form method="POST" action="/bitacora/{{ registro.get('id') }}/duplicar" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-success"
+              onclick="return confirm('¿Duplicar este registro con la fecha de hoy?')">
+              <i class="fa-solid fa-copy me-1"></i>Duplicar
+            </button>
+          </form>
           <a href="/bitacora" class="btn btn-sm btn-outline-secondary">
             <i class="fa-solid fa-arrow-left me-1"></i>Volver
           </a>
         </div>
       </div>
       <div class="card-body">
-        <dl class="row">
+        <dl class="row mb-0">
           <dt class="col-sm-4">Fecha</dt>
           <dd class="col-sm-8">{{ registro.get('Fecha','') }}</dd>
 
@@ -34,11 +40,45 @@
           <dt class="col-sm-4">Labor</dt>
           <dd class="col-sm-8 fw-semibold">{{ registro.get('Labor','') }}</dd>
 
+          {% if 'GSI' in clasif_activas %}
           <dt class="col-sm-4">GSI</dt>
           <dd class="col-sm-8">{{ registro.get('GSI','—') }}</dd>
+          {% endif %}
 
+          {% if 'RMR' in clasif_activas %}
           <dt class="col-sm-4">RMR</dt>
-          <dd class="col-sm-8">{{ registro.get('RMR','—') }}</dd>
+          <dd class="col-sm-8">
+            {% set rmr_val = registro.get('RMR', '') %}
+            {% if rmr_val %}
+              {% set rmr_num = rmr_val|int(default=0) %}
+              {% if rmr_num >= 81 %}
+                <span class="badge bg-success">{{ rmr_val }}</span>
+                <small class="text-muted ms-1">— Roca Excelente</small>
+              {% elif rmr_num >= 61 %}
+                <span class="badge" style="background:#2563eb;">{{ rmr_val }}</span>
+                <small class="text-muted ms-1">— Roca Buena</small>
+              {% elif rmr_num >= 41 %}
+                <span class="badge bg-warning text-dark">{{ rmr_val }}</span>
+                <small class="text-muted ms-1">— Roca Regular</small>
+              {% elif rmr_num >= 21 %}
+                <span class="badge" style="background:#f97316;">{{ rmr_val }}</span>
+                <small class="text-muted ms-1">— Roca Pobre</small>
+              {% else %}
+                <span class="badge bg-danger">{{ rmr_val }}</span>
+                <small class="text-muted ms-1">— Roca Muy Pobre</small>
+              {% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+          {% endif %}
+
+          {% for cid in clasif_activas %}
+            {% if cid not in ('GSI','RMR') %}
+            <dt class="col-sm-4">{{ cid }}</dt>
+            <dd class="col-sm-8">{{ registro.get(cid, '—') }}</dd>
+            {% endif %}
+          {% endfor %}
 
           <dt class="col-sm-4">Soporte</dt>
           <dd class="col-sm-8">{{ registro.get('Soporte','—') }}</dd>
@@ -46,13 +86,22 @@
           <dt class="col-sm-4">Observaciones</dt>
           <dd class="col-sm-8">{{ registro.get('Observaciones','—') }}</dd>
 
+          <dt class="col-sm-4">Fecha de Creación</dt>
+          <dd class="col-sm-8 text-muted small">{{ registro.get('created_at','—') }}</dd>
+
           {% if registro.get('imagen_path') %}
           <dt class="col-sm-4">Registro Fotográfico</dt>
           <dd class="col-sm-8">
             <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}" target="_blank">
               <img src="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
-                alt="Registro fotográfico" class="img-thumbnail" style="max-height:300px;" />
+                alt="Registro fotográfico" class="img-thumbnail" style="max-height:400px;" />
             </a>
+            <div class="mt-2">
+              <a href="/bitacora/imagen/{{ registro.get('imagen_path', '').split('/')[-1] }}"
+                download class="btn btn-sm btn-outline-primary">
+                <i class="fa-solid fa-download me-1"></i>Descargar imagen
+              </a>
+            </div>
           </dd>
           {% endif %}
         </dl>

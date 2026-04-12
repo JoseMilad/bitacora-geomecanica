@@ -44,6 +44,14 @@ def _is_admin(request: Request) -> bool:
     return user is not None and user.get("rol") == "admin"
 
 
+def _get_username(request: Request) -> str:
+    """Obtiene el nombre del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("nombre") or user.get("username", "sistema")
+    return "sistema"
+
+
 def _config_clasificaciones():
     """Devuelve las clasificaciones activas desde la configuración."""
     config = cargar_config()
@@ -86,6 +94,25 @@ async def listar_bitacora(
     start = (page - 1) * PAGE_SIZE
     registros_pagina = registros[start: start + PAGE_SIZE]
 
+    # Calcular estadísticas rápidas
+    labores_set = set()
+    rmr_values = []
+    con_foto = 0
+    for r in registros:
+        labores_set.add(r.get("Labor", ""))
+        try:
+            rmr_val = float(r.get("RMR", ""))
+            rmr_values.append(rmr_val)
+        except (ValueError, TypeError):
+            pass
+        if r.get("imagen_path"):
+            con_foto += 1
+    stats = {
+        "labores_distintas": len(labores_set),
+        "rmr_promedio": round(sum(rmr_values) / len(rmr_values), 1) if rmr_values else "—",
+        "con_foto": con_foto,
+    }
+
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     clasif_activas = _config_clasificaciones()
@@ -103,6 +130,7 @@ async def listar_bitacora(
         "page": page,
         "total_pages": total_pages,
         "total": total,
+        "stats": stats,
         "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
@@ -174,6 +202,10 @@ async def nuevo_bitacora_save(request: Request):
         ok, msg = model.guardar_registro(datos)
 
     if ok:
+        # Log activity with actual username
+        username = _get_username(request)
+        model.db.registrar_actividad(username, "crear_registro",
+                                     f"Nuevo registro: {fecha} - {labor}")
         _set_flash(request, "success", msg)
         return RedirectResponse(url="/bitacora", status_code=303)
 
@@ -193,6 +225,72 @@ async def nuevo_bitacora_save(request: Request):
         "duplicado": True,
         "active_page": "bitacora",
     })
+
+
+# ── Ver detalle ───────────────────────────────────────────────────────────────
+@router.get("/{id}/detalle", response_class=HTMLResponse)
+async def ver_detalle_bitacora(request: Request, id: int):
+    """Muestra el detalle completo de un registro incluyendo imagen."""
+    model = BitacoraModel()
+    registro = None
+    registros_list = model.db.obtener_bitacora()
+    for r in registros_list:
+        if r.get("id") == id:
+            registro = r
+            break
+
+    if registro is None:
+        _set_flash(request, "error", "Registro no encontrado.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
+    flash = _get_flash(request)
+    clasif_activas = _config_clasificaciones()
+    return templates.TemplateResponse(request, "bitacora/detail.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "registro": registro,
+        "clasif_activas": clasif_activas,
+        "flash": flash,
+        "active_page": "bitacora",
+    })
+
+
+# ── Duplicar registro ────────────────────────────────────────────────────────
+@router.post("/{id}/duplicar")
+async def duplicar_bitacora(request: Request, id: int):
+    """Crea una copia del registro especificado con la fecha actual."""
+    model = BitacoraModel()
+    registro = None
+    registros_list = model.db.obtener_bitacora()
+    for r in registros_list:
+        if r.get("id") == id:
+            registro = r
+            break
+
+    if registro is None:
+        _set_flash(request, "error", "Registro no encontrado.")
+        return RedirectResponse(url="/bitacora", status_code=303)
+
+    from datetime import date
+    datos = {
+        "Fecha": date.today().strftime("%Y-%m-%d"),
+        "Turno": registro.get("Turno", ""),
+        "Labor": registro.get("Labor", ""),
+        "GSI": registro.get("GSI", ""),
+        "RMR": registro.get("RMR", ""),
+        "Soporte": registro.get("Soporte", ""),
+        "Observaciones": registro.get("Observaciones", ""),
+        "imagen_path": "",
+    }
+    ok, msg = model.guardar_registro_forzado(datos)
+    if ok:
+        username = _get_username(request)
+        model.db.registrar_actividad(username, "duplicar_registro",
+                                     f"Registro #{id} duplicado con fecha {datos['Fecha']}")
+        _set_flash(request, "success", f"Registro duplicado exitosamente. {msg}")
+    else:
+        _set_flash(request, "error", msg)
+    return RedirectResponse(url="/bitacora", status_code=303)
 
 
 # ── Editar — formulario ───────────────────────────────────────────────────────

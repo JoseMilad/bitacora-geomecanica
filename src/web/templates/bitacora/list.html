@@ -78,6 +78,56 @@
   </div>
 </div>
 
+<!-- Estadísticas rápidas -->
+{% if registros %}
+<div class="row g-3 mt-2 mb-3">
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-primary-soft">
+        <i class="fa-solid fa-clipboard-list text-primary fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Registros</p>
+        <h3 class="kpi-value">{{ total }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-accent-soft">
+        <i class="fa-solid fa-hard-hat text-accent fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Labores Distintas</p>
+        <h3 class="kpi-value">{{ stats.labores_distintas }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-success-soft">
+        <i class="fa-solid fa-mountain text-success fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">RMR Promedio</p>
+        <h3 class="kpi-value">{{ stats.rmr_promedio }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="kpi-card">
+      <div class="kpi-icon bg-secondary-soft">
+        <i class="fa-solid fa-camera text-secondary fa-lg"></i>
+      </div>
+      <div>
+        <p class="kpi-label">Con Foto</p>
+        <h3 class="kpi-value">{{ stats.con_foto }}</h3>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Tabla -->
 <div class="card shadow-sm border-0">
   <div class="card-body p-0">
@@ -107,9 +157,30 @@
                   {{ r.get('Turno', '') }}
                 </span>
               </td>
-              <td class="fw-semibold">{{ r.get('Labor', '') }}</td>
+              <td class="fw-semibold">
+                <a href="/bitacora/{{ r.get('id', loop.index0) }}/detalle" class="text-decoration-none text-dark"
+                   title="Ver detalle">{{ r.get('Labor', '') }}</a>
+              </td>
               {% if 'GSI' in clasif_activas %}<td>{{ r.get('GSI', '') }}</td>{% endif %}
-              {% if 'RMR' in clasif_activas %}<td>{{ r.get('RMR', '') }}</td>{% endif %}
+              {% if 'RMR' in clasif_activas %}
+              <td>
+                {% set rmr_val = r.get('RMR', '') %}
+                {% if rmr_val %}
+                  {% set rmr_num = rmr_val|int(default=0) %}
+                  {% if rmr_num >= 81 %}
+                    <span class="badge bg-success" title="Excelente">{{ rmr_val }}</span>
+                  {% elif rmr_num >= 61 %}
+                    <span class="badge" style="background:#2563eb;" title="Bueno">{{ rmr_val }}</span>
+                  {% elif rmr_num >= 41 %}
+                    <span class="badge bg-warning text-dark" title="Regular">{{ rmr_val }}</span>
+                  {% elif rmr_num >= 21 %}
+                    <span class="badge" style="background:#f97316;" title="Pobre">{{ rmr_val }}</span>
+                  {% else %}
+                    <span class="badge bg-danger" title="Muy Pobre">{{ rmr_val }}</span>
+                  {% endif %}
+                {% endif %}
+              </td>
+              {% endif %}
               {% for cid in clasif_activas %}{% if cid not in ('GSI','RMR') %}<td>{{ r.get(cid, '') }}</td>{% endif %}{% endfor %}
               <td><small>{{ r.get('Soporte', '') }}</small></td>
               <td class="text-muted small">{{ (r.get('Observaciones', '') or '')[:80] }}{% if (r.get('Observaciones', '') or '')|length > 80 %}…{% endif %}</td>
@@ -126,9 +197,18 @@
               </td>
               <td class="text-center">
                 <div class="btn-group btn-group-sm">
+                  <a href="/bitacora/{{ r.get('id', loop.index0) }}/detalle" class="btn btn-outline-secondary" title="Ver detalle">
+                    <i class="fa-solid fa-eye"></i>
+                  </a>
                   <a href="/bitacora/{{ r.get('id', loop.index0) }}/editar" class="btn btn-outline-primary" title="Editar">
                     <i class="fa-solid fa-pen"></i>
                   </a>
+                  <form method="POST" action="/bitacora/{{ r.get('id', loop.index0) }}/duplicar" class="d-inline">
+                    <button type="submit" class="btn btn-outline-success" title="Duplicar registro"
+                      onclick="return confirm('¿Duplicar este registro con la fecha de hoy?')">
+                      <i class="fa-solid fa-copy"></i>
+                    </button>
+                  </form>
                   {% if is_admin %}
                   <button type="button" class="btn btn-outline-danger"
                     onclick="confirmarEliminacion('{{ r.get('id', loop.index0) }}', 'bitacora')"
@@ -141,7 +221,7 @@
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="{{ 7 + (clasif_activas | length) }}" class="text-center text-muted py-5">
+            <tr><td colspan="{{ 8 + (clasif_activas | length) }}" class="text-center text-muted py-5">
               <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
               No se encontraron registros
             </td></tr>
