@@ -18,10 +18,18 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 @router.get("/actividad", response_class=HTMLResponse)
 async def actividad_log(request: Request):
     """Muestra el log de actividad reciente."""
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     actividades = model.db.obtener_actividad_log(limite=100)
     flash = request.session.pop("flash", None) or {}
     return templates.TemplateResponse(request, "actividad.html", context={

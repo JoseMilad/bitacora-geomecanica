@@ -29,6 +29,14 @@ def _get_flash(request: Request) -> dict:
     return request.session.pop("flash", None) or {}
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 # ── Helpers PDF ───────────────────────────────────────────────────────────────
 
 def _crear_estilos_pdf():
@@ -248,7 +256,7 @@ def _generar_pdf_sostenimiento(df, fi_str: str = "", ff_str: str = "") -> bytes:
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 async def reportes_index(request: Request):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
 
@@ -290,11 +298,12 @@ async def reportes_index(request: Request):
 # ── Exportar bitácora a Excel ─────────────────────────────────────────────────
 @router.get("/exportar/bitacora")
 async def exportar_bitacora(
+    request: Request,
     fecha_inicio: str = "",
     fecha_fin: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.buscar_registros(
         labor=labor,
         fecha_inicio=fecha_inicio or None,
@@ -317,11 +326,12 @@ async def exportar_bitacora(
 # ── Exportar sostenimiento a Excel ────────────────────────────────────────────
 @router.get("/exportar/sostenimiento")
 async def exportar_sostenimiento(
+    request: Request,
     fecha_inicio: str = "",
     fecha_fin: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_sostenimiento(
         fecha=fecha_inicio or None,
         labor=labor or None,
@@ -343,11 +353,12 @@ async def exportar_sostenimiento(
 # ── Exportar bitácora a PDF ───────────────────────────────────────────────────
 @router.get("/pdf/bitacora")
 async def pdf_bitacora(
+    request: Request,
     fecha_inicio: str = "",
     fecha_fin: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.buscar_registros(
         labor=labor,
         fecha_inicio=fecha_inicio or None,
@@ -369,11 +380,12 @@ async def pdf_bitacora(
 # ── Exportar sostenimiento a PDF ──────────────────────────────────────────────
 @router.get("/pdf/sostenimiento")
 async def pdf_sostenimiento(
+    request: Request,
     fecha_inicio: str = "",
     fecha_fin: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_sostenimiento(
         fecha=fecha_inicio or None,
         labor=labor or None,

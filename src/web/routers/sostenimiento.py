@@ -41,6 +41,14 @@ def _campos_sost():
     return activos if activos else DEFAULTS["sostenimientos_activos"]
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 def _turnos_config():
     """Devuelve los turnos configurados."""
     config = cargar_config()
@@ -55,7 +63,7 @@ async def listar_sostenimiento(
     fecha: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_sostenimiento(
         fecha=fecha or None,
         labor=labor or None,
@@ -87,7 +95,7 @@ async def totales_sostenimiento(
     fecha_fin: str = "",
     labor: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_totales_sostenimiento(
         fecha_inicio=fecha_inicio or None,
         fecha_fin=fecha_fin or None,
@@ -115,7 +123,7 @@ async def totales_sostenimiento(
 # ── Nuevo registro — formulario ───────────────────────────────────────────────
 @router.get("/nuevo", response_class=HTMLResponse)
 async def nuevo_sostenimiento_form(request: Request):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     return templates.TemplateResponse(request, "sostenimiento/form.html", context={
@@ -165,7 +173,7 @@ async def nuevo_sostenimiento_save(request: Request):
         except (ValueError, TypeError):
             datos[col] = 0
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     if forzar == "1":
         ok, msg = model.guardar_sostenimiento_forzado(datos)
     else:
@@ -194,7 +202,7 @@ async def nuevo_sostenimiento_save(request: Request):
 # ── Editar — formulario ───────────────────────────────────────────────────────
 @router.get("/{id}/editar", response_class=HTMLResponse)
 async def editar_sostenimiento_form(request: Request, id: int):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registros_list = model.db.obtener_sostenimiento()
     registro = None
     for r in registros_list:
@@ -254,7 +262,7 @@ async def editar_sostenimiento_save(request: Request, id: int):
         except (ValueError, TypeError):
             datos[col] = 0
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registros_list = model.db.obtener_sostenimiento()
     indice = None
     for i, r in enumerate(registros_list):
@@ -281,7 +289,7 @@ async def eliminar_sostenimiento(request: Request, id: int):
         _set_flash(request, "error", "Solo los administradores pueden eliminar registros.")
         return RedirectResponse(url="/sostenimiento", status_code=303)
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registros_list = model.db.obtener_sostenimiento()
     indice = None
     for i, r in enumerate(registros_list):

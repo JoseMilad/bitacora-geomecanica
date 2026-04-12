@@ -33,11 +33,19 @@ def _is_admin(request: Request) -> bool:
     return user is not None and user.get("rol") == "admin"
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 # ── Listar labores ────────────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 async def listar_labores(request: Request, q: str = ""):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     if q:
         # filtrar_labores returns a list of labor names; fetch full data for each
         nombres = model.filtrar_labores(q)
@@ -88,7 +96,7 @@ async def nueva_labor_save(
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.agregar_labor(
         nombre_labor=nombre,
         gsi=gsi,
@@ -131,8 +139,8 @@ async def detectar_clasificacion_route(nombre: str = ""):
 
 # ── Datos JSON (para autocompletado en formularios) ───────────────────────────
 @router.get("/{nombre}/datos")
-async def datos_labor(nombre: str):
-    model = BitacoraModel()
+async def datos_labor(request: Request, nombre: str):
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     datos = model.obtener_datos_labor(nombre)
     if datos:
         return JSONResponse(datos)
@@ -142,7 +150,7 @@ async def datos_labor(nombre: str):
 # ── Editar labor — formulario ─────────────────────────────────────────────────
 @router.get("/{nombre}/editar", response_class=HTMLResponse)
 async def editar_labor_form(request: Request, nombre: str):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     datos = model.obtener_datos_labor(nombre)
     if not datos:
         _set_flash(request, "error", "Labor no encontrada.")
@@ -171,7 +179,7 @@ async def editar_labor_save(
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     nuevos_datos = {
         "Labor": nombre,
         "GSI": gsi,
@@ -196,7 +204,7 @@ async def eliminar_labor(request: Request, nombre: str):
         _set_flash(request, "error", "Solo los administradores pueden eliminar labores.")
         return RedirectResponse(url="/labores", status_code=303)
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.eliminar_labor(nombre)
     if ok:
         _set_flash(request, "success", msg)

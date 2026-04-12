@@ -53,6 +53,14 @@ def _get_username(request: Request) -> str:
     return "sistema"
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 def _config_clasificaciones():
     """Devuelve las clasificaciones activas desde la configuración."""
     config = cargar_config()
@@ -76,7 +84,7 @@ async def listar_bitacora(
     q: str = "",
     page: int = 1,
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.buscar_registros(
         labor=labor,
         fecha_inicio=fecha_inicio or None,
@@ -142,7 +150,7 @@ async def listar_bitacora(
 # ── Nuevo registro — formulario ───────────────────────────────────────────────
 @router.get("/nuevo", response_class=HTMLResponse)
 async def nuevo_bitacora_form(request: Request):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     clasif_activas = _config_clasificaciones()
@@ -196,7 +204,7 @@ async def nuevo_bitacora_save(request: Request):
         "Observaciones": observaciones,
         "imagen_path": imagen_path,
     }
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     if forzar == "1":
         ok, msg = model.guardar_registro_forzado(datos)
     else:
@@ -232,7 +240,7 @@ async def nuevo_bitacora_save(request: Request):
 @router.get("/{id}/detalle", response_class=HTMLResponse)
 async def ver_detalle_bitacora(request: Request, id: int):
     """Muestra el detalle completo de un registro incluyendo imagen."""
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registro = None
     registros_list = model.db.obtener_bitacora()
     for r in registros_list:
@@ -260,7 +268,7 @@ async def ver_detalle_bitacora(request: Request, id: int):
 @router.post("/{id}/duplicar")
 async def duplicar_bitacora(request: Request, id: int):
     """Crea una copia del registro especificado con la fecha actual."""
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registro = None
     registros_list = model.db.obtener_bitacora()
     for r in registros_list:
@@ -296,7 +304,7 @@ async def duplicar_bitacora(request: Request, id: int):
 # ── Editar — formulario ───────────────────────────────────────────────────────
 @router.get("/{id}/editar", response_class=HTMLResponse)
 async def editar_bitacora_form(request: Request, id: int):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     registro = None
 
     registros_list = model.db.obtener_bitacora()
@@ -362,7 +370,7 @@ async def editar_bitacora_save(request: Request, id: int):
     if imagen_path:
         datos["imagen_path"] = imagen_path
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.editar_registro_por_id(id, datos)
     if ok:
         _set_flash(request, "success", msg)
@@ -378,7 +386,7 @@ async def eliminar_bitacora(request: Request, id: int):
         _set_flash(request, "error", "Solo los administradores pueden eliminar registros.")
         return RedirectResponse(url="/bitacora", status_code=303)
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.eliminar_registro_por_id(id)
     if ok:
         _set_flash(request, "success", msg)
@@ -390,7 +398,7 @@ async def eliminar_bitacora(request: Request, id: int):
 # ── Deshacer última acción ────────────────────────────────────────────────────
 @router.post("/deshacer")
 async def deshacer(request: Request):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.deshacer_ultima_accion()
     if ok:
         _set_flash(request, "success", msg)
@@ -410,7 +418,7 @@ async def archivar_periodo(
         _set_flash(request, "error", "Solo los administradores pueden archivar períodos.")
         return RedirectResponse(url="/bitacora", status_code=303)
 
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg, _ = model.archivar_periodo(fecha_inicio, fecha_fin)
     if ok:
         _set_flash(request, "success", msg)
@@ -421,9 +429,9 @@ async def archivar_periodo(
 
 # ── Calcular soporte (JSON API) ───────────────────────────────────────────────
 @router.get("/calcular-soporte")
-async def calcular_soporte(rmr: str = "", labor: str = ""):
+async def calcular_soporte(request: Request, rmr: str = "", labor: str = ""):
     """Devuelve el soporte recomendado dado un valor RMR."""
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
     from src.utils.helpers import validar_rmr
     rmr_val = validar_rmr(rmr)
     if rmr_val is None:

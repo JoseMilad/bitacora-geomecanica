@@ -28,6 +28,14 @@ def _get_flash(request: Request) -> dict:
     return msg or {}
 
 
+def _get_empresa_id(request: Request) -> int:
+    """Obtiene el empresa_id del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("empresa_id", 1)
+    return 1
+
+
 def _parse_fecha(x) -> datetime | None:
     """Convierte una fecha en varios formatos a datetime, o None si no es válida."""
     if not x:
@@ -49,7 +57,7 @@ async def dashboard(
     fecha_inicio: str = "",
     fecha_fin: str = "",
 ):
-    model = BitacoraModel()
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
     df_bit = model.obtener_bitacora()

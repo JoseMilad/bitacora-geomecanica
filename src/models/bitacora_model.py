@@ -77,10 +77,10 @@ class BitacoraModel:
 
     _UNDO_MAX = 5
 
-    def __init__(self, archivo=None, db_path=None):
+    def __init__(self, archivo=None, db_path=None, empresa_id=1):
         self.archivo = archivo or ARCHIVO_BITACORA
         self._undo_stack: list = []
-        self.db = DatabaseManager(db_path=db_path)
+        self.db = DatabaseManager(db_path=db_path, empresa_id=empresa_id)
         self.inicializar_excel()
         self._migrar_excel_a_sqlite()
     
