@@ -58,15 +58,14 @@
             <!-- Labor -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Labor <span class="text-danger">*</span></label>
-              <select name="labor" class="form-select" required>
-                <option value="">Seleccionar labor...</option>
-                {% for l in labores %}
-                <option value="{{ l }}"
-                  {% if registro and registro.get('Labor') == l %}selected{% endif %}>
-                  {{ l }}
-                </option>
-                {% endfor %}
-              </select>
+              <div class="position-relative">
+                <input type="text" name="labor" id="inputLaborSost" class="form-control" required
+                  autocomplete="off"
+                  value="{{ registro.get('Labor', '') if registro else '' }}"
+                  placeholder="Escriba para buscar labor..." />
+                <div id="dropdownLaborSost" class="list-group position-absolute w-100 shadow-sm"
+                  style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+              </div>
             </div>
 
             <!-- Campos dinámicos de sostenimiento -->
@@ -124,4 +123,11 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const _laboresSostForm = {{ labores | tojson }};
+initLaborTypeahead('inputLaborSost', 'dropdownLaborSost', _laboresSostForm);
+</script>
 {% endblock %}

@@ -2,6 +2,77 @@
    Bitácora Geomecánica — main.js
    ═══════════════════════════════════════════════════════════ */
 
+// ── Reusable Labor Typeahead Component ───────────────────────────────────────
+/**
+ * Initializes a typeahead autocomplete on a text input for labor filtering.
+ * @param {string} inputId - ID of the text input element
+ * @param {string} dropdownId - ID of the dropdown container element
+ * @param {string[]} laboresList - Array of labor names
+ * @param {object} [options] - Optional config
+ * @param {function} [options.onSelect] - Callback when a labor is selected
+ * @param {boolean} [options.showAll] - Show "Todas las labores" option (default: false)
+ * @param {number} [options.maxResults] - Max results to show (default: 10)
+ */
+function initLaborTypeahead(inputId, dropdownId, laboresList, options) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !dropdown) return;
+
+  const opts = Object.assign({ onSelect: null, showAll: false, maxResults: 10 }, options || {});
+
+  function filterAndShow(texto) {
+    dropdown.innerHTML = '';
+    const filtradas = texto
+      ? laboresList.filter(function(l) { return l.toLowerCase().includes(texto.toLowerCase()); })
+      : laboresList;
+
+    if (opts.showAll) {
+      var allItem = document.createElement('a');
+      allItem.href = '#';
+      allItem.className = 'list-group-item list-group-item-action py-2 px-3';
+      allItem.style.fontSize = '0.9rem';
+      allItem.innerHTML = '<em class="text-muted">Todas las labores</em>';
+      allItem.addEventListener('click', function(e) {
+        e.preventDefault();
+        input.value = '';
+        dropdown.style.display = 'none';
+        if (opts.onSelect) opts.onSelect('');
+      });
+      dropdown.appendChild(allItem);
+    }
+
+    if (filtradas.length === 0 && !opts.showAll) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    filtradas.slice(0, opts.maxResults).forEach(function(labor) {
+      var item = document.createElement('a');
+      item.href = '#';
+      item.className = 'list-group-item list-group-item-action py-2 px-3';
+      item.style.fontSize = '0.9rem';
+      item.textContent = labor;
+      item.addEventListener('click', function(e) {
+        e.preventDefault();
+        input.value = labor;
+        dropdown.style.display = 'none';
+        if (opts.onSelect) opts.onSelect(labor);
+      });
+      dropdown.appendChild(item);
+    });
+    dropdown.style.display = 'block';
+  }
+
+  input.addEventListener('input', function() { filterAndShow(this.value); });
+  input.addEventListener('focus', function() { filterAndShow(this.value); });
+
+  document.addEventListener('click', function(e) {
+    if (!dropdown.contains(e.target) && e.target !== input) {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
 // ── Autocompletar datos de labor ──────────────────────────────────────────────
 async function autocompletarLabor(nombre) {
   if (!nombre) return;
