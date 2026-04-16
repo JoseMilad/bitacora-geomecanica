@@ -1,15 +1,13 @@
 """
 Módulo de base de datos para la Bitácora Geomecánica.
 
-Usa MySQL como backend por defecto (vía ``DATABASE_URL``) y mantiene
-compatibilidad opcional con SQLite cuando se inyecta ``db_path`` en tests.
+Usa MySQL como backend de almacenamiento (vía ``DATABASE_URL``).
 """
 from __future__ import annotations
 
 import json
 import os
 import re
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -74,23 +72,17 @@ class _MySQLConnectionAdapter:
 class DatabaseManager:
     """Gestiona todas las operaciones CRUD contra la base de datos."""
 
-    def __init__(self, db_path: str | Path | None = None, empresa_id: int = 1):
+    def __init__(self, empresa_id: int = 1):
         """
         Inicializa el gestor y crea las tablas si no existen.
 
         Args:
-            db_path: Ruta al archivo .db (solo fallback SQLite para pruebas).
             empresa_id: ID de la empresa activa para multi-tenant.
         """
         self.empresa_id = empresa_id
-        self.backend = "sqlite" if db_path else "mysql"
-        self.db_path = Path(db_path) if db_path else None
-        self.mysql_config = self._parse_mysql_url(DATABASE_URL) if self.backend == "mysql" else None
-
-        if self.backend == "sqlite" and self.db_path is not None:
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        elif self.backend == "mysql":
-            self._ensure_mysql_database()
+        self.backend = "mysql"
+        self.mysql_config = self._parse_mysql_url(DATABASE_URL)
+        self._ensure_mysql_database()
         self._init_db()
 
     # ── Conexión e inicialización ────────────────────────────────────────
@@ -133,13 +125,6 @@ class DatabaseManager:
 
     def _get_connection(self):
         """Retorna una conexión al backend activo."""
-        if self.backend == "sqlite":
-            conn = sqlite3.connect(str(self.db_path))
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            return conn
-
         raw = pymysql.connect(**(self.mysql_config or {}))
         return _MySQLConnectionAdapter(raw)
 
@@ -147,154 +132,79 @@ class DatabaseManager:
         """Crea las tablas si no existen."""
         conn = self._get_connection()
         try:
-            if self.backend == "sqlite":
-                conn.executescript("""
-                    CREATE TABLE IF NOT EXISTS empresas (
-                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                        nombre      TEXT    NOT NULL UNIQUE,
-                        created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
-                    );
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS empresas (
+                    id          INT PRIMARY KEY AUTO_INCREMENT,
+                    nombre      VARCHAR(255) NOT NULL UNIQUE,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-                    CREATE TABLE IF NOT EXISTS bitacora (
-                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id      INTEGER DEFAULT 1,
-                        fecha           TEXT    NOT NULL,
-                        turno           TEXT    NOT NULL,
-                        labor           TEXT    NOT NULL,
-                        gsi             TEXT    DEFAULT '',
-                        rmr             TEXT    DEFAULT '',
-                        soporte         TEXT    DEFAULT '',
-                        observaciones   TEXT    DEFAULT '',
-                        imagen_path     TEXT    DEFAULT '',
-                        created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
-                    );
+                CREATE TABLE IF NOT EXISTS bitacora (
+                    id              INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id      INT DEFAULT 1,
+                    fecha           VARCHAR(20) NOT NULL,
+                    turno           VARCHAR(20) NOT NULL,
+                    labor           VARCHAR(255) NOT NULL,
+                    gsi             VARCHAR(255) DEFAULT '',
+                    rmr             VARCHAR(255) DEFAULT '',
+                    soporte         TEXT,
+                    observaciones   TEXT,
+                    imagen_path     TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-                    CREATE TABLE IF NOT EXISTS labores (
-                        id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id        INTEGER DEFAULT 1,
-                        labor             TEXT    NOT NULL,
-                        gsi               TEXT    DEFAULT '',
-                        rmr               TEXT    DEFAULT '',
-                        soporte           TEXT    DEFAULT '',
-                        tipo              TEXT    DEFAULT 'Temporal',
-                        fase              TEXT    DEFAULT '',
-                        clasificacion_kpi TEXT    DEFAULT '',
-                        UNIQUE(empresa_id, labor)
-                    );
+                CREATE TABLE IF NOT EXISTS labores (
+                    id                INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id        INT DEFAULT 1,
+                    labor             VARCHAR(255) NOT NULL,
+                    gsi               VARCHAR(255) DEFAULT '',
+                    rmr               VARCHAR(255) DEFAULT '',
+                    soporte           TEXT,
+                    tipo              VARCHAR(100) DEFAULT 'Temporal',
+                    fase              VARCHAR(255) DEFAULT '',
+                    clasificacion_kpi VARCHAR(255) DEFAULT '',
+                    UNIQUE KEY uq_labores_empresa_labor (empresa_id, labor)
+                );
 
-                    CREATE TABLE IF NOT EXISTS estandar_sostenimiento (
-                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id  INTEGER DEFAULT 1,
-                        sistema     TEXT    NOT NULL,
-                        valor_min   REAL    NOT NULL,
-                        valor_max   REAL    NOT NULL,
-                        tipo        TEXT    DEFAULT '',
-                        soporte     TEXT    DEFAULT ''
-                    );
+                CREATE TABLE IF NOT EXISTS estandar_sostenimiento (
+                    id          INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id  INT DEFAULT 1,
+                    sistema     VARCHAR(50) NOT NULL,
+                    valor_min   DOUBLE NOT NULL,
+                    valor_max   DOUBLE NOT NULL,
+                    tipo        VARCHAR(255) DEFAULT '',
+                    soporte     TEXT
+                );
 
-                    CREATE TABLE IF NOT EXISTS sostenimiento_diario (
-                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id      INTEGER DEFAULT 1,
-                        fecha           TEXT    NOT NULL,
-                        turno           TEXT    NOT NULL,
-                        labor           TEXT    NOT NULL,
-                        datos_json      TEXT    DEFAULT '{}',
-                        observaciones   TEXT    DEFAULT '',
-                        created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
-                    );
+                CREATE TABLE IF NOT EXISTS sostenimiento_diario (
+                    id              INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id      INT DEFAULT 1,
+                    fecha           VARCHAR(20) NOT NULL,
+                    turno           VARCHAR(20) NOT NULL,
+                    labor           VARCHAR(255) NOT NULL,
+                    datos_json      LONGTEXT,
+                    observaciones   TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-                    CREATE TABLE IF NOT EXISTS registro_fotografico (
-                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id      INTEGER DEFAULT 1,
-                        labor           TEXT    NOT NULL,
-                        imagen_path     TEXT    NOT NULL,
-                        descripcion     TEXT    DEFAULT '',
-                        created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
-                    );
+                CREATE TABLE IF NOT EXISTS registro_fotografico (
+                    id              INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id      INT DEFAULT 1,
+                    labor           VARCHAR(255) NOT NULL,
+                    imagen_path     TEXT NOT NULL,
+                    descripcion     TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 
-                    CREATE TABLE IF NOT EXISTS actividad_log (
-                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                        empresa_id      INTEGER DEFAULT 1,
-                        usuario         TEXT    DEFAULT '',
-                        accion          TEXT    NOT NULL,
-                        detalle         TEXT    DEFAULT '',
-                        created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
-                    );
-                """)
-            else:
-                conn.executescript("""
-                    CREATE TABLE IF NOT EXISTS empresas (
-                        id          INT PRIMARY KEY AUTO_INCREMENT,
-                        nombre      VARCHAR(255) NOT NULL UNIQUE,
-                        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS bitacora (
-                        id              INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id      INT DEFAULT 1,
-                        fecha           VARCHAR(20) NOT NULL,
-                        turno           VARCHAR(20) NOT NULL,
-                        labor           VARCHAR(255) NOT NULL,
-                        gsi             VARCHAR(255) DEFAULT '',
-                        rmr             VARCHAR(255) DEFAULT '',
-                        soporte         TEXT,
-                        observaciones   TEXT,
-                        imagen_path     TEXT,
-                        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS labores (
-                        id                INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id        INT DEFAULT 1,
-                        labor             VARCHAR(255) NOT NULL,
-                        gsi               VARCHAR(255) DEFAULT '',
-                        rmr               VARCHAR(255) DEFAULT '',
-                        soporte           TEXT,
-                        tipo              VARCHAR(100) DEFAULT 'Temporal',
-                        fase              VARCHAR(255) DEFAULT '',
-                        clasificacion_kpi VARCHAR(255) DEFAULT '',
-                        UNIQUE KEY uq_labores_empresa_labor (empresa_id, labor)
-                    );
-
-                    CREATE TABLE IF NOT EXISTS estandar_sostenimiento (
-                        id          INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id  INT DEFAULT 1,
-                        sistema     VARCHAR(50) NOT NULL,
-                        valor_min   DOUBLE NOT NULL,
-                        valor_max   DOUBLE NOT NULL,
-                        tipo        VARCHAR(255) DEFAULT '',
-                        soporte     TEXT
-                    );
-
-                    CREATE TABLE IF NOT EXISTS sostenimiento_diario (
-                        id              INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id      INT DEFAULT 1,
-                        fecha           VARCHAR(20) NOT NULL,
-                        turno           VARCHAR(20) NOT NULL,
-                        labor           VARCHAR(255) NOT NULL,
-                        datos_json      LONGTEXT,
-                        observaciones   TEXT,
-                        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS registro_fotografico (
-                        id              INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id      INT DEFAULT 1,
-                        labor           VARCHAR(255) NOT NULL,
-                        imagen_path     TEXT NOT NULL,
-                        descripcion     TEXT,
-                        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS actividad_log (
-                        id              INT PRIMARY KEY AUTO_INCREMENT,
-                        empresa_id      INT DEFAULT 1,
-                        usuario         VARCHAR(100) DEFAULT '',
-                        accion          VARCHAR(50) NOT NULL,
-                        detalle         TEXT,
-                        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                """)
+                CREATE TABLE IF NOT EXISTS actividad_log (
+                    id              INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id      INT DEFAULT 1,
+                    usuario         VARCHAR(100) DEFAULT '',
+                    accion          VARCHAR(50) NOT NULL,
+                    detalle         TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
             conn.commit()
 
             # ── Migration: add empresa_id to existing tables if missing ──
@@ -316,19 +226,14 @@ class DatabaseManager:
             "sostenimiento_diario", "registro_fotografico", "actividad_log",
         }
         for table in allowed_tables:
-            if self.backend == "sqlite":
-                cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
-                if "empresa_id" not in cols:
-                    conn.execute(f"ALTER TABLE [{table}] ADD COLUMN empresa_id INTEGER DEFAULT 1")
-            else:
-                row = conn.execute(
-                    """SELECT COUNT(*) AS cnt
-                       FROM information_schema.COLUMNS
-                       WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME='empresa_id'""",
-                    (self.mysql_config["database"], table),
-                ).fetchone()
-                if row and row["cnt"] == 0:
-                    conn.execute(f"ALTER TABLE `{table}` ADD COLUMN empresa_id INT DEFAULT 1")
+            row = conn.execute(
+                """SELECT COUNT(*) AS cnt
+                   FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME='empresa_id'""",
+                (self.mysql_config["database"], table),
+            ).fetchone()
+            if row and row["cnt"] == 0:
+                conn.execute(f"ALTER TABLE `{table}` ADD COLUMN empresa_id INT DEFAULT 1")
         # Remove UNIQUE constraint on labores.labor (now unique per empresa)
         # This is handled naturally since new tables have no UNIQUE on labor alone
         conn.commit()
@@ -336,13 +241,13 @@ class DatabaseManager:
     # ── Helpers internos ─────────────────────────────────────────────────
 
     @staticmethod
-    def _row_to_dict(row: dict | sqlite3.Row) -> dict:
-        """Convierte un sqlite3.Row a dict estándar."""
+    def _row_to_dict(row: dict) -> dict:
+        """Convierte una fila en dict estándar."""
         return dict(row)
 
     @staticmethod
-    def _rows_to_list(rows: list[dict] | list[sqlite3.Row]) -> list[dict]:
-        """Convierte una lista de sqlite3.Row a lista de dicts."""
+    def _rows_to_list(rows: list[dict]) -> list[dict]:
+        """Convierte una lista de filas a lista de dicts."""
         return [dict(r) for r in rows]
 
     # ══════════════════════════════════════════════════════════════════════
@@ -768,7 +673,7 @@ class DatabaseManager:
                 )
                 conn.commit()
                 return True, "Labor editada correctamente"
-            except (sqlite3.IntegrityError, MySQLIntegrityError):
+            except MySQLIntegrityError:
                 return False, f"La labor '{datos.get('Labor', '')}' ya existe"
             finally:
                 conn.close()
@@ -1017,7 +922,7 @@ class DatabaseManager:
         except Exception:
             return []
 
-    def _expandir_sostenimiento(self, row: dict | sqlite3.Row) -> dict:
+    def _expandir_sostenimiento(self, row: dict) -> dict:
         """Expande una fila de sostenimiento_diario con los datos JSON."""
         registro: dict = {
             "id": row["id"],
@@ -1124,7 +1029,7 @@ class DatabaseManager:
 
     def migrar_desde_excel(self, archivo_excel: str) -> tuple[bool, str]:
         """
-        Importa todos los datos de un archivo Excel existente a SQLite.
+        Importa todos los datos de un archivo Excel existente a MySQL.
 
         Lee las hojas Bitacora, Labores, Estandar_Sostenimiento y
         Sostenimiento_Diario e inserta sus filas en las tablas correspondientes.
@@ -1194,7 +1099,7 @@ class DatabaseManager:
                                 ),
                             )
                             count += 1
-                        except (sqlite3.IntegrityError, MySQLIntegrityError):
+                        except MySQLIntegrityError:
                             pass
                     conn.commit()
                 finally:

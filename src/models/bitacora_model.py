@@ -1,6 +1,6 @@
 """
 Modelo de datos para la Bitácora Geomecánica
-Maneja la lógica de lectura/escritura usando SQLite (primario) y Excel (secundario).
+Maneja la lógica de lectura/escritura usando MySQL (primario) y Excel (secundario).
 """
 import shutil
 import pandas as pd
@@ -71,7 +71,7 @@ def _convertir_valor(valor, col_dtype) -> object:
 class BitacoraModel:
     """Gestiona la lógica de datos de la bitácora.
 
-    Usa SQLite como almacenamiento primario y mantiene el archivo Excel
+    Usa MySQL como almacenamiento primario y mantiene el archivo Excel
     sincronizado como formato secundario de exportación.
     """
 
@@ -80,9 +80,9 @@ class BitacoraModel:
     def __init__(self, archivo=None, db_path=None, empresa_id=1):
         self.archivo = archivo or ARCHIVO_BITACORA
         self._undo_stack: list = []
-        self.db = DatabaseManager(db_path=db_path, empresa_id=empresa_id)
+        self.db = DatabaseManager(empresa_id=empresa_id)
         self.inicializar_excel()
-        self._migrar_excel_a_sqlite()
+        self._migrar_excel_a_mysql()
     
     def _hacer_backup(self):
         """
@@ -172,8 +172,8 @@ class BitacoraModel:
             except Exception:
                 pass
 
-    def _migrar_excel_a_sqlite(self):
-        """Migra datos del Excel existente a SQLite (solo la primera vez)."""
+    def _migrar_excel_a_mysql(self):
+        """Migra datos del Excel existente a MySQL (solo la primera vez)."""
         try:
             if not os.path.exists(self.archivo):
                 return
