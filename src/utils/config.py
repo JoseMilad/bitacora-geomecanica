@@ -9,6 +9,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 ARCHIVO_BITACORA = DATA_DIR / "bitacora_geomecanica.xlsx"
 
+# Base de datos (MySQL por defecto, configurable vía variable de entorno)
+MYSQL_USER = os.getenv("MYSQL_USER", "usuario")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "password")
+MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "bitacora_geomecanica")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}",
+)
+
 # Crear directorios si no existen
 DATA_DIR.mkdir(exist_ok=True)
 

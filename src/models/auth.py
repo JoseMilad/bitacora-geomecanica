@@ -1,7 +1,7 @@
 """
 Módulo de autenticación — gestión de usuarios y sesiones.
 
-Almacena usuarios en la tabla ``usuarios`` de la BD SQLite existente.
+Almacena usuarios en la tabla ``usuarios`` de la BD principal (MySQL por defecto).
 Las contraseñas se almacenan con hash bcrypt vía passlib.
 """
 from __future__ import annotations
@@ -9,11 +9,17 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+from urllib.parse import unquote, urlparse
 
-from utils.config import DATA_DIR
+import pymysql
+from pymysql.cursors import DictCursor
+
+from utils.config import DATA_DIR, DATABASE_URL
 
 # ── Hashing de contraseñas ───────────────────────────────────────────────────
 # Usamos SHA-256 + salt propio en vez de bcrypt para evitar dependencias
@@ -42,44 +48,149 @@ def _verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
-# ── Gestión de usuarios en SQLite ────────────────────────────────────────────
+# ── Gestión de usuarios en BD ────────────────────────────────────────────────
 
 _DB_PATH = DATA_DIR / "bitacora.db"
 
-_CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS usuarios (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    username    TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-    password    TEXT    NOT NULL,
-    nombre      TEXT    DEFAULT '',
-    rol         TEXT    DEFAULT 'usuario',
-    empresa_id  INTEGER DEFAULT 1,
-    activo      INTEGER DEFAULT 1,
-    created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
-);
+_CREATE_TABLE_SQLITE = """
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        username    TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        password    TEXT    NOT NULL,
+        nombre      TEXT    DEFAULT '',
+        rol         TEXT    DEFAULT 'usuario',
+        empresa_id  INTEGER DEFAULT 1,
+        activo      INTEGER DEFAULT 1,
+        created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
+    );
+"""
+
+_CREATE_TABLE_MYSQL = """
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id          INT PRIMARY KEY AUTO_INCREMENT,
+        username    VARCHAR(150) NOT NULL UNIQUE,
+        password    VARCHAR(255) NOT NULL,
+        nombre      VARCHAR(255) DEFAULT '',
+        rol         VARCHAR(50)  DEFAULT 'usuario',
+        empresa_id  INT DEFAULT 1,
+        activo      TINYINT(1) DEFAULT 1,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
 """
 
 
-def _get_conn(db_path: str | Path | None = None) -> sqlite3.Connection:
-    """Retorna conexión SQLite con row_factory."""
-    path = Path(db_path) if db_path else _DB_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+class _MySQLCursorAdapter:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    @property
+    def rowcount(self) -> int:
+        return self._cursor.rowcount
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+
+class _MySQLConnectionAdapter:
+    backend = "mysql"
+
+    def __init__(self, connection):
+        self._conn = connection
+
+    @staticmethod
+    def _normalize_sql(query: str) -> str:
+        return query.replace("?", "%s")
+
+    def execute(self, query: str, params: tuple | list | None = None) -> _MySQLCursorAdapter:
+        cur = self._conn.cursor()
+        cur.execute(self._normalize_sql(query), params or ())
+        return _MySQLCursorAdapter(cur)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def _parse_mysql_url(database_url: str) -> dict[str, Any]:
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {"mysql", "mysql+pymysql"}:
+        raise ValueError("DATABASE_URL debe usar esquema mysql+pymysql://")
+    database = parsed.path.lstrip("/")
+    if not database:
+        raise ValueError("DATABASE_URL debe incluir nombre de base de datos.")
+    if not re.fullmatch(r"[A-Za-z0-9_]+", database):
+        raise ValueError("Nombre de base de datos inválido.")
+    return {
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 3306,
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "database": database,
+        "charset": "utf8mb4",
+        "cursorclass": DictCursor,
+        "autocommit": False,
+    }
+
+
+def _ensure_mysql_database() -> None:
+    cfg = _parse_mysql_url(DATABASE_URL)
+    server_cfg = {k: v for k, v in cfg.items() if k != "database"}
+    conn = pymysql.connect(**server_cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{cfg['database']}` "
+                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _get_conn(db_path: str | Path | None = None):
+    """Retorna conexión al backend activo."""
+    if db_path:
+        path = Path(db_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(path))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    _ensure_mysql_database()
+    raw = pymysql.connect(**_parse_mysql_url(DATABASE_URL))
+    return _MySQLConnectionAdapter(raw)
 
 
 def inicializar_tabla_usuarios(db_path: str | Path | None = None) -> None:
     """Crea la tabla ``usuarios`` si no existe y agrega el usuario admin por defecto."""
     conn = _get_conn(db_path)
     try:
-        conn.execute(_CREATE_TABLE)
+        is_mysql = isinstance(conn, _MySQLConnectionAdapter)
+        conn.execute(_CREATE_TABLE_MYSQL if is_mysql else _CREATE_TABLE_SQLITE)
+
         # Migration: add empresa_id column if missing
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
-        if "empresa_id" not in cols:
-            conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INTEGER DEFAULT 1")
-            conn.commit()
+        if is_mysql:
+            row = conn.execute(
+                """SELECT COUNT(*) AS cnt
+                   FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='usuarios' AND COLUMN_NAME='empresa_id'""",
+                (_parse_mysql_url(DATABASE_URL)["database"],),
+            ).fetchone()
+            if row and row["cnt"] == 0:
+                conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INT DEFAULT 1")
+                conn.commit()
+        else:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
+            if "empresa_id" not in cols:
+                conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INTEGER DEFAULT 1")
+                conn.commit()
+
         # Verificar si ya existe algún usuario
         row = conn.execute("SELECT COUNT(*) as cnt FROM usuarios").fetchone()
         if row["cnt"] == 0:
@@ -148,6 +259,11 @@ def crear_usuario(
     Returns:
         (True, mensaje) si se creó correctamente, (False, mensaje) en caso de error.
     """
+    if db_path is None and isinstance(empresa_id, (str, Path)):
+        # Compatibilidad hacia atrás para llamadas posicionales con db_path en 5to argumento.
+        db_path = empresa_id
+        empresa_id = 1
+
     username = username.strip().lower()
     if not username or not password:
         return False, "Usuario y contraseña son requeridos."
