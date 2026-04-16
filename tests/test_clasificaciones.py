@@ -244,3 +244,18 @@ def test_guardar_estandar_default_es_rmr(model):
     model.guardar_estandar_sostenimiento(datos)
     df = model.obtener_estandar_sostenimiento()
     assert len(df) == 1
+
+
+def test_guardar_estandar_descarta_duplicados_exactos(model):
+    """Al guardar estándar se deben ignorar filas exactas repetidas."""
+    datos = [
+        {"RMR_min": 0, "RMR_max": 20, "Tipo": "Temporal", "Soporte": "Pernos"},
+        {"RMR_min": 0.0, "RMR_max": 20.0, "Tipo": "Temporal", "Soporte": "Pernos"},
+        {"RMR_min": 21, "RMR_max": 40, "Tipo": "Temporal", "Soporte": "Shotcrete"},
+    ]
+    ok, _ = model.guardar_estandar_sostenimiento(datos, sistema="RMR")
+    assert ok is True
+
+    df = model.obtener_estandar_sostenimiento(sistema="RMR")
+    assert len(df) == 2
+    assert list(df["RMR_min"]) == [0.0, 21.0]
