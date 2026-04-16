@@ -8,9 +8,9 @@ from utils.config import DATA_DIR
 CONFIG_FILE = DATA_DIR / "config.json"
 
 CLASIFICACIONES_PREDEFINIDAS = [
-    {"id": "RMR", "nombre": "RMR (Rock Mass Rating)", "predefinida": True},
-    {"id": "Q", "nombre": "Q de Barton", "predefinida": True},
-    {"id": "GSI", "nombre": "GSI (Geological Strength Index)", "predefinida": True},
+    {"id": "RMR", "nombre": "RMR (Rock Mass Rating)", "predefinida": True, "tipo_valor": "numerico"},
+    {"id": "Q", "nombre": "Q de Barton", "predefinida": True, "tipo_valor": "numerico"},
+    {"id": "GSI", "nombre": "GSI (Geological Strength Index)", "predefinida": True, "tipo_valor": "numerico"},
 ]
 
 DEFAULTS = {
@@ -84,12 +84,17 @@ def guardar_config(config: dict) -> bool:
 def obtener_clasificaciones_disponibles() -> list:
     """
     Devuelve la lista combinada de clasificaciones predefinidas y personalizadas.
-    Cada elemento es un dict con 'id', 'nombre' y 'predefinida'.
+    Cada elemento es un dict con 'id', 'nombre', 'predefinida' y 'tipo_valor'.
     """
     config = cargar_config()
     personalizadas = config.get("clasificaciones_personalizadas", [])
     return list(CLASIFICACIONES_PREDEFINIDAS) + [
-        {"id": c["id"], "nombre": c["nombre"], "predefinida": False}
+        {
+            "id": c["id"],
+            "nombre": c["nombre"],
+            "predefinida": False,
+            "tipo_valor": c.get("tipo_valor", "numerico"),
+        }
         for c in personalizadas if isinstance(c, dict) and "id" in c and "nombre" in c
     ]
 
@@ -100,6 +105,22 @@ def obtener_clasificaciones_activas() -> list:
     return config.get("clasificaciones_activas", ["RMR"])
 
 
+def get_tipo_valor_clasificacion(sistema: str) -> str:
+    """
+    Devuelve 'numerico' o 'texto' para un sistema de clasificación dado.
+    Las clasificaciones predefinidas son siempre numéricas.
+    Las personalizadas toman el valor guardado en config (por defecto 'numerico').
+    """
+    for c in CLASIFICACIONES_PREDEFINIDAS:
+        if c["id"] == sistema:
+            return c.get("tipo_valor", "numerico")
+    config = cargar_config()
+    for c in config.get("clasificaciones_personalizadas", []):
+        if isinstance(c, dict) and c.get("id") == sistema:
+            return c.get("tipo_valor", "numerico")
+    return "numerico"
+
+
 def nombre_hoja_estandar(sistema: str) -> str:
     """Devuelve el nombre de la hoja Excel para un sistema de clasificación."""
     if sistema == "RMR":
@@ -108,7 +129,15 @@ def nombre_hoja_estandar(sistema: str) -> str:
 
 
 def columnas_estandar(sistema: str) -> list:
-    """Devuelve las columnas del estándar según el sistema de clasificación."""
+    """Devuelve las columnas del estándar según el sistema de clasificación.
+
+    Para clasificaciones de tipo numérico: ['{sistema}_min', '{sistema}_max', 'Tipo', 'Soporte']
+    Para clasificaciones de tipo texto:    ['{sistema}_desde', '{sistema}_hasta', 'Tipo', 'Soporte']
+    """
+    tipo_valor = get_tipo_valor_clasificacion(sistema)
+    if tipo_valor == "texto":
+        return [f"{sistema}_desde", f"{sistema}_hasta", "Tipo", "Soporte"]
+    # Tipo numérico (predefinidas o personalizadas numéricas)
     if sistema == "RMR":
         return ["RMR_min", "RMR_max", "Tipo", "Soporte"]
     elif sistema == "Q":

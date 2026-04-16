@@ -84,12 +84,15 @@ async def guardar_configuracion(request: Request):
     # ── Nueva clasificación personalizada ─────────────────────────────────────
     nueva_id = form.get("nueva_clasif_id", "").strip()
     nueva_nombre = form.get("nueva_clasif_nombre", "").strip()
+    nueva_tipo_valor = form.get("nueva_clasif_tipo_valor", "numerico").strip()
+    if nueva_tipo_valor not in ("numerico", "texto"):
+        nueva_tipo_valor = "numerico"
     if nueva_id and nueva_nombre:
         nueva_id = re.sub(r"[^a-zA-Z0-9_]", "_", nueva_id).upper()
         ids_predefinidas = {c["id"] for c in CLASIFICACIONES_PREDEFINIDAS}
         ids_existentes = {c["id"] for c in personalizadas if isinstance(c, dict)}
         if nueva_id not in ids_predefinidas and nueva_id not in ids_existentes:
-            personalizadas.append({"id": nueva_id, "nombre": nueva_nombre})
+            personalizadas.append({"id": nueva_id, "nombre": nueva_nombre, "tipo_valor": nueva_tipo_valor})
             config["clasificaciones_personalizadas"] = personalizadas
 
     # ── Sostenimientos activos ────────────────────────────────────────────────

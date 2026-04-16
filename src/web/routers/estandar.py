@@ -17,6 +17,7 @@ from src.utils.config_manager import (
     obtener_clasificaciones_activas,
     obtener_clasificaciones_disponibles,
     columnas_estandar,
+    get_tipo_valor_clasificacion,
 )
 
 router = APIRouter()
@@ -80,6 +81,7 @@ async def ver_estandar(request: Request, sistema: str = ""):
         "nombre_sistema": disponibles.get(sistema, sistema),
         "filas": filas,
         "cols": cols,
+        "tipo_valor": get_tipo_valor_clasificacion(sistema),
         "flash": flash,
         "active_page": "estandar",
     })

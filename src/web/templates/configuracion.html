@@ -79,6 +79,25 @@
               placeholder="Nombre completo" />
           </div>
         </div>
+        <div class="mt-2">
+          <label class="form-label fw-semibold small mb-1">Tipo de entrada:</label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="nueva_clasif_tipo_valor"
+                id="tipo_numerico" value="numerico" checked />
+              <label class="form-check-label small" for="tipo_numerico">
+                <i class="fa-solid fa-hashtag me-1 text-primary"></i>Numérico
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="nueva_clasif_tipo_valor"
+                id="tipo_texto" value="texto" />
+              <label class="form-check-label small" for="tipo_texto">
+                <i class="fa-solid fa-font me-1 text-primary"></i>Texto / Letras
+              </label>
+            </div>
+          </div>
+        </div>
         <small class="text-muted mt-1 d-block">
           El ID será normalizado a mayúsculas (ej: RQD). Guarda para confirmar.
         </small>
