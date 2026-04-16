@@ -1,7 +1,7 @@
 """
 Módulo de autenticación — gestión de usuarios y sesiones.
 
-Almacena usuarios en la tabla ``usuarios`` de la BD principal (MySQL por defecto).
+Almacena usuarios en la tabla ``usuarios`` de la BD principal (MySQL exclusivamente).
 Las contraseñas se almacenan con hash bcrypt vía passlib.
 """
 from __future__ import annotations
@@ -10,16 +10,13 @@ import hashlib
 import hmac
 import os
 import re
-import sqlite3
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 import pymysql
 from pymysql.cursors import DictCursor
 
-from utils.config import DATA_DIR, DATABASE_URL
+from utils.config import DATABASE_URL
 
 # ── Hashing de contraseñas ───────────────────────────────────────────────────
 # Usamos SHA-256 + salt propio en vez de bcrypt para evitar dependencias
@@ -49,21 +46,6 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 
 # ── Gestión de usuarios en BD ────────────────────────────────────────────────
-
-_DB_PATH = DATA_DIR / "bitacora.db"
-
-_CREATE_TABLE_SQLITE = """
-    CREATE TABLE IF NOT EXISTS usuarios (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        username    TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-        password    TEXT    NOT NULL,
-        nombre      TEXT    DEFAULT '',
-        rol         TEXT    DEFAULT 'usuario',
-        empresa_id  INTEGER DEFAULT 1,
-        activo      INTEGER DEFAULT 1,
-        created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
-    );
-"""
 
 _CREATE_TABLE_MYSQL = """
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -152,44 +134,29 @@ def _ensure_mysql_database() -> None:
         conn.close()
 
 
-def _get_conn(db_path: str | Path | None = None):
+def _get_conn():
     """Retorna conexión al backend activo."""
-    if db_path:
-        path = Path(db_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(path))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        return conn
-
     _ensure_mysql_database()
     raw = pymysql.connect(**_parse_mysql_url(DATABASE_URL))
     return _MySQLConnectionAdapter(raw)
 
 
-def inicializar_tabla_usuarios(db_path: str | Path | None = None) -> None:
+def inicializar_tabla_usuarios() -> None:
     """Crea la tabla ``usuarios`` si no existe y agrega el usuario admin por defecto."""
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
-        is_mysql = isinstance(conn, _MySQLConnectionAdapter)
-        conn.execute(_CREATE_TABLE_MYSQL if is_mysql else _CREATE_TABLE_SQLITE)
+        conn.execute(_CREATE_TABLE_MYSQL)
 
         # Migration: add empresa_id column if missing
-        if is_mysql:
-            row = conn.execute(
-                """SELECT COUNT(*) AS cnt
-                   FROM information_schema.COLUMNS
-                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='usuarios' AND COLUMN_NAME='empresa_id'""",
-                (_parse_mysql_url(DATABASE_URL)["database"],),
-            ).fetchone()
-            if row and row["cnt"] == 0:
-                conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INT DEFAULT 1")
-                conn.commit()
-        else:
-            cols = [row[1] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
-            if "empresa_id" not in cols:
-                conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INTEGER DEFAULT 1")
-                conn.commit()
+        row = conn.execute(
+            """SELECT COUNT(*) AS cnt
+               FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA=%s AND TABLE_NAME='usuarios' AND COLUMN_NAME='empresa_id'""",
+            (_parse_mysql_url(DATABASE_URL)["database"],),
+        ).fetchone()
+        if row and row["cnt"] == 0:
+            conn.execute("ALTER TABLE usuarios ADD COLUMN empresa_id INT DEFAULT 1")
+            conn.commit()
 
         # Verificar si ya existe algún usuario
         row = conn.execute("SELECT COUNT(*) as cnt FROM usuarios").fetchone()
@@ -204,14 +171,14 @@ def inicializar_tabla_usuarios(db_path: str | Path | None = None) -> None:
         conn.close()
 
 
-def autenticar_usuario(username: str, password: str, db_path: str | Path | None = None) -> dict | None:
+def autenticar_usuario(username: str, password: str) -> dict | None:
     """
     Intenta autenticar un usuario.
 
     Returns:
         dict con datos del usuario si la autenticación es exitosa, None en caso contrario.
     """
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         row = conn.execute(
             "SELECT * FROM usuarios WHERE username = ? AND activo = 1",
@@ -232,9 +199,9 @@ def autenticar_usuario(username: str, password: str, db_path: str | Path | None 
         conn.close()
 
 
-def obtener_usuarios(db_path: str | Path | None = None) -> list[dict]:
+def obtener_usuarios() -> list[dict]:
     """Devuelve la lista de todos los usuarios."""
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         rows = conn.execute(
             "SELECT id, username, nombre, rol, activo, created_at FROM usuarios ORDER BY id"
@@ -250,7 +217,6 @@ def crear_usuario(
     nombre: str = "",
     rol: str = "usuario",
     empresa_id: int = 1,
-    db_path: str | Path | None = None,
     activo: int = 1,
 ) -> tuple[bool, str]:
     """
@@ -259,18 +225,13 @@ def crear_usuario(
     Returns:
         (True, mensaje) si se creó correctamente, (False, mensaje) en caso de error.
     """
-    if db_path is None and isinstance(empresa_id, (str, Path)):
-        # Compatibilidad hacia atrás para llamadas posicionales con db_path en 5to argumento.
-        db_path = empresa_id
-        empresa_id = 1
-
     username = username.strip().lower()
     if not username or not password:
         return False, "Usuario y contraseña son requeridos."
     if len(password) < 4:
         return False, "La contraseña debe tener al menos 4 caracteres."
 
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         # Verificar si ya existe
         row = conn.execute("SELECT id FROM usuarios WHERE username = ?", (username,)).fetchone()
@@ -294,10 +255,9 @@ def editar_usuario(
     rol: str | None = None,
     activo: bool | None = None,
     password: str | None = None,
-    db_path: str | Path | None = None,
 ) -> tuple[bool, str]:
     """Edita campos de un usuario existente."""
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         sets, params = [], []
         if nombre is not None:
@@ -324,9 +284,9 @@ def editar_usuario(
         conn.close()
 
 
-def eliminar_usuario(user_id: int, db_path: str | Path | None = None) -> tuple[bool, str]:
+def eliminar_usuario(user_id: int) -> tuple[bool, str]:
     """Elimina un usuario (no permite eliminar al último admin)."""
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         # Verificar que no sea el último admin
         row = conn.execute("SELECT rol FROM usuarios WHERE id = ?", (user_id,)).fetchone()
