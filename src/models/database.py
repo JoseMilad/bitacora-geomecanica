@@ -733,6 +733,18 @@ class DatabaseManager:
         try:
             col_min = f"{sistema}_min"
             col_max = f"{sistema}_max"
+            filas_unicas: list[tuple[float, float, str, str]] = []
+            vistas: set[tuple[float, float, str, str]] = set()
+            for fila in datos:
+                valor_min = float(fila.get(col_min, 0))
+                valor_max = float(fila.get(col_max, 0))
+                tipo = str(fila.get("Tipo", "")).strip()
+                soporte = str(fila.get("Soporte", "")).strip()
+                clave = (valor_min, valor_max, tipo.casefold(), soporte.casefold())
+                if clave in vistas:
+                    continue
+                vistas.add(clave)
+                filas_unicas.append((valor_min, valor_max, tipo, soporte))
 
             conn = self._get_connection()
             try:
@@ -740,7 +752,7 @@ class DatabaseManager:
                     "DELETE FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=?",
                     (sistema, self.empresa_id),
                 )
-                for fila in datos:
+                for valor_min, valor_max, tipo, soporte in filas_unicas:
                     conn.execute(
                         """INSERT INTO estandar_sostenimiento
                                (empresa_id, sistema, valor_min, valor_max, tipo, soporte)
@@ -748,10 +760,10 @@ class DatabaseManager:
                         (
                             self.empresa_id,
                             sistema,
-                            float(fila.get(col_min, 0)),
-                            float(fila.get(col_max, 0)),
-                            fila.get("Tipo", ""),
-                            fila.get("Soporte", ""),
+                            valor_min,
+                            valor_max,
+                            tipo,
+                            soporte,
                         ),
                     )
                 conn.commit()
