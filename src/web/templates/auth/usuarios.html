@@ -50,7 +50,7 @@
                 <span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i>Inactivo</span>
                 {% endif %}
               </td>
-              <td class="text-muted small">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+              <td class="text-muted small">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}</td>
               <td class="text-center">
                 <button class="btn btn-sm btn-outline-primary" title="Editar"
                   data-bs-toggle="modal" data-bs-target="#modalEditar{{ u.id }}">
