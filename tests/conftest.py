@@ -1,3 +1,5 @@
+"""Fixtures de pruebas que mockean conexiones MySQL con backend en memoria."""
+
 import re
 import sqlite3
 

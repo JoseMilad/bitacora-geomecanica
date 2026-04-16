@@ -82,7 +82,7 @@ class BitacoraModel:
         self._undo_stack: list = []
         self.db = DatabaseManager(empresa_id=empresa_id)
         self.inicializar_excel()
-        self._migrar_excel_a_sqlite()
+        self._migrar_excel_a_mysql()
     
     def _hacer_backup(self):
         """
@@ -172,8 +172,8 @@ class BitacoraModel:
             except Exception:
                 pass
 
-    def _migrar_excel_a_sqlite(self):
-        """Migra datos del Excel existente a SQLite (solo la primera vez)."""
+    def _migrar_excel_a_mysql(self):
+        """Migra datos del Excel existente a MySQL (solo la primera vez)."""
         try:
             if not os.path.exists(self.archivo):
                 return
