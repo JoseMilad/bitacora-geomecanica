@@ -45,12 +45,12 @@ Acceder en: http://localhost:8000
 | Variable | Descripción |
 |---|---|
 | `BITACORA_SECRET_KEY` | Clave secreta segura y aleatoria (p. ej. generada con `openssl rand -hex 32`) |
+| `DATABASE_URL` | Cadena de conexión MySQL (ej: `mysql+pymysql://usuario:contraseña@localhost:3306/bitacora_geomecanica`) |
 
 5. Haz clic en **"Create Web Service"** y Render desplegará la aplicación automáticamente.
 
-### 💾 Persistencia de datos (SQLite)
+### 💾 Persistencia de datos (MySQL)
 
-La aplicación usa SQLite (`data/bitacora.db`) y archivos Excel (`data/`). El sistema de archivos de Render es **efímero**: los archivos se borran con cada nuevo deploy.
+La aplicación usa **MySQL** como base de datos principal (configurable con `DATABASE_URL`) y mantiene archivos Excel en `data/` para exportación/sincronización.
 
-Para conservar los datos entre deploys, configura un **[Render Disk](https://render.com/docs/disks)** y móntalo en el directorio `data/` del servicio.
-
+Para entornos productivos, define credenciales reales por variables de entorno (recomendado) y evita hardcodear usuarios/contraseñas en el código.
