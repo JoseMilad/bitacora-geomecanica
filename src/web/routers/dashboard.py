@@ -10,9 +10,10 @@ for _p in (str(_ROOT), str(_ROOT / "src")):
 
 import pandas as pd
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from typing import List
 
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import APP_VERSION
@@ -49,6 +50,9 @@ def _parse_fecha(x) -> datetime | None:
     return None
 
 
+TIPOS_SHOTCRETE = ["X1", "X5", "X6", "X7", "X10"]
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
@@ -56,6 +60,7 @@ async def dashboard(
     labor_filter: str = "",
     fecha_inicio: str = "",
     fecha_fin: str = "",
+    tipo_shotcrete: List[str] = Query(default=[]),
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
 
@@ -175,13 +180,20 @@ async def dashboard(
 
     flash = _get_flash(request)
 
+    # Validar tipos de shotcrete seleccionados
+    tipos_shotcrete_sel = [t for t in tipo_shotcrete if t in TIPOS_SHOTCRETE]
+
     # ── Datos para gráfico de sostenimiento ───────────────────────────────────
     # Totales por labor (para chart de barras) con filtro de labor
     labels_sost_labor, data_sost_labor = [], []
+    df_sost_full = pd.DataFrame()
     try:
         df_sost_full = model.obtener_sostenimiento()
         if labor_filter and not df_sost_full.empty:
             df_sost_full = df_sost_full[df_sost_full["Labor"].str.contains(labor_filter, case=False, na=False)]
+        # Aplicar filtro de tipo de shotcrete cuando corresponda
+        if tipos_shotcrete_sel and not df_sost_full.empty and col_principal.lower().startswith("shotcrete") and "Tipo_Shotcrete" in df_sost_full.columns:
+            df_sost_full = df_sost_full[df_sost_full["Tipo_Shotcrete"].isin(tipos_shotcrete_sel)]
         if not df_sost_full.empty and col_principal in df_sost_full.columns:
             grp = df_sost_full.groupby("Labor")[col_principal].sum().sort_values(ascending=False).head(10)
             labels_sost_labor = grp.index.tolist()
@@ -252,4 +264,6 @@ async def dashboard(
         "labores_nombres": labores_nombres,
         "flash": flash,
         "active_page": "dashboard",
+        "tipos_shotcrete_disponibles": TIPOS_SHOTCRETE,
+        "tipos_shotcrete_sel": tipos_shotcrete_sel,
     })

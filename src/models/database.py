@@ -680,6 +680,28 @@ class DatabaseManager:
         except Exception as e:
             return False, f"Error al editar labor: {e}"
 
+    def tiene_datos(self) -> bool:
+        """
+        Comprueba si ya existen datos en alguna de las tablas principales
+        para esta empresa.  Se usa como guarda para evitar re-migraciones.
+        """
+        tablas = ("bitacora", "estandar_sostenimiento", "sostenimiento_diario", "labores")
+        try:
+            conn = self._get_connection()
+            try:
+                for tabla in tablas:
+                    row = conn.execute(
+                        f"SELECT 1 FROM {tabla} WHERE empresa_id=? LIMIT 1",
+                        (self.empresa_id,),
+                    ).fetchone()
+                    if row:
+                        return True
+            finally:
+                conn.close()
+        except Exception:
+            pass
+        return False
+
     # ══════════════════════════════════════════════════════════════════════
     #  ESTÁNDAR DE SOSTENIMIENTO
     # ══════════════════════════════════════════════════════════════════════

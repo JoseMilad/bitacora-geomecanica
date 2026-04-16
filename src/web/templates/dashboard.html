@@ -14,6 +14,9 @@
       <!-- Mantener filtros de sostenimiento al cambiar período -->
       <input type="hidden" name="sost_col" value="{{ sost_col }}" />
       <input type="hidden" name="labor_filter" value="{{ labor_filter }}" />
+      {% for t in tipos_shotcrete_sel %}
+      <input type="hidden" name="tipo_shotcrete" value="{{ t }}" />
+      {% endfor %}
       <div class="col-auto">
         <label class="form-label small fw-semibold mb-1">
           <i class="fa-solid fa-calendar me-1"></i>Desde
@@ -126,13 +129,13 @@
 <!-- Filtros de Sostenimiento -->
 <div class="card shadow-sm border-0 mb-3">
   <div class="card-body py-2">
-    <form method="get" action="/dashboard" class="row g-2 align-items-end">
+    <form method="get" action="/dashboard" class="row g-2 align-items-end" id="formSostFilter">
       <!-- Mantener filtro de período -->
       <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}" />
       <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}" />
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label small fw-semibold mb-1">Tipo de Soporte</label>
-        <select name="sost_col" class="form-select form-select-sm" onchange="this.form.submit()">
+        <select name="sost_col" class="form-select form-select-sm" id="selectSostCol" onchange="onSostColChange(this)">
           {% for s in activos_sost %}
             {% if s is mapping %}
             <option value="{{ s.columna }}" {% if sost_col == s.columna %}selected{% endif %}>
@@ -142,7 +145,23 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-4">
+      <!-- Filtro por tipo de shotcrete (solo cuando sost_col == Shotcrete_m3) -->
+      <div class="col-md-4" id="tipoShotcreteContainer" style="{% if not sost_col.startswith('Shotcrete') %}display:none{% endif %}">
+        <label class="form-label small fw-semibold mb-1">
+          <i class="fa-solid fa-spray-can me-1 text-secondary"></i>Tipo de Shotcrete
+        </label>
+        <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="background:#f8fafc;max-height:72px;overflow-y:auto;">
+          {% for tipo in tipos_shotcrete_disponibles %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" name="tipo_shotcrete" value="{{ tipo }}"
+              id="chk_{{ tipo }}"
+              {% if tipo in tipos_shotcrete_sel %}checked{% endif %} />
+            <label class="form-check-label small fw-semibold" for="chk_{{ tipo }}">{{ tipo }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-md-3">
         <label class="form-label small fw-semibold mb-1">Filtrar por Labor</label>
         <div class="position-relative">
           <input type="text" name="labor_filter" id="dashLaborFilter" value="{{ labor_filter }}"
@@ -151,11 +170,11 @@
             style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
         </div>
       </div>
-      <div class="col-md-4 d-flex gap-2">
+      <div class="col-md-2 d-flex gap-2">
         <button type="submit" class="btn btn-sm btn-outline-secondary">
           <i class="fa-solid fa-filter me-1"></i>Filtrar
         </button>
-        {% if sost_col or labor_filter %}
+        {% if sost_col or labor_filter or tipos_shotcrete_sel %}
         <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
           <i class="fa-solid fa-xmark me-1"></i>Limpiar
         </a>
@@ -303,27 +322,70 @@ const dataSostTipo    = {{ data_sost_tipo | tojson }};
 const labelsSostFase  = {{ labels_sost_fase | tojson }};
 const dataSostFase    = {{ data_sost_fase | tojson }};
 
-new Chart(document.getElementById('chartLabores'), {
+// ── Shared chart defaults ──────────────────────────────────────────────
+Chart.defaults.font.family = "'Segoe UI', system-ui, -apple-system, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#6b7280';
+
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(26,37,64,0.92)',
+  titleColor: '#ffffff',
+  bodyColor: 'rgba(255,255,255,0.8)',
+  borderColor: 'rgba(255,255,255,0.1)',
+  borderWidth: 1,
+  padding: 10,
+  cornerRadius: 8,
+  displayColors: true,
+  boxPadding: 4,
+};
+
+// ── Top 10 Labores por Registros ──────────────────────────────────────
+const ctxLabores = document.getElementById('chartLabores').getContext('2d');
+const gradLabores = ctxLabores.createLinearGradient(0, 0, 0, 250);
+gradLabores.addColorStop(0, 'rgba(26,111,196,0.85)');
+gradLabores.addColorStop(1, 'rgba(26,111,196,0.35)');
+
+new Chart(ctxLabores, {
   type: 'bar',
   data: {
     labels: labelsLabores,
     datasets: [{
       label: 'Registros',
       data: dataLabores,
-      backgroundColor: '#1a6fc4cc',
+      backgroundColor: gradLabores,
       borderColor: '#1a6fc4',
-      borderWidth: 1,
-      borderRadius: 4,
+      borderWidth: 1.5,
+      borderRadius: 6,
+      borderSkipped: false,
     }]
   },
   options: {
     responsive: true,
-    plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    plugins: {
+      legend: { display: false },
+      tooltip: TOOLTIP_STYLE,
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, color: '#9ca3af' },
+        grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+      },
+      x: {
+        ticks: { color: '#9ca3af' },
+        grid: { display: false },
+      }
+    }
   }
 });
 
-new Chart(document.getElementById('chartFechas'), {
+// ── Actividad últimos 30 días ─────────────────────────────────────────
+const ctxFechas = document.getElementById('chartFechas').getContext('2d');
+const gradFechas = ctxFechas.createLinearGradient(0, 0, 0, 220);
+gradFechas.addColorStop(0, 'rgba(45,138,110,0.35)');
+gradFechas.addColorStop(1, 'rgba(45,138,110,0.02)');
+
+new Chart(ctxFechas, {
   type: 'line',
   data: {
     labels: labelsFechas,
@@ -331,38 +393,72 @@ new Chart(document.getElementById('chartFechas'), {
       label: 'Registros',
       data: dataFechas,
       borderColor: '#2d8a6e',
-      backgroundColor: '#2d8a6e22',
+      backgroundColor: gradFechas,
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
       pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#2d8a6e',
+      borderWidth: 2,
     }]
   },
   options: {
     responsive: true,
-    plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    plugins: {
+      legend: { display: false },
+      tooltip: TOOLTIP_STYLE,
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, color: '#9ca3af' },
+        grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+      },
+      x: {
+        ticks: { color: '#9ca3af', maxTicksLimit: 10 },
+        grid: { display: false },
+      }
+    }
   }
 });
 
-// Dashboard Sostenimiento — totales por labor
+// ── Sostenimiento: totales por labor ──────────────────────────────────
 if (labelsSostLabor.length > 0) {
-  new Chart(document.getElementById('chartSostLabor'), {
+  const ctxSostLabor = document.getElementById('chartSostLabor').getContext('2d');
+  const gradSostLabor = ctxSostLabor.createLinearGradient(0, 0, 0, 260);
+  gradSostLabor.addColorStop(0, 'rgba(45,138,110,0.85)');
+  gradSostLabor.addColorStop(1, 'rgba(45,138,110,0.3)');
+  new Chart(ctxSostLabor, {
     type: 'bar',
     data: {
       labels: labelsSostLabor,
       datasets: [{
         label: 'Cantidad',
         data: dataSostLabor,
-        backgroundColor: '#2d8a6ecc',
+        backgroundColor: gradSostLabor,
         borderColor: '#2d8a6e',
-        borderWidth: 1,
-        borderRadius: 4,
+        borderWidth: 1.5,
+        borderRadius: 6,
+        borderSkipped: false,
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
+      plugins: {
+        legend: { display: false },
+        tooltip: TOOLTIP_STYLE,
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#9ca3af' },
+          grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+        },
+        x: {
+          ticks: { color: '#9ca3af' },
+          grid: { display: false },
+        }
+      }
     }
   });
 } else {
@@ -370,7 +466,7 @@ if (labelsSostLabor.length > 0) {
     '<p class="text-muted text-center py-4"><i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>Sin datos de sostenimiento</p>';
 }
 
-// Por tipo de labor (pie)
+// ── Por tipo de labor (doughnut) ──────────────────────────────────────
 if (labelsSostTipo.length > 0) {
   new Chart(document.getElementById('chartSostTipo'), {
     type: 'doughnut',
@@ -378,13 +474,22 @@ if (labelsSostTipo.length > 0) {
       labels: labelsSostTipo,
       datasets: [{
         data: dataSostTipo,
-        backgroundColor: ['#1a6fc4', '#2d8a6e', '#f59e0b', '#d94f3d', '#8b5cf6'],
+        backgroundColor: ['#1a6fc4', '#2d8a6e', '#f59e0b', '#d94f3d', '#8b5cf6', '#06b6d4'],
+        borderColor: '#ffffff',
         borderWidth: 2,
+        hoverOffset: 6,
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+      cutout: '65%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 10 }, padding: 12, boxWidth: 12 }
+        },
+        tooltip: TOOLTIP_STYLE,
+      }
     }
   });
 } else {
@@ -392,8 +497,9 @@ if (labelsSostTipo.length > 0) {
     '<p class="text-muted text-center py-4 small">Sin datos de tipo</p>';
 }
 
-// Por fase (bar)
+// ── Por fase (bar horizontal) ─────────────────────────────────────────
 if (labelsSostFase.length > 0) {
+  const faseColors = ['rgba(74,144,217,0.8)','rgba(230,126,34,0.8)','rgba(39,174,96,0.8)','rgba(155,89,182,0.8)','rgba(231,76,60,0.8)','rgba(52,152,219,0.8)'];
   new Chart(document.getElementById('chartSostFase'), {
     type: 'bar',
     data: {
@@ -401,15 +507,30 @@ if (labelsSostFase.length > 0) {
       datasets: [{
         label: 'Cantidad',
         data: dataSostFase,
-        backgroundColor: ['#4a90d9cc', '#e67e22cc', '#27ae60cc', '#9b59b6cc'],
-        borderWidth: 1,
-        borderRadius: 4,
+        backgroundColor: faseColors.slice(0, labelsSostFase.length),
+        borderColor: faseColors.slice(0, labelsSostFase.length).map(c => c.replace('0.8','1')),
+        borderWidth: 1.5,
+        borderRadius: 6,
+        borderSkipped: false,
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
+      plugins: {
+        legend: { display: false },
+        tooltip: TOOLTIP_STYLE,
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#9ca3af' },
+          grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+        },
+        x: {
+          ticks: { color: '#9ca3af' },
+          grid: { display: false },
+        }
+      }
     }
   });
 } else {
@@ -417,7 +538,7 @@ if (labelsSostFase.length > 0) {
     '<p class="text-muted text-center py-4 small">Sin datos de fase</p>';
 }
 
-// Typeahead para filtro de labor en sección sostenimiento
+// ── Typeahead para filtro de labor ────────────────────────────────────
 const _laboresDash = {{ labores_nombres | tojson }};
 initLaborTypeahead('dashLaborFilter', 'dropdownDashLaborFilter', _laboresDash, {
   showAll: true,
@@ -425,5 +546,18 @@ initLaborTypeahead('dashLaborFilter', 'dropdownDashLaborFilter', _laboresDash, {
     document.getElementById('dashLaborFilter').closest('form').submit();
   }
 });
+
+// ── Mostrar/ocultar filtro de tipo de shotcrete ───────────────────────
+function onSostColChange(sel) {
+  const container = document.getElementById('tipoShotcreteContainer');
+  if (sel.value && sel.value.toLowerCase().includes('shotcrete')) {
+    container.style.display = '';
+  } else {
+    container.style.display = 'none';
+    // Desmarcar checkboxes al cambiar a otro tipo de soporte
+    container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  }
+  sel.closest('form').submit();
+}
 </script>
 {% endblock %}

@@ -177,10 +177,9 @@ class BitacoraModel:
         try:
             if not os.path.exists(self.archivo):
                 return
-            # Verificar si ya hay datos en SQLite para evitar migración duplicada
-            registros = self.db.obtener_bitacora()
-            if registros:
-                return  # Ya hay datos, no migrar
+            # Verificar si ya hay datos en cualquier tabla para evitar re-migración
+            if self.db.tiene_datos():
+                return
             self.db.migrar_desde_excel(str(self.archivo))
         except Exception:
             pass
