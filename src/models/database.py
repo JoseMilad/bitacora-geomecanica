@@ -685,11 +685,14 @@ class DatabaseManager:
         Comprueba si ya existen datos en alguna de las tablas principales
         para esta empresa.  Se usa como guarda para evitar re-migraciones.
         """
+        _tablas_permitidas = frozenset({"bitacora", "estandar_sostenimiento", "sostenimiento_diario", "labores"})
         tablas = ("bitacora", "estandar_sostenimiento", "sostenimiento_diario", "labores")
         try:
             conn = self._get_connection()
             try:
                 for tabla in tablas:
+                    if tabla not in _tablas_permitidas:
+                        continue
                     row = conn.execute(
                         f"SELECT 1 FROM {tabla} WHERE empresa_id=? LIMIT 1",
                         (self.empresa_id,),

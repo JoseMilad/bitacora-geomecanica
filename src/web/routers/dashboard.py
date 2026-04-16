@@ -186,6 +186,8 @@ async def dashboard(
     # ── Datos para gráfico de sostenimiento ───────────────────────────────────
     # Totales por labor (para chart de barras) con filtro de labor
     labels_sost_labor, data_sost_labor = [], []
+    # Inicializar como DataFrame vacío para que las secciones posteriores
+    # puedan comprobar .empty de forma segura aunque el bloque try falle.
     df_sost_full = pd.DataFrame()
     try:
         df_sost_full = model.obtener_sostenimiento()
