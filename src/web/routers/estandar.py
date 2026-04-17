@@ -92,8 +92,8 @@ async def ver_estandar(request: Request, sistema: str = ""):
 async def agregar_fila(
     request: Request,
     sistema: str = Form(...),
-    val_min: str = Form(...),
-    val_max: str = Form(...),
+    val_min: str = Form(""),
+    val_max: str = Form(""),
     tipo: str = Form("Temporal"),
     soporte: str = Form(...),
 ):
@@ -101,8 +101,13 @@ async def agregar_fila(
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)
+    tipo_valor = get_tipo_valor_clasificacion(sistema)
 
-    nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
+    if tipo_valor == "texto":
+        # Text classification: single description field (cols[0] = {sistema}_desc)
+        nueva = {cols[0]: val_min, "Tipo": tipo, "Soporte": soporte.upper()}
+    else:
+        nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
     filas.append(nueva)
 
     ok, msg = model.guardar_estandar_sostenimiento(filas, sistema=sistema)
@@ -148,8 +153,8 @@ async def editar_fila(
     request: Request,
     sistema: str = Form(...),
     indice: int = Form(...),
-    val_min: str = Form(...),
-    val_max: str = Form(...),
+    val_min: str = Form(""),
+    val_max: str = Form(""),
     tipo: str = Form("Temporal"),
     soporte: str = Form(...),
 ):
@@ -157,9 +162,13 @@ async def editar_fila(
     df = model.obtener_estandar_sostenimiento(sistema)
     filas = df.to_dict(orient="records") if not df.empty else []
     cols = columnas_estandar(sistema)
+    tipo_valor = get_tipo_valor_clasificacion(sistema)
 
     if 0 <= indice < len(filas):
-        filas[indice] = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
+        if tipo_valor == "texto":
+            filas[indice] = {cols[0]: val_min, "Tipo": tipo, "Soporte": soporte.upper()}
+        else:
+            filas[indice] = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
         ok, msg = model.guardar_estandar_sostenimiento(filas, sistema=sistema)
         if ok:
             _set_flash(request, "success", "Fila actualizada correctamente.")

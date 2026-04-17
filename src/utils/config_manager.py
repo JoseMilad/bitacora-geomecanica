@@ -136,7 +136,8 @@ def columnas_estandar(sistema: str) -> list:
     """
     tipo_valor = get_tipo_valor_clasificacion(sistema)
     if tipo_valor == "texto":
-        return [f"{sistema}_desde", f"{sistema}_hasta", "Tipo", "Soporte"]
+        # Text classifications use a single description field instead of a numeric range
+        return [f"{sistema}_desc", "Tipo", "Soporte"]
     # Tipo numérico (predefinidas o personalizadas numéricas)
     if sistema == "RMR":
         return ["RMR_min", "RMR_max", "Tipo", "Soporte"]
