@@ -64,7 +64,7 @@
                 <label class="form-label fw-semibold">{{ clasif_nombres.get(cid, cid) }}</label>
                 <input type="{{ 'number' if clasif_tipos.get(cid) == 'numerico' else 'text' }}"
                   name="clasif_{{ cid }}" id="inputClasif_{{ cid }}" class="form-control"
-                  value=""
+                  value="{{ labor.get(cid, '') if labor else '' }}"
                   placeholder="Valor {{ cid }}"
                   oninput="calcularSoporteLabor()" />
               </div>
