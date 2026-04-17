@@ -28,27 +28,59 @@
             </div>
             {% endif %}
 
-            <!-- GSI -->
+            <!-- GSI — visible solo si GSI está activo -->
+            {% if 'GSI' in clasif_activas %}
             <div class="col-md-6">
               <label class="form-label fw-semibold">GSI</label>
-              <input type="text" name="gsi" class="form-control"
+              <input type="{{ 'number' if clasif_tipos.get('GSI') == 'numerico' else 'text' }}"
+                name="gsi" id="inputGSI" class="form-control"
                 value="{{ labor.get('GSI', '') if labor else '' }}"
-                placeholder="Valor GSI" />
+                placeholder="Valor GSI"
+                oninput="calcularSoporteLabor()" />
             </div>
-            <!-- RMR -->
+            {% else %}
+            <input type="hidden" name="gsi" value="{{ labor.get('GSI', '') if labor else '' }}" />
+            {% endif %}
+
+            <!-- RMR — visible solo si RMR está activo -->
+            {% if 'RMR' in clasif_activas %}
             <div class="col-md-6">
               <label class="form-label fw-semibold">RMR</label>
-              <input type="text" name="rmr" class="form-control"
+              <input type="{{ 'number' if clasif_tipos.get('RMR') == 'numerico' else 'text' }}"
+                name="rmr" id="inputRMR" class="form-control"
+                {% if clasif_tipos.get('RMR') == 'numerico' %}min="0" max="100" step="1"{% endif %}
                 value="{{ labor.get('RMR', '') if labor else '' }}"
-                placeholder="Valor RMR" />
+                placeholder="Valor RMR"
+                oninput="calcularSoporteLabor()" />
             </div>
+            {% else %}
+            <input type="hidden" name="rmr" value="{{ labor.get('RMR', '') if labor else '' }}" />
+            {% endif %}
+
             <!-- Soporte -->
             <div class="col-12">
               <label class="form-label fw-semibold">Soporte</label>
-              <input type="text" name="soporte" class="form-control"
+              {% set efectivos = clasif_activas | selectattr(None) | list %}
+              {% set efectivos_list = [] %}
+              {% for sid in clasif_activas %}{% if sid in sistemas_con_estandar %}{% if efectivos_list.append(sid) %}{% endif %}{% endif %}{% endfor %}
+              {% if efectivos_list | length > 1 %}
+              <div class="d-flex gap-2 align-items-center mb-2">
+                <label class="form-label fw-semibold mb-0 small text-muted">
+                  <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia:
+                </label>
+                <select id="selectSistemaReferenciaLabor" class="form-select form-select-sm w-auto"
+                  onchange="calcularSoporteLabor()">
+                  {% for sid in efectivos_list %}
+                  <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
+              <input type="text" name="soporte" id="inputSoporte" class="form-control"
                 value="{{ labor.get('Soporte', '') if labor else '' }}"
                 placeholder="Tipo de soporte recomendado" />
             </div>
+
             <!-- Tipo -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Tipo</label>
@@ -101,6 +133,49 @@
 
 {% block extra_scripts %}
 <script>
+// Datos de clasificación inyectados desde el servidor
+const _clasifActivas = {{ clasif_activas | tojson }};
+const _clasifTipos = {{ clasif_tipos | tojson }};
+const _sistemasConEstandar = {{ sistemas_con_estandar | tojson }};
+
+// Sistemas activos que tienen estándar definido
+const _efectivosLabor = _clasifActivas.filter(s => _sistemasConEstandar.includes(s));
+
+function _getSistemaReferenciaLabor() {
+  const sel = document.getElementById('selectSistemaReferenciaLabor');
+  if (sel) return sel.value;
+  return _efectivosLabor.length > 0 ? _efectivosLabor[0] : null;
+}
+
+function _getInputValorLabor(sistema) {
+  if (sistema === 'GSI') return document.getElementById('inputGSI');
+  if (sistema === 'RMR') return document.getElementById('inputRMR');
+  return null;
+}
+
+let _calcTimerLabor = null;
+function calcularSoporteLabor() {
+  clearTimeout(_calcTimerLabor);
+  _calcTimerLabor = setTimeout(_doCalcSoporteLabor, 500);
+}
+
+async function _doCalcSoporteLabor() {
+  const sistema = _getSistemaReferenciaLabor();
+  if (!sistema) return;
+  const inputEl = _getInputValorLabor(sistema);
+  if (!inputEl || !inputEl.value.trim()) return;
+  try {
+    const params = new URLSearchParams({ sistema, valor: inputEl.value.trim() });
+    const res = await fetch(`/bitacora/calcular-soporte-gen?${params}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const soporteEl = document.getElementById('inputSoporte');
+    if (soporteEl && data.soporte) soporteEl.value = data.soporte;
+  } catch (e) {
+    console.warn('calcularSoporteLabor error:', e);
+  }
+}
+
 let _detectTimer = null;
 async function detectarClasificacion(nombre) {
   clearTimeout(_detectTimer);

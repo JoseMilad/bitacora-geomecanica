@@ -96,6 +96,27 @@ def _config_clasificaciones():
     return config.get("clasificaciones_activas", ["RMR"])
 
 
+def _get_clasif_context(empresa_id: int) -> dict:
+    """Returns extra classification context for form templates."""
+    from src.utils.config_manager import (
+        obtener_clasificaciones_activas,
+        obtener_clasificaciones_disponibles,
+        get_tipo_valor_clasificacion,
+    )
+    activas = obtener_clasificaciones_activas()
+    disponibles = {c["id"]: c for c in obtener_clasificaciones_disponibles()}
+    clasif_tipos = {sid: get_tipo_valor_clasificacion(sid) for sid in activas}
+    clasif_nombres = {sid: disponibles.get(sid, {}).get("nombre", sid) for sid in activas}
+    model = BitacoraModel(empresa_id=empresa_id)
+    sistemas_con_estandar = model.obtener_sistemas_con_estandar()
+    return {
+        "clasif_activas": activas,
+        "clasif_tipos": clasif_tipos,
+        "clasif_nombres": clasif_nombres,
+        "sistemas_con_estandar": sistemas_con_estandar,
+    }
+
+
 def _turnos_config():
     """Devuelve los turnos configurados."""
     config = cargar_config()
@@ -185,7 +206,7 @@ async def nuevo_bitacora_form(request: Request):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
-    clasif_activas = _config_clasificaciones()
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -195,9 +216,9 @@ async def nuevo_bitacora_form(request: Request):
         "turno_auto": _obtener_turno_automatico(),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
-        "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
+        **clasif_ctx,
     })
 
 
@@ -252,7 +273,7 @@ async def nuevo_bitacora_save(request: Request):
 
     # Duplicado u otro error — mostrar formulario con error
     labores_nombres = model.obtener_labores_guardadas()
-    clasif_activas = _config_clasificaciones()
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -261,10 +282,10 @@ async def nuevo_bitacora_save(request: Request):
         "turnos": _turnos_config(),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
-        "clasif_activas": clasif_activas,
         "flash": {"tipo": "warning", "mensaje": msg},
         "duplicado": True,
         "active_page": "bitacora",
+        **clasif_ctx,
     })
 
 
@@ -354,7 +375,7 @@ async def editar_bitacora_form(request: Request, id: int):
 
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
-    clasif_activas = _config_clasificaciones()
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -363,9 +384,9 @@ async def editar_bitacora_form(request: Request, id: int):
         "turnos": _turnos_config(),
         "action": f"/bitacora/{id}/editar",
         "titulo": "Editar Registro",
-        "clasif_activas": clasif_activas,
         "flash": flash,
         "active_page": "bitacora",
+        **clasif_ctx,
     })
 
 
@@ -467,7 +488,7 @@ async def archivar_periodo(
 # ── Calcular soporte (JSON API) ───────────────────────────────────────────────
 @router.get("/calcular-soporte")
 async def calcular_soporte(request: Request, rmr: str = "", labor: str = ""):
-    """Devuelve el soporte recomendado dado un valor RMR."""
+    """Devuelve el soporte recomendado dado un valor RMR (compatibilidad retroactiva)."""
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     from src.utils.helpers import validar_rmr
     rmr_val = validar_rmr(rmr)
@@ -478,7 +499,27 @@ async def calcular_soporte(request: Request, rmr: str = "", labor: str = ""):
         datos = model.obtener_datos_labor(labor)
         if datos and datos.get("Tipo"):
             tipo = str(datos["Tipo"])
-    soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR") or ""
+    soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR", tipo_valor="numerico") or ""
+    return JSONResponse({"soporte": soporte})
+
+
+@router.get("/calcular-soporte-gen")
+async def calcular_soporte_gen(request: Request, sistema: str = "", valor: str = "", labor: str = ""):
+    """Devuelve el soporte recomendado para cualquier sistema de clasificación activo."""
+    from src.utils.config_manager import obtener_clasificaciones_activas, get_tipo_valor_clasificacion
+    activas = obtener_clasificaciones_activas()
+    if not sistema or sistema not in activas:
+        return JSONResponse({"soporte": "", "error": "Sistema no activo"})
+    if not valor or not valor.strip():
+        return JSONResponse({"soporte": "", "error": "Valor vacío"})
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    tipo = "Temporal"
+    if labor:
+        datos = model.obtener_datos_labor(labor)
+        if datos and datos.get("Tipo"):
+            tipo = str(datos["Tipo"])
+    tipo_valor = get_tipo_valor_clasificacion(sistema)
+    soporte = model.recomendar_soporte(valor.strip(), tipo=tipo, sistema=sistema, tipo_valor=tipo_valor) or ""
     return JSONResponse({"soporte": soporte})
 
 

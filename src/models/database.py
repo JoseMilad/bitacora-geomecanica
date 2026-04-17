@@ -170,8 +170,8 @@ class DatabaseManager:
                     id          INT PRIMARY KEY AUTO_INCREMENT,
                     empresa_id  INT DEFAULT 1,
                     sistema     VARCHAR(50) NOT NULL,
-                    valor_min   DOUBLE NOT NULL,
-                    valor_max   DOUBLE NOT NULL,
+                    valor_min   VARCHAR(255) NOT NULL DEFAULT '',
+                    valor_max   VARCHAR(255) NOT NULL DEFAULT '',
                     tipo        VARCHAR(255) DEFAULT '',
                     soporte     TEXT
                 );
@@ -209,6 +209,8 @@ class DatabaseManager:
 
             # ── Migration: add empresa_id to existing tables if missing ──
             self._migrate_empresa_id(conn)
+            # ── Migration: change valor_min/valor_max to VARCHAR if still DOUBLE ──
+            self._migrate_estandar_text_columns(conn)
             # ── Ensure default empresa exists ──
             row = conn.execute("SELECT COUNT(*) as cnt FROM empresas").fetchone()
             if row["cnt"] == 0:
@@ -237,6 +239,25 @@ class DatabaseManager:
         # Remove UNIQUE constraint on labores.labor (now unique per empresa)
         # This is handled naturally since new tables have no UNIQUE on labor alone
         conn.commit()
+
+    def _migrate_estandar_text_columns(self, conn) -> None:
+        """Changes valor_min/valor_max from DOUBLE to VARCHAR(255) if needed."""
+        try:
+            row = conn.execute(
+                """SELECT DATA_TYPE FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='estandar_sostenimiento'
+                   AND COLUMN_NAME='valor_min'""",
+                (self.mysql_config["database"],),
+            ).fetchone()
+            if row and row["DATA_TYPE"].lower() in ("double", "float", "decimal", "int", "bigint"):
+                conn.execute(
+                    "ALTER TABLE estandar_sostenimiento "
+                    "MODIFY COLUMN valor_min VARCHAR(255) NOT NULL DEFAULT '', "
+                    "MODIFY COLUMN valor_max VARCHAR(255) NOT NULL DEFAULT ''"
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     # ── Helpers internos ─────────────────────────────────────────────────
 
@@ -723,7 +744,7 @@ class DatabaseManager:
             conn = self._get_connection()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=? ORDER BY valor_min",
+                    "SELECT * FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=? ORDER BY (valor_min+0), valor_min",
                     (sistema, self.empresa_id),
                 ).fetchall()
                 return [
@@ -756,16 +777,28 @@ class DatabaseManager:
             (True, mensaje) o (False, mensaje de error).
         """
         try:
+            from utils.config_manager import get_tipo_valor_clasificacion
+            tipo_valor = get_tipo_valor_clasificacion(sistema)
             col_min = f"{sistema}_min"
             col_max = f"{sistema}_max"
-            filas_unicas: list[tuple[float, float, str, str]] = []
-            vistas: set[tuple[float, float, str, str]] = set()
+            filas_unicas: list[tuple[str, str, str, str]] = []
+            vistas: set[tuple[str, str, str, str]] = set()
             for fila in datos:
-                valor_min = float(fila.get(col_min, 0))
-                valor_max = float(fila.get(col_max, 0))
+                raw_min = fila.get(col_min, "")
+                raw_max = fila.get(col_max, "")
+                if tipo_valor == "texto":
+                    valor_min = str(raw_min).strip()
+                    valor_max = str(raw_max).strip()
+                else:
+                    try:
+                        valor_min = str(float(raw_min))
+                        valor_max = str(float(raw_max))
+                    except (ValueError, TypeError):
+                        valor_min = str(raw_min).strip()
+                        valor_max = str(raw_max).strip()
                 tipo = str(fila.get("Tipo", "")).strip()
                 soporte = str(fila.get("Soporte", "")).strip()
-                clave = (valor_min, valor_max, tipo.casefold(), soporte.casefold())
+                clave = (valor_min.casefold(), valor_max.casefold(), tipo.casefold(), soporte.casefold())
                 if clave in vistas:
                     continue
                 vistas.add(clave)
@@ -799,15 +832,16 @@ class DatabaseManager:
             return False, f"Error al guardar estándar: {e}"
 
     def recomendar_soporte(
-        self, valor: float, tipo: str = "Temporal", sistema: str = "RMR"
+        self, valor, tipo: str = "Temporal", sistema: str = "RMR", tipo_valor: str = "numerico"
     ) -> str:
         """
         Recomienda el soporte para un valor de clasificación y tipo de labor.
 
         Args:
-            valor: Valor numérico de clasificación.
+            valor: Valor de clasificación (float para numérico, str para texto).
             tipo: Tipo de labor (``Temporal`` o ``Permanente``).
             sistema: Sistema de clasificación.
+            tipo_valor: ``"numerico"`` (comparación de rango) o ``"texto"`` (coincidencia exacta).
 
         Returns:
             Cadena con la recomendación o cadena vacía.
@@ -815,30 +849,77 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                # Primero intentar filtrar por tipo
-                row = conn.execute(
-                    """SELECT soporte FROM estandar_sostenimiento
-                       WHERE sistema=? AND tipo=? AND valor_min<=? AND valor_max>=? AND empresa_id=?
-                       LIMIT 1""",
-                    (sistema, tipo, valor, valor, self.empresa_id),
-                ).fetchone()
-
-                if row:
-                    return row["soporte"]
-
-                # Fallback: sin filtro de tipo
-                row = conn.execute(
-                    """SELECT soporte FROM estandar_sostenimiento
-                       WHERE sistema=? AND valor_min<=? AND valor_max>=? AND empresa_id=?
-                       LIMIT 1""",
-                    (sistema, valor, valor, self.empresa_id),
-                ).fetchone()
+                if tipo_valor == "texto":
+                    valor_str = str(valor).strip().upper()
+                    # Match exact value (case-insensitive) against valor_min or valor_max
+                    row = conn.execute(
+                        """SELECT soporte FROM estandar_sostenimiento
+                           WHERE sistema=? AND tipo=?
+                           AND (UPPER(valor_min)=? OR UPPER(valor_max)=?)
+                           AND empresa_id=?
+                           LIMIT 1""",
+                        (sistema, tipo, valor_str, valor_str, self.empresa_id),
+                    ).fetchone()
+                    if not row:
+                        # Fallback: no tipo filter
+                        row = conn.execute(
+                            """SELECT soporte FROM estandar_sostenimiento
+                               WHERE sistema=?
+                               AND (UPPER(valor_min)=? OR UPPER(valor_max)=?)
+                               AND empresa_id=?
+                               LIMIT 1""",
+                            (sistema, valor_str, valor_str, self.empresa_id),
+                        ).fetchone()
+                else:
+                    try:
+                        valor_num = float(valor)
+                    except (ValueError, TypeError):
+                        return ""
+                    # Numeric range comparison using CAST
+                    row = conn.execute(
+                        """SELECT soporte FROM estandar_sostenimiento
+                           WHERE sistema=? AND tipo=?
+                           AND CAST(valor_min AS DECIMAL(12,4))<=?
+                           AND CAST(valor_max AS DECIMAL(12,4))>=?
+                           AND empresa_id=?
+                           LIMIT 1""",
+                        (sistema, tipo, valor_num, valor_num, self.empresa_id),
+                    ).fetchone()
+                    if not row:
+                        # Fallback: sin filtro de tipo
+                        row = conn.execute(
+                            """SELECT soporte FROM estandar_sostenimiento
+                               WHERE sistema=?
+                               AND CAST(valor_min AS DECIMAL(12,4))<=?
+                               AND CAST(valor_max AS DECIMAL(12,4))>=?
+                               AND empresa_id=?
+                               LIMIT 1""",
+                            (sistema, valor_num, valor_num, self.empresa_id),
+                        ).fetchone()
 
                 return row["soporte"] if row else ""
             finally:
                 conn.close()
         except Exception:
             return ""
+
+    def obtener_sistemas_con_estandar(self) -> list:
+        """
+        Devuelve la lista de sistemas de clasificación que tienen al menos
+        un estándar de sostenimiento definido para esta empresa.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                rows = conn.execute(
+                    "SELECT DISTINCT sistema FROM estandar_sostenimiento WHERE empresa_id=?",
+                    (self.empresa_id,),
+                ).fetchall()
+                return [r["sistema"] for r in rows]
+            finally:
+                conn.close()
+        except Exception:
+            return []
 
     # ══════════════════════════════════════════════════════════════════════
     #  SOSTENIMIENTO DIARIO
@@ -1148,11 +1229,12 @@ class DatabaseManager:
             # ── Estándar de sostenimiento ──
             for sistema in ("RMR", "Q", "GSI"):
                 try:
-                    from utils.config_manager import nombre_hoja_estandar, columnas_estandar
+                    from utils.config_manager import nombre_hoja_estandar, columnas_estandar, get_tipo_valor_clasificacion
 
                     hoja = nombre_hoja_estandar(sistema)
                     cols = columnas_estandar(sistema)
                     col_min, col_max = cols[0], cols[1]
+                    tipo_valor = get_tipo_valor_clasificacion(sistema)
 
                     df = pd.read_excel(archivo, sheet_name=hoja)
                     count = 0
@@ -1160,14 +1242,22 @@ class DatabaseManager:
                     try:
                         for _, row in df.iterrows():
                             try:
+                                raw_min = row.get(col_min, "")
+                                raw_max = row.get(col_max, "")
+                                if tipo_valor == "texto":
+                                    valor_min = str(raw_min).strip()
+                                    valor_max = str(raw_max).strip()
+                                else:
+                                    valor_min = str(float(raw_min))
+                                    valor_max = str(float(raw_max))
                                 conn.execute(
                                     """INSERT INTO estandar_sostenimiento
                                            (sistema, valor_min, valor_max, tipo, soporte)
                                        VALUES (?, ?, ?, ?, ?)""",
                                     (
                                         sistema,
-                                        float(row.get(col_min, 0)),
-                                        float(row.get(col_max, 0)),
+                                        valor_min,
+                                        valor_max,
                                         str(row.get("Tipo", "")),
                                         str(row.get("Soporte", "")),
                                     ),
