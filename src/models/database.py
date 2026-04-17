@@ -743,7 +743,7 @@ class DatabaseManager:
             sistema: Sistema de clasificación (RMR, Q, GSI, etc.).
 
         Returns:
-            Lista de dicts con valor_min, valor_max, tipo, soporte.
+            Lista de dicts con las claves definidas por columnas_estandar, tipo, soporte.
         """
         try:
             conn = self._get_connection()
@@ -752,16 +752,31 @@ class DatabaseManager:
                     "SELECT * FROM estandar_sostenimiento WHERE sistema=? AND empresa_id=? ORDER BY (valor_min+0), valor_min",
                     (sistema, self.empresa_id),
                 ).fetchall()
-                return [
-                    {
-                        "id": r["id"],
-                        f"{sistema}_min": r["valor_min"],
-                        f"{sistema}_max": r["valor_max"],
-                        "Tipo": r["tipo"],
-                        "Soporte": r["soporte"],
-                    }
-                    for r in rows
-                ]
+                tipo_valor = get_tipo_valor_clasificacion(sistema)
+                cols = columnas_estandar(sistema)
+                if tipo_valor == "texto":
+                    # Text classifications: single description field (cols[0] = {sistema}_desc)
+                    return [
+                        {
+                            "id": r["id"],
+                            cols[0]: r["valor_min"],
+                            "Tipo": r["tipo"],
+                            "Soporte": r["soporte"],
+                        }
+                        for r in rows
+                    ]
+                else:
+                    # Numeric classifications: two range columns (cols[0]=min, cols[1]=max)
+                    return [
+                        {
+                            "id": r["id"],
+                            cols[0]: r["valor_min"],
+                            cols[1]: r["valor_max"],
+                            "Tipo": r["tipo"],
+                            "Soporte": r["soporte"],
+                        }
+                        for r in rows
+                    ]
             finally:
                 conn.close()
         except Exception:
@@ -773,9 +788,12 @@ class DatabaseManager:
         """
         Reemplaza los estándares de un sistema con los datos proporcionados.
 
+        For numeric systems, dicts must contain ``{sistema}_min``, ``{sistema}_max``,
+        ``Tipo``, ``Soporte``.
+        For text systems, dicts must contain ``{sistema}_desc``, ``Tipo``, ``Soporte``.
+
         Args:
-            datos: Lista de dicts. Cada dict debe contener las claves
-                   ``{sistema}_min``, ``{sistema}_max``, ``Tipo``, ``Soporte``.
+            datos: Lista de dicts con los estándares.
             sistema: Sistema de clasificación.
 
         Returns:
@@ -783,17 +801,19 @@ class DatabaseManager:
         """
         try:
             tipo_valor = get_tipo_valor_clasificacion(sistema)
-            col_min = f"{sistema}_min"
-            col_max = f"{sistema}_max"
+            cols = columnas_estandar(sistema)
             filas_unicas: list[tuple[str, str, str, str]] = []
             vistas: set[tuple[str, str, str, str]] = set()
             for fila in datos:
-                raw_min = fila.get(col_min, "")
-                raw_max = fila.get(col_max, "")
                 if tipo_valor == "texto":
-                    valor_min = str(raw_min).strip()
-                    valor_max = str(raw_max).strip()
+                    # Single description field stored in valor_min; valor_max is empty
+                    valor_min = str(fila.get(cols[0], "")).strip()
+                    valor_max = ""
                 else:
+                    col_min = cols[0]
+                    col_max = cols[1]
+                    raw_min = fila.get(col_min, "")
+                    raw_max = fila.get(col_max, "")
                     try:
                         valor_min = str(float(raw_min))
                         valor_max = str(float(raw_max))

@@ -57,19 +57,31 @@
             <input type="hidden" name="rmr" value="{{ labor.get('RMR', '') if labor else '' }}" />
             {% endif %}
 
+            <!-- Clasificaciones personalizadas activas (no GSI/RMR) -->
+            {% for cid in clasif_activas %}
+              {% if cid not in ('GSI', 'RMR') %}
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">{{ clasif_nombres.get(cid, cid) }}</label>
+                <input type="{{ 'number' if clasif_tipos.get(cid) == 'numerico' else 'text' }}"
+                  name="clasif_{{ cid }}" id="inputClasif_{{ cid }}" class="form-control"
+                  value="{{ labor.get(cid, '') if labor else '' }}"
+                  placeholder="Valor {{ cid }}"
+                  oninput="calcularSoporteLabor()" />
+              </div>
+              {% endif %}
+            {% endfor %}
+
             <!-- Soporte -->
             <div class="col-12">
               <label class="form-label fw-semibold">Soporte</label>
-              {% set efectivos_list = [] %}
-              {% for sid in clasif_activas %}{% if sid in sistemas_con_estandar %}{% if efectivos_list.append(sid) %}{% endif %}{% endif %}{% endfor %}
-              {% if efectivos_list | length > 1 %}
+              {% if clasif_activas | length > 1 %}
               <div class="d-flex gap-2 align-items-center mb-2">
                 <label class="form-label fw-semibold mb-0 small text-muted">
                   <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia:
                 </label>
                 <select id="selectSistemaReferenciaLabor" class="form-select form-select-sm w-auto"
                   onchange="calcularSoporteLabor()">
-                  {% for sid in efectivos_list %}
+                  {% for sid in clasif_activas %}
                   <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
                   {% endfor %}
                 </select>
@@ -137,19 +149,16 @@ const _clasifActivas = {{ clasif_activas | tojson }};
 const _clasifTipos = {{ clasif_tipos | tojson }};
 const _sistemasConEstandar = {{ sistemas_con_estandar | tojson }};
 
-// Sistemas activos que tienen estándar definido
-const _efectivosLabor = _clasifActivas.filter(s => _sistemasConEstandar.includes(s));
-
 function _getSistemaReferenciaLabor() {
   const sel = document.getElementById('selectSistemaReferenciaLabor');
   if (sel) return sel.value;
-  return _efectivosLabor.length > 0 ? _efectivosLabor[0] : null;
+  return _clasifActivas.length > 0 ? _clasifActivas[0] : null;
 }
 
 function _getInputValorLabor(sistema) {
   if (sistema === 'GSI') return document.getElementById('inputGSI');
   if (sistema === 'RMR') return document.getElementById('inputRMR');
-  return null;
+  return document.getElementById('inputClasif_' + sistema);
 }
 
 let _calcTimerLabor = null;
