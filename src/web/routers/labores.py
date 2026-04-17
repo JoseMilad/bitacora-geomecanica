@@ -41,6 +41,28 @@ def _get_empresa_id(request: Request) -> int:
     return 1
 
 
+def _get_clasif_context(empresa_id: int) -> dict:
+    """Returns classification context for form templates."""
+    from src.utils.config_manager import (
+        obtener_clasificaciones_activas,
+        obtener_clasificaciones_disponibles,
+        get_tipo_valor_clasificacion,
+        cargar_config,
+    )
+    activas = obtener_clasificaciones_activas()
+    disponibles = {c["id"]: c for c in obtener_clasificaciones_disponibles()}
+    clasif_tipos = {sid: get_tipo_valor_clasificacion(sid) for sid in activas}
+    clasif_nombres = {sid: disponibles.get(sid, {}).get("nombre", sid) for sid in activas}
+    model = BitacoraModel(empresa_id=empresa_id)
+    sistemas_con_estandar = model.obtener_sistemas_con_estandar()
+    return {
+        "clasif_activas": activas,
+        "clasif_tipos": clasif_tipos,
+        "clasif_nombres": clasif_nombres,
+        "sistemas_con_estandar": sistemas_con_estandar,
+    }
+
+
 # ── Listar labores ────────────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -73,6 +95,7 @@ async def listar_labores(request: Request, q: str = ""):
 @router.get("/nueva", response_class=HTMLResponse)
 async def nueva_labor_form(request: Request):
     flash = _get_flash(request)
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -81,6 +104,7 @@ async def nueva_labor_form(request: Request):
         "titulo": "Nueva Labor",
         "flash": flash,
         "active_page": "labores",
+        **clasif_ctx,
     })
 
 
@@ -109,6 +133,7 @@ async def nueva_labor_save(
     if ok:
         _set_flash(request, "success", msg)
         return RedirectResponse(url="/labores", status_code=303)
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -122,6 +147,7 @@ async def nueva_labor_save(
         "titulo": "Nueva Labor",
         "flash": {"tipo": "error", "mensaje": msg},
         "active_page": "labores",
+        **clasif_ctx,
     })
 
 
@@ -158,6 +184,7 @@ async def editar_labor_form(request: Request, nombre: str):
         _set_flash(request, "error", "Labor no encontrada.")
         return RedirectResponse(url="/labores", status_code=303)
     flash = _get_flash(request)
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -166,6 +193,7 @@ async def editar_labor_form(request: Request, nombre: str):
         "titulo": f"Editar Labor: {nombre}",
         "flash": flash,
         "active_page": "labores",
+        **clasif_ctx,
     })
 
 

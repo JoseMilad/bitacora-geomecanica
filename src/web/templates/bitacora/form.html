@@ -73,9 +73,11 @@
             {% if 'GSI' in clasif_activas %}
             <div class="col-md-4" id="campoGSI">
               <label class="form-label fw-semibold">GSI</label>
-              <input type="text" name="gsi" id="inputGSI" class="form-control"
+              <input type="{{ 'number' if clasif_tipos.get('GSI') == 'numerico' else 'text' }}"
+                name="gsi" id="inputGSI" class="form-control"
                 value="{{ registro.get('GSI','') if registro else '' }}"
-                placeholder="Valor GSI" />
+                placeholder="Valor GSI"
+                oninput="calcularSoporteAuto('GSI')" />
             </div>
             {% else %}
             <input type="hidden" name="gsi" value="" />
@@ -86,16 +88,17 @@
             <div class="col-md-4" id="campoRMR">
               <label class="form-label fw-semibold">RMR</label>
               <div class="input-group">
-                <input type="number" name="rmr" id="inputRMR" class="form-control"
+                <input type="{{ 'number' if clasif_tipos.get('RMR') == 'numerico' else 'text' }}"
+                  name="rmr" id="inputRMR" class="form-control"
                   value="{{ registro.get('RMR','') if registro else '' }}"
-                  placeholder="0–100" min="0" max="100" step="1"
-                  oninput="calcularSoporteAuto()" />
+                  {% if clasif_tipos.get('RMR') == 'numerico' %}placeholder="0–100" min="0" max="100" step="1"{% else %}placeholder="Valor RMR"{% endif %}
+                  oninput="calcularSoporteAuto('RMR')" />
                 <button type="button" class="btn btn-outline-secondary" id="btnCalcSoporte"
-                  onclick="calcularSoporte()" title="Calcular soporte recomendado">
+                  onclick="calcularSoporteManual('RMR')" title="Calcular soporte recomendado">
                   <i class="fa-solid fa-calculator"></i>
                 </button>
               </div>
-              <div class="invalid-feedback">RMR debe estar entre 0 y 100</div>
+              <div class="invalid-feedback">Valor de RMR inválido</div>
             </div>
             {% else %}
             <input type="hidden" name="rmr" value="" />
@@ -104,6 +107,22 @@
             <!-- Soporte -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Soporte</label>
+              <!-- Selector de sistema de referencia (solo si hay múltiples con estándar) -->
+              {% set efectivos_list = [] %}
+              {% for sid in clasif_activas %}{% if sid in sistemas_con_estandar %}{% if efectivos_list.append(sid) %}{% endif %}{% endif %}{% endfor %}
+              {% if efectivos_list | length > 1 %}
+              <div class="d-flex gap-2 align-items-center mb-1">
+                <label class="mb-0 small text-muted">
+                  <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema referencia:
+                </label>
+                <select id="selectSistemaReferencia" class="form-select form-select-sm w-auto"
+                  onchange="calcularSoporteManual(_getSistemaReferencia())">
+                  {% for sid in efectivos_list %}
+                  <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
               <input type="text" name="soporte" id="inputSoporte" class="form-control"
                 value="{{ registro.get('Soporte','') if registro else '' }}"
                 placeholder="Tipo de soporte" />
@@ -114,9 +133,11 @@
               {% if cid not in ('GSI', 'RMR') %}
               <div class="col-md-4">
                 <label class="form-label fw-semibold">{{ cid }}</label>
-                <input type="text" name="clasif_{{ cid }}" class="form-control"
+                <input type="{{ 'number' if clasif_tipos.get(cid) == 'numerico' else 'text' }}"
+                  name="clasif_{{ cid }}" id="inputClasif_{{ cid }}" class="form-control"
                   value="{{ registro.get(cid,'') if registro else '' }}"
-                  placeholder="Valor {{ cid }}" />
+                  placeholder="Valor {{ cid }}"
+                  oninput="calcularSoporteAuto('{{ cid }}')" />
               </div>
               {% endif %}
             {% endfor %}
@@ -236,29 +257,56 @@ initLaborTypeahead('inputLabor', 'dropdownLabores', todasLabores, {
   onSelect: function(labor) { autocompletarLabor(labor); }
 });
 
-// Auto-calcular soporte al cambiar RMR (con debounce)
-let _calcTimer = null;
-function calcularSoporteAuto() {
-  clearTimeout(_calcTimer);
-  _calcTimer = setTimeout(calcularSoporte, 700);
+// ── Datos de clasificación inyectados desde el servidor ────────────────────
+const _clasifActivas = {{ clasif_activas | tojson }};
+const _clasifTipos = {{ clasif_tipos | tojson }};
+const _sistemasConEstandar = {{ sistemas_con_estandar | tojson }};
+
+// Sistemas activos que tienen estándar definido
+const _efectivos = _clasifActivas.filter(s => _sistemasConEstandar.includes(s));
+
+function _getSistemaReferencia() {
+  const sel = document.getElementById('selectSistemaReferencia');
+  if (sel) return sel.value;
+  return _efectivos.length > 0 ? _efectivos[0] : null;
 }
 
-async function calcularSoporte() {
-  const rmr = document.getElementById('inputRMR')?.value?.trim();
-  if (!rmr) return;
+function _getInputValor(sistema) {
+  if (sistema === 'GSI') return document.getElementById('inputGSI');
+  if (sistema === 'RMR') return document.getElementById('inputRMR');
+  return document.getElementById('inputClasif_' + sistema);
+}
+
+// Auto-calcular soporte al cambiar cualquier campo de clasificación
+let _calcTimer = null;
+function calcularSoporteAuto(sistemaCambiado) {
+  // Solo auto-calcula si el sistema cambiado es el de referencia actual
+  if (_getSistemaReferencia() !== sistemaCambiado) return;
+  clearTimeout(_calcTimer);
+  _calcTimer = setTimeout(() => calcularSoporteManual(sistemaCambiado), 700);
+}
+
+async function calcularSoporteManual(sistema) {
+  if (!sistema) sistema = _getSistemaReferencia();
+  if (!sistema) return;
+  const inputEl = _getInputValor(sistema);
+  if (!inputEl || !inputEl.value.trim()) return;
   const labor = document.getElementById('inputLabor')?.value || '';
   try {
-    const params = new URLSearchParams({ rmr, labor });
-    const res = await fetch(`/bitacora/calcular-soporte?${params}`);
+    const params = new URLSearchParams({ sistema, valor: inputEl.value.trim(), labor });
+    const res = await fetch(`/bitacora/calcular-soporte-gen?${params}`);
     if (!res.ok) return;
     const data = await res.json();
     const inp = document.getElementById('inputSoporte');
-    if (inp && data.soporte) {
-      inp.value = data.soporte;
-    }
+    if (inp && data.soporte) inp.value = data.soporte;
   } catch (e) {
-    console.warn('calcularSoporte error:', e);
+    console.warn('calcularSoporteManual error:', e);
   }
+}
+
+// Alias for backward compatibility (called from main.js autocompletarLabor)
+function calcularSoporte() {
+  calcularSoporteManual(_getSistemaReferencia());
 }
 
 // ── Editor de imagen en canvas ──────────────────────────────────────────────

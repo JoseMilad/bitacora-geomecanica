@@ -25,7 +25,7 @@
             <tr>
               <td>{{ e.id }}</td>
               <td class="fw-semibold">{{ e.nombre }}</td>
-              <td class="text-muted small">{{ e.created_at[:10] if e.created_at else '—' }}</td>
+              <td class="text-muted small">{{ e.created_at.strftime('%Y-%m-%d') if e.created_at else '—' }}</td>
             </tr>
             {% endfor %}
           </tbody>

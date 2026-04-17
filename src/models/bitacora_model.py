@@ -447,20 +447,25 @@ class BitacoraModel:
         except Exception:
             return pd.DataFrame(columns=["RMR_min", "RMR_max", "Tipo", "Soporte"])
     
-    def recomendar_soporte(self, valor, tipo="Temporal", sistema="RMR"):
+    def recomendar_soporte(self, valor, tipo="Temporal", sistema="RMR", tipo_valor="numerico"):
         """
         Recomienda soporte según el valor de clasificación y el tipo de labor.
         Usa SQLite como fuente primaria.
 
         Args:
-            valor (float): Valor de la clasificación (RMR, Q, GSI, etc.)
+            valor: Valor de la clasificación (numérico o texto)
             tipo (str): Tipo de labor ("Temporal" o "Permanente")
             sistema (str): Sistema de clasificación ("RMR", "Q", "GSI", etc.)
+            tipo_valor (str): "numerico" o "texto"
 
         Returns:
             str: Recomendación de soporte o vacío
         """
-        return self.db.recomendar_soporte(valor, tipo=tipo, sistema=sistema)
+        return self.db.recomendar_soporte(valor, tipo=tipo, sistema=sistema, tipo_valor=tipo_valor)
+
+    def obtener_sistemas_con_estandar(self) -> list:
+        """Devuelve los sistemas que tienen al menos un estándar definido para esta empresa."""
+        return self.db.obtener_sistemas_con_estandar()
     
     def guardar_estandar_sostenimiento(self, datos, sistema="RMR"):
         """
