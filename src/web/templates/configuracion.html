@@ -58,11 +58,13 @@
             {{ c.nombre }}
             {% if not c.predefinida %}
             <small class="text-muted">(personalizada)</small>
-            <a href="/configuracion/eliminar-clasificacion/{{ c.id }}" class="text-danger ms-2 small"
-               onclick="return confirm('¿Eliminar clasificación {{ c.id }}?')"
-               title="Eliminar">
-              <i class="fa-solid fa-trash"></i>
-            </a>
+            <form method="post" action="/configuracion/eliminar-clasificacion/{{ c.id }}"
+                  class="d-inline" onsubmit="return confirm('¿Eliminar clasificación {{ c.id }}?')">
+              <button type="submit" class="btn btn-link text-danger ms-2 small p-0 border-0"
+                      title="Eliminar">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </form>
             {% endif %}
           </label>
         </div>
