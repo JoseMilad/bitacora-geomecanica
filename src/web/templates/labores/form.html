@@ -60,7 +60,6 @@
             <!-- Soporte -->
             <div class="col-12">
               <label class="form-label fw-semibold">Soporte</label>
-              {% set efectivos = clasif_activas | selectattr(None) | list %}
               {% set efectivos_list = [] %}
               {% for sid in clasif_activas %}{% if sid in sistemas_con_estandar %}{% if efectivos_list.append(sid) %}{% endif %}{% endif %}{% endfor %}
               {% if efectivos_list | length > 1 %}

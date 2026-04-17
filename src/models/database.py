@@ -19,6 +19,11 @@ from pymysql.cursors import DictCursor
 from pymysql.err import IntegrityError as MySQLIntegrityError
 
 from utils.config import DATA_DIR, DATABASE_URL
+from utils.config_manager import (
+    get_tipo_valor_clasificacion,
+    nombre_hoja_estandar,
+    columnas_estandar,
+)
 
 
 class _MySQLCursorAdapter:
@@ -777,7 +782,6 @@ class DatabaseManager:
             (True, mensaje) o (False, mensaje de error).
         """
         try:
-            from utils.config_manager import get_tipo_valor_clasificacion
             tipo_valor = get_tipo_valor_clasificacion(sistema)
             col_min = f"{sistema}_min"
             col_max = f"{sistema}_max"
@@ -1229,8 +1233,6 @@ class DatabaseManager:
             # ── Estándar de sostenimiento ──
             for sistema in ("RMR", "Q", "GSI"):
                 try:
-                    from utils.config_manager import nombre_hoja_estandar, columnas_estandar, get_tipo_valor_clasificacion
-
                     hoja = nombre_hoja_estandar(sistema)
                     cols = columnas_estandar(sistema)
                     col_min, col_max = cols[0], cols[1]

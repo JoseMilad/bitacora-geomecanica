@@ -116,7 +116,7 @@
                   <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema referencia:
                 </label>
                 <select id="selectSistemaReferencia" class="form-select form-select-sm w-auto"
-                  onchange="calcularSoporteManual(document.getElementById('selectSistemaReferencia').value)">
+                  onchange="calcularSoporteManual(_getSistemaReferencia())">
                   {% for sid in efectivos_list %}
                   <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
                   {% endfor %}
