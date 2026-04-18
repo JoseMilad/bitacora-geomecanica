@@ -32,7 +32,7 @@
               <td><code>{{ u.username }}</code></td>
               <td>{{ u.nombre or '—' }}</td>
               <td>
-                <span class="badge {{ 'bg-primary' if u.rol == 'admin' else 'bg-secondary' }}">
+                <span class="badge {{ 'bg-primary' if u.rol == 'admin' else ('bg-info text-dark' if u.rol == 'empresa_admin' else 'bg-secondary') }}">
                   {{ u.rol }}
                 </span>
               </td>
@@ -87,7 +87,8 @@
                         <label class="form-label fw-semibold">Rol</label>
                         <select name="rol" class="form-select">
                           <option value="usuario" {% if u.rol == 'usuario' %}selected{% endif %}>Usuario</option>
-                          <option value="admin" {% if u.rol == 'admin' %}selected{% endif %}>Administrador</option>
+                          <option value="empresa_admin" {% if u.rol == 'empresa_admin' %}selected{% endif %}>Admin de empresa</option>
+                          <option value="admin" {% if u.rol == 'admin' %}selected{% endif %}>Administrador global</option>
                         </select>
                       </div>
                       <div class="mb-3">
@@ -146,7 +147,8 @@
             <label class="form-label fw-semibold">Rol</label>
             <select name="rol" class="form-select">
               <option value="usuario">Usuario</option>
-              <option value="admin">Administrador</option>
+              <option value="empresa_admin">Admin de empresa</option>
+              <option value="admin">Administrador global</option>
             </select>
           </div>
           <div class="mb-3">

@@ -33,9 +33,9 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
 
 
 def _is_admin(request: Request) -> bool:
-    """Verifica si el usuario actual es administrador."""
+    """Verifica si el usuario es administrador global o de empresa."""
     user = request.session.get("user")
-    return user is not None and user.get("rol") == "admin"
+    return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
 def _get_empresa_id(request: Request) -> int:
@@ -104,10 +104,28 @@ async def agregar_fila(
     tipo_valor = get_tipo_valor_clasificacion(sistema)
 
     if tipo_valor == "texto":
-        # Text classification: single description field (cols[0] = {sistema}_desc)
         nueva = {cols[0]: val_min, "Tipo": tipo, "Soporte": soporte.upper()}
     else:
         nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
+
+    # Issue 6: Check for duplicate range + tipo before adding
+    for fila in filas:
+        if tipo_valor == "texto":
+            if (str(fila.get(cols[0], "")).strip() == val_min.strip()
+                    and str(fila.get("Tipo", "")).strip() == tipo.strip()):
+                _set_flash(request, "error",
+                           f"Ya existe un estándar para el valor '{val_min}' con tipo '{tipo}'.")
+                sistema_seguro = _validar_sistema(sistema)
+                return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+        else:
+            if (str(fila.get(cols[0], "")).strip() == val_min.strip()
+                    and str(fila.get(cols[1], "")).strip() == val_max.strip()
+                    and str(fila.get("Tipo", "")).strip() == tipo.strip()):
+                _set_flash(request, "error",
+                           f"Ya existe un estándar para el rango '{val_min}–{val_max}' con tipo '{tipo}'.")
+                sistema_seguro = _validar_sistema(sistema)
+                return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+
     filas.append(nueva)
 
     ok, msg = model.guardar_estandar_sostenimiento(filas, sistema=sistema)

@@ -34,9 +34,9 @@
     <small class="text-muted">{{ filas|length }} fila{% if filas|length != 1 %}s{% endif %}</small>
   </div>
   <div class="card-body p-0">
-    <div class="table-responsive">
+    <div class="table-responsive" style="max-height:480px;overflow-y:auto;">
       <table class="table table-hover mb-0" id="tablaEstandar">
-        <thead class="table-light">
+        <thead class="table-light" style="position:sticky;top:0;z-index:1;">
           <tr>
             {% for col in cols %}
             <th>{{ col.replace('_', ' ') }}</th>

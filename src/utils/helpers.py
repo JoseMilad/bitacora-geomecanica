@@ -30,34 +30,62 @@ def validar_gsi(valor):
 def _obtener_turno_automatico():
     """
     Determina el turno según la hora actual y los horarios configurados.
-    El turno de noche que se extiende al día siguiente sigue perteneciendo
-    a la fecha en que inició.
+    Soporta cualquier número de turnos personalizados usando el dict 'turnos_horas'.
+    El turno se determina como aquel cuyo inicio es el más cercano sin superar la
+    hora actual (ordenado cíclicamente).
     """
-    from utils.config import TURNOS
     from utils.config_manager import cargar_config
     config = cargar_config()
+    turnos = config.get("turnos", ["Día", "Noche"])
+
+    # Build a mapping of shift name → start minutes, using turnos_horas first,
+    # then fall back to legacy turno_dia_inicio / turno_noche_inicio keys.
+    turnos_horas_cfg = config.get("turnos_horas", {})
     try:
         dia_inicio = config.get("turno_dia_inicio", "07:30")
         noche_inicio = config.get("turno_noche_inicio", "19:30")
-        h_dia, m_dia = map(int, dia_inicio.split(":"))
-        h_noche, m_noche = map(int, noche_inicio.split(":"))
-    except (ValueError, AttributeError):
-        h_dia, m_dia = 7, 30
-        h_noche, m_noche = 19, 30
+    except Exception:
+        dia_inicio, noche_inicio = "07:30", "19:30"
+
+    def _parse_time(t):
+        try:
+            h, m = map(int, str(t).split(":"))
+            return h * 60 + m
+        except Exception:
+            return None
+
+    # Map every configured turn to its start minute
+    turno_minutos: dict[str, int] = {}
+    for t in turnos:
+        raw = turnos_horas_cfg.get(t)
+        if raw is None:
+            # legacy fallback for Día / Noche
+            if t == "Día":
+                raw = dia_inicio
+            elif t == "Noche":
+                raw = noche_inicio
+        if raw is not None:
+            m = _parse_time(raw)
+            if m is not None:
+                turno_minutos[t] = m
+
+    if not turno_minutos:
+        return turnos[0] if turnos else "Día"
 
     ahora = datetime.now()
     minutos_actual = ahora.hour * 60 + ahora.minute
-    minutos_dia = h_dia * 60 + m_dia
-    minutos_noche = h_noche * 60 + m_noche
 
-    if minutos_dia <= minutos_actual < minutos_noche:
-        turno = "Día"
-    else:
-        turno = "Noche"
-    # Fallback si el turno no está en la lista configurada
-    if turno not in TURNOS:
-        return TURNOS[0] if TURNOS else "Día"
-    return turno
+    # Sort shifts by start time; find the last shift whose start <= current time
+    ordenados = sorted(turno_minutos.items(), key=lambda x: x[1])
+    turno_actual = ordenados[-1][0]  # default: last shift (handles wrap-around)
+    for nombre, inicio in ordenados:
+        if inicio <= minutos_actual:
+            turno_actual = nombre
+
+    # Fallback if determined turno is not in the configured list
+    if turno_actual not in turnos:
+        return turnos[0] if turnos else "Día"
+    return turno_actual
 
 def validar_campos_obligatorios(labor, turno):
     """Valida campos obligatorios"""

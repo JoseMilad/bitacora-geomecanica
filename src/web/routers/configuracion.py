@@ -69,8 +69,19 @@ async def guardar_configuracion(request: Request):
     if not turnos:
         turnos = ["Día", "Noche"]
     config["turnos"] = turnos
-    config["turno_dia_inicio"] = form.get("turno_dia_inicio", "07:30").strip()
-    config["turno_noche_inicio"] = form.get("turno_noche_inicio", "19:30").strip()
+
+    # Build turnos_horas dict from dynamic form fields (turno_hora_<nombre>)
+    turnos_horas: dict[str, str] = {}
+    for turno in turnos:
+        field_key = f"turno_hora_{turno}"
+        valor = form.get(field_key, "").strip()
+        if valor:
+            turnos_horas[turno] = valor
+    config["turnos_horas"] = turnos_horas
+
+    # Keep legacy keys for backward compat
+    config["turno_dia_inicio"] = turnos_horas.get("Día", form.get("turno_dia_inicio", "07:30").strip())
+    config["turno_noche_inicio"] = turnos_horas.get("Noche", form.get("turno_noche_inicio", "19:30").strip())
 
     # ── Clasificaciones activas ───────────────────────────────────────────────
     # Los checkboxes envían sus IDs como campos con valor "on"
