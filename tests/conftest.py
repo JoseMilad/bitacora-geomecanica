@@ -52,6 +52,31 @@ class _FakeMySQLCursor:
             self.rowcount = 1
             return
 
+        if "from information_schema.columns" in normalized:
+            # Generic handler for other column migration checks (e.g. sistema_referencia, datos_adicionales)
+            # Extract column name from the query params if available
+            col_name = None
+            m = re.search(r"column_name='(\w+)'", normalized)
+            if m:
+                col_name = m.group(1)
+            table_name = None
+            m2 = re.search(r"table_name='(\w+)'", normalized)
+            if m2:
+                table_name = m2.group(1)
+            if col_name and table_name:
+                try:
+                    cols = self._state["conn"].execute(f"PRAGMA table_info({table_name})").fetchall()
+                    has_col = any(c[1] == col_name for c in cols)
+                    self._rows = [{"cnt": 1 if has_col else 0}]
+                    self.rowcount = 1
+                except Exception:
+                    self._rows = [{"cnt": 1}]
+                    self.rowcount = 1
+            else:
+                self._rows = [{"cnt": 1}]
+                self.rowcount = 1
+            return
+
         sqlite_query = self._to_sqlite(query)
         cursor = self._state["conn"].cursor()
         try:

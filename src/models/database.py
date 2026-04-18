@@ -169,6 +169,7 @@ class DatabaseManager:
                     fase                VARCHAR(255) DEFAULT '',
                     clasificacion_kpi   VARCHAR(255) DEFAULT '',
                     sistema_referencia  VARCHAR(50) DEFAULT '',
+                    datos_adicionales   TEXT DEFAULT NULL,
                     UNIQUE KEY uq_labores_empresa_labor (empresa_id, labor)
                 );
 
@@ -219,6 +220,8 @@ class DatabaseManager:
             self._migrate_estandar_text_columns(conn)
             # ── Migration: add sistema_referencia to labores if missing ──
             self._migrate_labores_sistema_referencia(conn)
+            # ── Migration: add datos_adicionales to labores if missing ──
+            self._migrate_labores_datos_adicionales(conn)
             # ── Ensure default empresa exists ──
             row = conn.execute("SELECT COUNT(*) as cnt FROM empresas").fetchone()
             if row["cnt"] == 0:
@@ -279,6 +282,23 @@ class DatabaseManager:
             if row and row["cnt"] == 0:
                 conn.execute(
                     "ALTER TABLE labores ADD COLUMN sistema_referencia VARCHAR(50) DEFAULT ''"
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+    def _migrate_labores_datos_adicionales(self, conn) -> None:
+        """Adds datos_adicionales column to labores if missing (stores custom classification values as JSON)."""
+        try:
+            row = conn.execute(
+                """SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='labores'
+                   AND COLUMN_NAME='datos_adicionales'""",
+                (self.mysql_config["database"],),
+            ).fetchone()
+            if row and row["cnt"] == 0:
+                conn.execute(
+                    "ALTER TABLE labores ADD COLUMN datos_adicionales TEXT DEFAULT NULL"
                 )
                 conn.commit()
         except Exception:
@@ -578,6 +598,7 @@ class DatabaseManager:
         fase: str = "",
         clasificacion_kpi: str = "",
         sistema_referencia: str = "",
+        extra_clasifs: dict | None = None,
     ) -> tuple[bool, str]:
         """
         Agrega una nueva labor al catálogo.
@@ -585,6 +606,7 @@ class DatabaseManager:
         Args:
             nombre: Nombre único de la labor.
             gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia: Datos técnicos.
+            extra_clasifs: Valores de clasificaciones personalizadas (distintas de GSI/RMR), guardados como JSON.
 
         Returns:
             (True, mensaje) o (False, mensaje de error/duplicado).
@@ -593,6 +615,8 @@ class DatabaseManager:
             nombre = nombre.strip()
             if not nombre:
                 return False, "El nombre de la labor no puede estar vacío"
+
+            datos_adicionales = json.dumps(extra_clasifs, ensure_ascii=False) if extra_clasifs else None
 
             conn = self._get_connection()
             try:
@@ -604,9 +628,9 @@ class DatabaseManager:
                     return False, f"La labor '{nombre}' ya existe"
                 conn.execute(
                     """INSERT INTO labores
-                           (empresa_id, labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (self.empresa_id, nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia),
+                           (empresa_id, labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia, datos_adicionales)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (self.empresa_id, nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia, datos_adicionales),
                 )
                 conn.commit()
                 return True, f"Labor '{nombre}' agregada correctamente"
@@ -644,7 +668,8 @@ class DatabaseManager:
 
         Returns:
             dict con claves Labor, GSI, RMR, Soporte, Tipo, Fase,
-            Clasificacion_KPI — o None.
+            Clasificacion_KPI y además las clasificaciones personalizadas
+            almacenadas en datos_adicionales — o None.
         """
         try:
             conn = self._get_connection()
@@ -655,7 +680,7 @@ class DatabaseManager:
                 ).fetchone()
                 if not row:
                     return None
-                return {
+                result = {
                     "Labor": row["labor"],
                     "GSI": row["gsi"],
                     "RMR": row["rmr"],
@@ -665,6 +690,16 @@ class DatabaseManager:
                     "Clasificacion_KPI": row["clasificacion_kpi"],
                     "Sistema_Referencia": row.get("sistema_referencia", "") or "",
                 }
+                # Merge custom classification values stored as JSON
+                raw = row.get("datos_adicionales") or ""
+                if raw:
+                    try:
+                        extra = json.loads(raw)
+                        if isinstance(extra, dict):
+                            result.update(extra)
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                return result
             finally:
                 conn.close()
         except Exception:
@@ -678,7 +713,8 @@ class DatabaseManager:
             nombre_original: Nombre actual de la labor.
             datos: Diccionario con los campos a actualizar.
                    Puede incluir Labor (renombrar), GSI, RMR, Soporte,
-                   Tipo, Fase, Clasificacion_KPI.
+                   Tipo, Fase, Clasificacion_KPI y extra_clasifs (dict
+                   con valores de clasificaciones personalizadas).
 
         Returns:
             (True, mensaje) o (False, mensaje de error).
@@ -711,6 +747,11 @@ class DatabaseManager:
                     if clave_ui in datos:
                         sets.append(f"{col_db}=?")
                         vals.append(str(datos[clave_ui]))
+
+                # Handle custom classification values stored as JSON
+                if "extra_clasifs" in datos and isinstance(datos["extra_clasifs"], dict):
+                    sets.append("datos_adicionales=?")
+                    vals.append(json.dumps(datos["extra_clasifs"], ensure_ascii=False))
 
                 if not sets:
                     return False, "No hay campos para actualizar"
