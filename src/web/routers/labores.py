@@ -123,12 +123,10 @@ async def nueva_labor_save(
 ):
     form_data = await request.form()
     extra_clasifs = {
-        key[len("clasif_"):]: str(val).upper()
+        key.removeprefix("clasif_"): str(val).upper()
         for key, val in form_data.items()
         if key.startswith("clasif_") and str(val).strip()
     }
-    model = BitacoraModel(empresa_id=_get_empresa_id(request))
-    ok, msg = model.agregar_labor(
         nombre_labor=nombre.upper(),
         gsi=gsi.upper(),
         rmr=rmr.upper(),
@@ -224,7 +222,7 @@ async def editar_labor_save(
 ):
     form_data = await request.form()
     extra_clasifs = {
-        key[len("clasif_"):]: str(val).upper()
+        key.removeprefix("clasif_"): str(val).upper()
         for key, val in form_data.items()
         if key.startswith("clasif_") and str(val).strip()
     }
