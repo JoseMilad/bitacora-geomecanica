@@ -1,6 +1,7 @@
 """Router de Estándar de Sostenimiento — CRUD por sistema de clasificación."""
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 for _p in (str(_ROOT), str(_ROOT / "src")):
@@ -116,7 +117,7 @@ async def agregar_fila(
                 _set_flash(request, "error",
                            f"Ya existe un estándar para el valor '{val_min}' con tipo '{tipo}'.")
                 sistema_seguro = _validar_sistema(sistema)
-                return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+                return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
         else:
             if (str(fila.get(cols[0], "")).strip() == val_min.strip()
                     and str(fila.get(cols[1], "")).strip() == val_max.strip()
@@ -124,7 +125,7 @@ async def agregar_fila(
                 _set_flash(request, "error",
                            f"Ya existe un estándar para el rango '{val_min}–{val_max}' con tipo '{tipo}'.")
                 sistema_seguro = _validar_sistema(sistema)
-                return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+                return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
 
     filas.append(nueva)
 
@@ -134,7 +135,7 @@ async def agregar_fila(
     else:
         _set_flash(request, "error", msg)
     sistema_seguro = _validar_sistema(sistema)
-    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+    return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
 
 
 # ── Eliminar fila por índice ──────────────────────────────────────────────────
@@ -162,7 +163,7 @@ async def eliminar_fila(
     else:
         _set_flash(request, "error", "Índice fuera de rango.")
     sistema_seguro = _validar_sistema(sistema)
-    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+    return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
 
 
 # ── Editar fila (guardar desde formulario inline) ─────────────────────────────
@@ -195,4 +196,4 @@ async def editar_fila(
     else:
         _set_flash(request, "error", "Índice fuera de rango.")
     sistema_seguro = _validar_sistema(sistema)
-    return RedirectResponse(url=f"/estandar?sistema={sistema_seguro}", status_code=303)
+    return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)

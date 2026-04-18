@@ -75,9 +75,12 @@ def _obtener_turno_automatico():
     ahora = datetime.now()
     minutos_actual = ahora.hour * 60 + ahora.minute
 
-    # Sort shifts by start time; find the last shift whose start <= current time
+    # Sort shifts by start time ascending.
+    # Default to the LAST shift in the sorted list: this handles the wrap-around
+    # case where the current time is before the first shift of the day (e.g. 02:00)
+    # meaning we are still in the last shift that started the previous day.
     ordenados = sorted(turno_minutos.items(), key=lambda x: x[1])
-    turno_actual = ordenados[-1][0]  # default: last shift (handles wrap-around)
+    turno_actual = ordenados[-1][0]  # wrap-around default: last shift by start time
     for nombre, inicio in ordenados:
         if inicio <= minutos_actual:
             turno_actual = nombre

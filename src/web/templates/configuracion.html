@@ -229,14 +229,22 @@ function actualizarCamposHoraTurnos() {
   turnos.forEach(turno => {
     const col = document.createElement('div');
     col.className = 'col-6';
+
     const label = document.createElement('label');
     label.className = 'form-label fw-semibold';
-    label.innerHTML = `Inicio turno <em>${turno}</em>`;
+    // Build label safely without innerHTML to avoid XSS
+    label.appendChild(document.createTextNode('Inicio turno '));
+    const em = document.createElement('em');
+    em.textContent = turno;
+    label.appendChild(em);
+
     const input = document.createElement('input');
     input.type = 'time';
-    input.name = `turno_hora_${turno}`;
+    // Build name safely using only validated turn name characters
+    input.name = 'turno_hora_' + turno;
     input.className = 'form-control';
     input.value = valoresActuales[turno] || '';
+
     col.appendChild(label);
     col.appendChild(input);
     contenedor.appendChild(col);
