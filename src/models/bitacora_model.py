@@ -372,7 +372,8 @@ class BitacoraModel:
             return pd.DataFrame(columns=COLUMNAS_LABORES)
 
     def agregar_labor(self, nombre_labor, gsi="", rmr="", soporte="", tipo="Temporal",
-                      fase="", clasificacion_kpi="", sistema_referencia=""):
+                      fase="", clasificacion_kpi="", sistema_referencia="",
+                      extra_clasifs: dict | None = None):
         """
         Agrega una nueva labor. Usa SQLite y sincroniza a Excel.
         Returns: tuple (éxito: bool, mensaje: str)
@@ -382,7 +383,8 @@ class BitacoraModel:
             exito, mensaje = self.db.agregar_labor(
                 nombre_labor, gsi=gsi, rmr=rmr, soporte=soporte,
                 tipo=tipo, fase=fase, clasificacion_kpi=clasificacion_kpi,
-                sistema_referencia=sistema_referencia
+                sistema_referencia=sistema_referencia,
+                extra_clasifs=extra_clasifs,
             )
             if exito:
                 self._sincronizar_a_excel("Labores")
