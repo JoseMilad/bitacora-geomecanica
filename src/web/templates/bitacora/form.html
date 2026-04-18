@@ -107,22 +107,27 @@
             <!-- Soporte -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Soporte</label>
-              <!-- Selector de sistema de referencia (solo si hay múltiples con estándar) -->
-              {% set efectivos_list = [] %}
-              {% for sid in clasif_activas %}{% if sid in sistemas_con_estandar %}{% if efectivos_list.append(sid) %}{% endif %}{% endif %}{% endfor %}
-              {% if efectivos_list | length > 1 %}
+              <!-- Selector de sistema de referencia — mostrar siempre que haya 2+ clasificaciones activas (issue 3) -->
+              {% if clasif_activas | length > 1 %}
               <div class="d-flex gap-2 align-items-center mb-1">
                 <label class="mb-0 small text-muted">
                   <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema referencia:
                 </label>
                 <select id="selectSistemaReferencia" class="form-select form-select-sm w-auto"
-                  onchange="calcularSoporteManual(_getSistemaReferencia())">
-                  {% for sid in efectivos_list %}
-                  <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
+                  onchange="onSistemaReferenciaChange()">
+                  <option value="">— seleccionar —</option>
+                  {% for sid in clasif_activas %}
+                  <option value="{{ sid }}"
+                    {% if sistema_ref_sesion and sistema_ref_sesion == sid %}selected{% endif %}>
+                    {{ clasif_nombres.get(sid, sid) }}
+                  </option>
                   {% endfor %}
                 </select>
               </div>
               {% endif %}
+              <!-- Hidden field to submit the selected system so the server can persist it -->
+              <input type="hidden" id="hiddenSistemaRefBitacora" name="sistema_referencia_bitacora"
+                value="{{ sistema_ref_sesion or '' }}" />
               <input type="text" name="soporte" id="inputSoporte" class="form-control"
                 value="{{ registro.get('Soporte','') if registro else '' }}"
                 placeholder="Tipo de soporte" />
@@ -262,19 +267,30 @@ const _clasifActivas = {{ clasif_activas | tojson }};
 const _clasifTipos = {{ clasif_tipos | tojson }};
 const _sistemasConEstandar = {{ sistemas_con_estandar | tojson }};
 
-// Sistemas activos que tienen estándar definido
-const _efectivos = _clasifActivas.filter(s => _sistemasConEstandar.includes(s));
-
 function _getSistemaReferencia() {
   const sel = document.getElementById('selectSistemaReferencia');
-  if (sel) return sel.value;
-  return _efectivos.length > 0 ? _efectivos[0] : null;
+  if (sel && sel.value) return sel.value;
+  // Fallback: use first active system if none selected
+  return _clasifActivas.length > 0 ? _clasifActivas[0] : null;
 }
 
 function _getInputValor(sistema) {
   if (sistema === 'GSI') return document.getElementById('inputGSI');
   if (sistema === 'RMR') return document.getElementById('inputRMR');
   return document.getElementById('inputClasif_' + sistema);
+}
+
+// Sync the hidden field that records which reference system the user chose
+function _syncHiddenSistemaRef() {
+  const sel = document.getElementById('selectSistemaReferencia');
+  const hidden = document.getElementById('hiddenSistemaRefBitacora');
+  if (sel && hidden) hidden.value = sel.value;
+}
+
+// Called when the user changes the reference system combo
+function onSistemaReferenciaChange() {
+  _syncHiddenSistemaRef();
+  calcularSoporteManual(_getSistemaReferencia());
 }
 
 // Auto-calcular soporte al cambiar cualquier campo de clasificación

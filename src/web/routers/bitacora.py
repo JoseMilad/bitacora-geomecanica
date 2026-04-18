@@ -69,9 +69,9 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
 
 
 def _is_admin(request: Request) -> bool:
-    """Verifica si el usuario actual es administrador."""
+    """Verifica si el usuario es administrador global o de empresa."""
     user = request.session.get("user")
-    return user is not None and user.get("rol") == "admin"
+    return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
 def _get_username(request: Request) -> str:
@@ -207,6 +207,8 @@ async def nuevo_bitacora_form(request: Request):
     labores_nombres = model.obtener_labores_guardadas()
     flash = _get_flash(request)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+    # Pre-select the last reference system used by this user (from session)
+    sistema_ref_sesion = request.session.get("ultimo_sistema_referencia", "")
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -218,6 +220,7 @@ async def nuevo_bitacora_form(request: Request):
         "titulo": "Nuevo Registro",
         "flash": flash,
         "active_page": "bitacora",
+        "sistema_ref_sesion": sistema_ref_sesion,
         **clasif_ctx,
     })
 
@@ -234,6 +237,10 @@ async def nuevo_bitacora_save(request: Request):
     soporte = form.get("soporte", "")
     observaciones = form.get("observaciones", "")
     forzar = form.get("forzar", "")
+    # Persist the reference system selected by the user in the session
+    sistema_ref = form.get("sistema_referencia_bitacora", "").strip()
+    if sistema_ref:
+        request.session["ultimo_sistema_referencia"] = sistema_ref
 
     # Procesar imagen subida
     imagen_path = ""
@@ -274,6 +281,7 @@ async def nuevo_bitacora_save(request: Request):
     # Duplicado u otro error — mostrar formulario con error
     labores_nombres = model.obtener_labores_guardadas()
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+    sistema_ref_sesion = request.session.get("ultimo_sistema_referencia", "")
     return templates.TemplateResponse(request, "bitacora/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -285,6 +293,7 @@ async def nuevo_bitacora_save(request: Request):
         "flash": {"tipo": "warning", "mensaje": msg},
         "duplicado": True,
         "active_page": "bitacora",
+        "sistema_ref_sesion": sistema_ref_sesion,
         **clasif_ctx,
     })
 
@@ -504,7 +513,7 @@ async def calcular_soporte(request: Request, rmr: str = "", labor: str = ""):
 
 
 @router.get("/calcular-soporte-gen")
-async def calcular_soporte_gen(request: Request, sistema: str = "", valor: str = "", labor: str = ""):
+async def calcular_soporte_gen(request: Request, sistema: str = "", valor: str = "", labor: str = "", tipo: str = ""):
     """Devuelve el soporte recomendado para cualquier sistema de clasificación activo."""
     from src.utils.config_manager import obtener_clasificaciones_activas, get_tipo_valor_clasificacion
     activas = obtener_clasificaciones_activas()
@@ -513,13 +522,16 @@ async def calcular_soporte_gen(request: Request, sistema: str = "", valor: str =
     if not valor or not valor.strip():
         return JSONResponse({"soporte": "", "error": "Valor vacío"})
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
-    tipo = "Temporal"
-    if labor:
+    # Use explicitly-passed tipo if provided; else look up from the labor catalog
+    tipo_efectivo = tipo.strip() if tipo.strip() in ("Temporal", "Permanente") else ""
+    if not tipo_efectivo and labor:
         datos = model.obtener_datos_labor(labor)
         if datos and datos.get("Tipo"):
-            tipo = str(datos["Tipo"])
+            tipo_efectivo = str(datos["Tipo"])
+    if not tipo_efectivo:
+        tipo_efectivo = "Temporal"
     tipo_valor = get_tipo_valor_clasificacion(sistema)
-    soporte = model.recomendar_soporte(valor.strip(), tipo=tipo, sistema=sistema, tipo_valor=tipo_valor) or ""
+    soporte = model.recomendar_soporte(valor.strip(), tipo=tipo_efectivo, sistema=sistema, tipo_valor=tipo_valor) or ""
     return JSONResponse({"soporte": soporte})
 
 

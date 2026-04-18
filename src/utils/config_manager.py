@@ -17,6 +17,7 @@ DEFAULTS = {
     "turnos": ["Día", "Noche"],
     "turno_dia_inicio": "07:30",
     "turno_noche_inicio": "19:30",
+    "turnos_horas": {"Día": "07:30", "Noche": "19:30"},
     "sostenimientos_activos": [
         {"display": "Shotcrete (m³)", "columna": "Shotcrete_m3", "tipo": "float"},
         {"display": "Pernos Helicoidales", "columna": "Pernos_Helicoidales", "tipo": "int"},

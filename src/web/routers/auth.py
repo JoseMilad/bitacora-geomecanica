@@ -40,9 +40,15 @@ def get_current_user(request: Request) -> dict | None:
 
 
 def require_admin(request: Request) -> bool:
-    """Verifica que el usuario sea administrador."""
+    """Verifica que el usuario sea administrador global (rol='admin')."""
     user = get_current_user(request)
     return user is not None and user.get("rol") == "admin"
+
+
+def is_empresa_admin(request: Request) -> bool:
+    """Verifica que el usuario sea admin de su empresa (rol='admin' o 'empresa_admin')."""
+    user = get_current_user(request)
+    return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
 # ── Registro ──────────────────────────────────────────────────────────────────

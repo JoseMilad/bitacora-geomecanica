@@ -92,8 +92,24 @@ async function autocompletarLabor(nombre) {
     if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
     if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
 
-    // Si RMR fue rellenado, calcular soporte
-    if (rmrInput && rmrInput.value && typeof calcularSoporte === 'function') {
+    // Issue 2: Pre-select the reference system stored for this labor
+    const sistemaRef = datos.Sistema_Referencia || '';
+    if (sistemaRef) {
+      const selRef = document.getElementById('selectSistemaReferencia');
+      if (selRef) {
+        // Only update if the labor's system is in the list
+        const opt = Array.from(selRef.options).find(o => o.value === sistemaRef);
+        if (opt) {
+          selRef.value = sistemaRef;
+          // Sync the hidden field
+          const hidden = document.getElementById('hiddenSistemaRefBitacora');
+          if (hidden) hidden.value = sistemaRef;
+        }
+      }
+    }
+
+    // Si hay un campo de referencia activo y tiene valor, calcular soporte
+    if (typeof calcularSoporte === 'function') {
       setTimeout(calcularSoporte, 200);
     }
   } catch (err) {

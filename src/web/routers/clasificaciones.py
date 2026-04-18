@@ -32,9 +32,9 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
 
 
 def _is_admin(request: Request) -> bool:
-    """Verifica si el usuario actual es administrador."""
+    """Verifica si el usuario es administrador global o de empresa."""
     user = request.session.get("user")
-    return user is not None and user.get("rol") == "admin"
+    return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
 # ── Listar clasificaciones de labor ───────────────────────────────────────────

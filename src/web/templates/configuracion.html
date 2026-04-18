@@ -18,24 +18,26 @@
             Turnos disponibles
             <small class="text-muted fw-normal">(uno por línea)</small>
           </label>
-          <textarea name="turnos" class="form-control font-monospace" rows="4"
-            placeholder="Día&#10;Noche">{{ config.get('turnos', ['Día', 'Noche']) | join('\n') }}</textarea>
+          <textarea name="turnos" id="textareaTurnos" class="form-control font-monospace" rows="4"
+            placeholder="Día&#10;Noche"
+            oninput="actualizarCamposHoraTurnos()">{{ config.get('turnos', ['Día', 'Noche']) | join('\n') }}</textarea>
         </div>
-        <div class="row g-3">
+        <div id="contenedorHoraTurnos" class="row g-3">
+          {% set turnos_horas = config.get('turnos_horas', {}) %}
+          {% set turno_dia_ini = config.get('turno_dia_inicio', '07:30') %}
+          {% set turno_noche_ini = config.get('turno_noche_inicio', '19:30') %}
+          {% for turno in config.get('turnos', ['Día', 'Noche']) %}
+          {% set hora_default = turnos_horas.get(turno) or (turno_dia_ini if turno == 'Día' else (turno_noche_ini if turno == 'Noche' else '')) %}
           <div class="col-6">
-            <label class="form-label fw-semibold">Inicio turno día</label>
-            <input type="time" name="turno_dia_inicio" class="form-control"
-              value="{{ config.get('turno_dia_inicio', '07:30') }}" />
+            <label class="form-label fw-semibold">Inicio turno <em>{{ turno }}</em></label>
+            <input type="time" name="turno_hora_{{ turno }}" class="form-control"
+              value="{{ hora_default }}" />
           </div>
-          <div class="col-6">
-            <label class="form-label fw-semibold">Inicio turno noche</label>
-            <input type="time" name="turno_noche_inicio" class="form-control"
-              value="{{ config.get('turno_noche_inicio', '19:30') }}" />
-          </div>
+          {% endfor %}
         </div>
         <small class="text-muted mt-2 d-block">
           <i class="fa-solid fa-circle-info me-1"></i>
-          El turno noche que cruza medianoche pertenece a la fecha en que inició.
+          El turno que cruza medianoche pertenece a la fecha en que inició.
         </small>
       </div>
     </div>
@@ -206,4 +208,47 @@
       action="/configuracion/eliminar-clasificacion/{{ c.id }}" style="display:none;"></form>
 {% endif %}
 {% endfor %}
+
+<script>
+// Issue 5: Dynamically update shift time input fields when the turns textarea changes
+function actualizarCamposHoraTurnos() {
+  const textarea = document.getElementById('textareaTurnos');
+  const contenedor = document.getElementById('contenedorHoraTurnos');
+  if (!textarea || !contenedor) return;
+
+  const turnos = textarea.value.split('\n').map(t => t.trim()).filter(Boolean);
+
+  // Collect existing values before re-rendering
+  const valoresActuales = {};
+  contenedor.querySelectorAll('input[type="time"]').forEach(inp => {
+    const nameMatch = inp.name.match(/^turno_hora_(.+)$/);
+    if (nameMatch) valoresActuales[nameMatch[1]] = inp.value;
+  });
+
+  contenedor.innerHTML = '';
+  turnos.forEach(turno => {
+    const col = document.createElement('div');
+    col.className = 'col-6';
+
+    const label = document.createElement('label');
+    label.className = 'form-label fw-semibold';
+    // Build label safely without innerHTML to avoid XSS
+    label.appendChild(document.createTextNode('Inicio turno '));
+    const em = document.createElement('em');
+    em.textContent = turno;
+    label.appendChild(em);
+
+    const input = document.createElement('input');
+    input.type = 'time';
+    // Build name safely using only validated turn name characters
+    input.name = 'turno_hora_' + turno;
+    input.className = 'form-control';
+    input.value = valoresActuales[turno] || '';
+
+    col.appendChild(label);
+    col.appendChild(input);
+    contenedor.appendChild(col);
+  });
+}
+</script>
 {% endblock %}

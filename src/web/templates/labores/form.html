@@ -79,13 +79,21 @@
                 <label class="form-label fw-semibold mb-0 small text-muted">
                   <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia:
                 </label>
-                <select id="selectSistemaReferenciaLabor" class="form-select form-select-sm w-auto"
-                  onchange="calcularSoporteLabor()">
+                <select id="selectSistemaReferenciaLabor" name="sistema_referencia"
+                  class="form-select form-select-sm w-auto"
+                  onchange="actualizarTiposEntrada(); calcularSoporteLabor()">
                   {% for sid in clasif_activas %}
-                  <option value="{{ sid }}">{{ clasif_nombres.get(sid, sid) }}</option>
+                  <option value="{{ sid }}"
+                    {% if labor and labor.get('Sistema_Referencia') == sid %}selected
+                    {% elif not labor and loop.first %}selected{% endif %}>
+                    {{ clasif_nombres.get(sid, sid) }}
+                  </option>
                   {% endfor %}
                 </select>
               </div>
+              {% else %}
+              <input type="hidden" name="sistema_referencia"
+                value="{{ clasif_activas[0] if clasif_activas else '' }}" />
               {% endif %}
               <input type="text" name="soporte" id="inputSoporte" class="form-control"
                 value="{{ labor.get('Soporte', '') if labor else '' }}"
@@ -172,8 +180,10 @@ async function _doCalcSoporteLabor() {
   if (!sistema) return;
   const inputEl = _getInputValorLabor(sistema);
   if (!inputEl || !inputEl.value.trim()) return;
+  const tipoEl = document.getElementById('selectTipo');
+  const tipo = tipoEl ? tipoEl.value : 'Temporal';
   try {
-    const params = new URLSearchParams({ sistema, valor: inputEl.value.trim() });
+    const params = new URLSearchParams({ sistema, valor: inputEl.value.trim(), tipo });
     const res = await fetch(`/bitacora/calcular-soporte-gen?${params}`);
     if (!res.ok) return;
     const data = await res.json();
@@ -182,6 +192,24 @@ async function _doCalcSoporteLabor() {
   } catch (e) {
     console.warn('calcularSoporteLabor error:', e);
   }
+}
+
+// Issue 4: When reference system changes, set non-selected fields to accept free text
+function actualizarTiposEntrada() {
+  const sistema = _getSistemaReferenciaLabor();
+  _clasifActivas.forEach(function(sid) {
+    const inputEl = _getInputValorLabor(sid);
+    if (!inputEl) return;
+    if (sid === sistema) {
+      // Restore native type for the selected reference system
+      inputEl.type = (_clasifTipos[sid] === 'numerico') ? 'number' : 'text';
+      inputEl.removeAttribute('data-manual');
+    } else {
+      // Non-reference fields: always allow free text
+      inputEl.type = 'text';
+      inputEl.setAttribute('data-manual', '1');
+    }
+  });
 }
 
 let _detectTimer = null;
@@ -214,5 +242,15 @@ async function detectarClasificacion(nombre) {
     }
   }, 400);
 }
+
+// Apply initial field types on page load (issue 4)
+document.addEventListener('DOMContentLoaded', function() {
+  actualizarTiposEntrada();
+  // When tipo changes, recalculate soporte (issue 1)
+  const selectTipo = document.getElementById('selectTipo');
+  if (selectTipo) {
+    selectTipo.addEventListener('change', function() { calcularSoporteLabor(); });
+  }
+});
 </script>
 {% endblock %}

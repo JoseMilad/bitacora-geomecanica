@@ -28,9 +28,9 @@ def _set_flash(request: Request, tipo: str, mensaje: str):
 
 
 def _is_admin(request: Request) -> bool:
-    """Verifica si el usuario actual es administrador."""
+    """Verifica si el usuario es administrador global o de empresa."""
     user = request.session.get("user")
-    return user is not None and user.get("rol") == "admin"
+    return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
 def _get_empresa_id(request: Request) -> int:
@@ -119,6 +119,7 @@ async def nueva_labor_save(
     tipo: str = Form("Temporal"),
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
+    sistema_referencia: str = Form(""),
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.agregar_labor(
@@ -129,6 +130,7 @@ async def nueva_labor_save(
         tipo=tipo,
         fase=fase.upper(),
         clasificacion_kpi=clasificacion_kpi.upper(),
+        sistema_referencia=sistema_referencia,
     )
     if ok:
         _set_flash(request, "success", msg)
@@ -142,6 +144,7 @@ async def nueva_labor_save(
             "Soporte": soporte.upper(),
             "Tipo": tipo, "Fase": fase.upper(),
             "Clasificacion_KPI": clasificacion_kpi.upper(),
+            "Sistema_Referencia": sistema_referencia,
         },
         "action": "/labores/nueva",
         "titulo": "Nueva Labor",
@@ -208,6 +211,7 @@ async def editar_labor_save(
     tipo: str = Form("Temporal"),
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
+    sistema_referencia: str = Form(""),
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     nuevos_datos = {
@@ -218,6 +222,7 @@ async def editar_labor_save(
         "Tipo": tipo,
         "Fase": fase.upper(),
         "Clasificacion_KPI": clasificacion_kpi.upper(),
+        "Sistema_Referencia": sistema_referencia,
     }
     ok, msg = model.db.editar_labor(nombre, nuevos_datos)
     if ok:

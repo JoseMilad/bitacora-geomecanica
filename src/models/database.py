@@ -159,15 +159,16 @@ class DatabaseManager:
                 );
 
                 CREATE TABLE IF NOT EXISTS labores (
-                    id                INT PRIMARY KEY AUTO_INCREMENT,
-                    empresa_id        INT DEFAULT 1,
-                    labor             VARCHAR(255) NOT NULL,
-                    gsi               VARCHAR(255) DEFAULT '',
-                    rmr               VARCHAR(255) DEFAULT '',
-                    soporte           TEXT,
-                    tipo              VARCHAR(100) DEFAULT 'Temporal',
-                    fase              VARCHAR(255) DEFAULT '',
-                    clasificacion_kpi VARCHAR(255) DEFAULT '',
+                    id                  INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id          INT DEFAULT 1,
+                    labor               VARCHAR(255) NOT NULL,
+                    gsi                 VARCHAR(255) DEFAULT '',
+                    rmr                 VARCHAR(255) DEFAULT '',
+                    soporte             TEXT,
+                    tipo                VARCHAR(100) DEFAULT 'Temporal',
+                    fase                VARCHAR(255) DEFAULT '',
+                    clasificacion_kpi   VARCHAR(255) DEFAULT '',
+                    sistema_referencia  VARCHAR(50) DEFAULT '',
                     UNIQUE KEY uq_labores_empresa_labor (empresa_id, labor)
                 );
 
@@ -216,6 +217,8 @@ class DatabaseManager:
             self._migrate_empresa_id(conn)
             # ── Migration: change valor_min/valor_max to VARCHAR if still DOUBLE ──
             self._migrate_estandar_text_columns(conn)
+            # ── Migration: add sistema_referencia to labores if missing ──
+            self._migrate_labores_sistema_referencia(conn)
             # ── Ensure default empresa exists ──
             row = conn.execute("SELECT COUNT(*) as cnt FROM empresas").fetchone()
             if row["cnt"] == 0:
@@ -264,7 +267,24 @@ class DatabaseManager:
         except Exception:
             pass
 
-    # ── Helpers internos ─────────────────────────────────────────────────
+    def _migrate_labores_sistema_referencia(self, conn) -> None:
+        """Adds sistema_referencia column to labores if missing."""
+        try:
+            row = conn.execute(
+                """SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='labores'
+                   AND COLUMN_NAME='sistema_referencia'""",
+                (self.mysql_config["database"],),
+            ).fetchone()
+            if row and row["cnt"] == 0:
+                conn.execute(
+                    "ALTER TABLE labores ADD COLUMN sistema_referencia VARCHAR(50) DEFAULT ''"
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+
 
     @staticmethod
     def _row_to_dict(row: dict) -> dict:
@@ -557,13 +577,14 @@ class DatabaseManager:
         tipo: str = "Temporal",
         fase: str = "",
         clasificacion_kpi: str = "",
+        sistema_referencia: str = "",
     ) -> tuple[bool, str]:
         """
         Agrega una nueva labor al catálogo.
 
         Args:
             nombre: Nombre único de la labor.
-            gsi, rmr, soporte, tipo, fase, clasificacion_kpi: Datos técnicos.
+            gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia: Datos técnicos.
 
         Returns:
             (True, mensaje) o (False, mensaje de error/duplicado).
@@ -582,9 +603,10 @@ class DatabaseManager:
                 if existing:
                     return False, f"La labor '{nombre}' ya existe"
                 conn.execute(
-                    """INSERT INTO labores (empresa_id, labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (self.empresa_id, nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi),
+                    """INSERT INTO labores
+                           (empresa_id, labor, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (self.empresa_id, nombre, gsi, rmr, soporte, tipo, fase, clasificacion_kpi, sistema_referencia),
                 )
                 conn.commit()
                 return True, f"Labor '{nombre}' agregada correctamente"
@@ -641,6 +663,7 @@ class DatabaseManager:
                     "Tipo": row["tipo"],
                     "Fase": row["fase"],
                     "Clasificacion_KPI": row["clasificacion_kpi"],
+                    "Sistema_Referencia": row.get("sistema_referencia", "") or "",
                 }
             finally:
                 conn.close()
@@ -680,6 +703,7 @@ class DatabaseManager:
                     "Tipo": "tipo",
                     "Fase": "fase",
                     "Clasificacion_KPI": "clasificacion_kpi",
+                    "Sistema_Referencia": "sistema_referencia",
                 }
                 sets: list[str] = []
                 vals: list = []
