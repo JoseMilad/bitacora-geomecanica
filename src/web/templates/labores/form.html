@@ -28,6 +28,26 @@
             </div>
             {% endif %}
 
+            <!-- Sistema de referencia — visible solo si hay 2+ clasificaciones activas -->
+            {% if clasif_activas | length > 1 %}
+            <div class="col-12">
+              <label class="form-label fw-semibold mb-1">
+                <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia
+              </label>
+              <select id="selectSistemaReferenciaLabor" name="sistema_referencia"
+                class="form-select form-select-sm w-auto"
+                onchange="actualizarTiposEntrada(); calcularSoporteLabor()">
+                {% for sid in clasif_activas %}
+                <option value="{{ sid }}"
+                  {% if labor and labor.get('Sistema_Referencia') == sid %}selected
+                  {% elif not labor and loop.first %}selected{% endif %}>
+                  {{ clasif_nombres.get(sid, sid) }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
             <!-- GSI — visible solo si GSI está activo -->
             {% if 'GSI' in clasif_activas %}
             <div class="col-md-6">
@@ -74,24 +94,7 @@
             <!-- Soporte -->
             <div class="col-12">
               <label class="form-label fw-semibold">Soporte</label>
-              {% if clasif_activas | length > 1 %}
-              <div class="d-flex gap-2 align-items-center mb-2">
-                <label class="form-label fw-semibold mb-0 small text-muted">
-                  <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia:
-                </label>
-                <select id="selectSistemaReferenciaLabor" name="sistema_referencia"
-                  class="form-select form-select-sm w-auto"
-                  onchange="actualizarTiposEntrada(); calcularSoporteLabor()">
-                  {% for sid in clasif_activas %}
-                  <option value="{{ sid }}"
-                    {% if labor and labor.get('Sistema_Referencia') == sid %}selected
-                    {% elif not labor and loop.first %}selected{% endif %}>
-                    {{ clasif_nombres.get(sid, sid) }}
-                  </option>
-                  {% endfor %}
-                </select>
-              </div>
-              {% else %}
+              {% if clasif_activas | length <= 1 %}
               <input type="hidden" name="sistema_referencia"
                 value="{{ clasif_activas[0] if clasif_activas else '' }}" />
               {% endif %}

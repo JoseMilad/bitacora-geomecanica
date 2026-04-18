@@ -69,6 +69,25 @@
               <small id="infoUltimoRegistro" class="text-muted"></small>
             </div>
 
+            <!-- Sistema de referencia — visible solo si hay 2+ clasificaciones activas -->
+            {% if clasif_activas | length > 1 %}
+            <div class="col-12">
+              <label class="form-label fw-semibold mb-1">
+                <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema de referencia
+              </label>
+              <select id="selectSistemaReferencia" class="form-select form-select-sm w-auto"
+                onchange="onSistemaReferenciaChange()">
+                <option value="">— seleccionar —</option>
+                {% for sid in clasif_activas %}
+                <option value="{{ sid }}"
+                  {% if sistema_ref_sesion and sistema_ref_sesion == sid %}selected{% endif %}>
+                  {{ clasif_nombres.get(sid, sid) }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
             <!-- GSI — visible solo si GSI está activo -->
             {% if 'GSI' in clasif_activas %}
             <div class="col-md-4" id="campoGSI">
@@ -107,24 +126,6 @@
             <!-- Soporte -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Soporte</label>
-              <!-- Selector de sistema de referencia — mostrar siempre que haya 2+ clasificaciones activas (issue 3) -->
-              {% if clasif_activas | length > 1 %}
-              <div class="d-flex gap-2 align-items-center mb-1">
-                <label class="mb-0 small text-muted">
-                  <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i>Sistema referencia:
-                </label>
-                <select id="selectSistemaReferencia" class="form-select form-select-sm w-auto"
-                  onchange="onSistemaReferenciaChange()">
-                  <option value="">— seleccionar —</option>
-                  {% for sid in clasif_activas %}
-                  <option value="{{ sid }}"
-                    {% if sistema_ref_sesion and sistema_ref_sesion == sid %}selected{% endif %}>
-                    {{ clasif_nombres.get(sid, sid) }}
-                  </option>
-                  {% endfor %}
-                </select>
-              </div>
-              {% endif %}
               <!-- Hidden field to submit the selected system so the server can persist it -->
               <input type="hidden" id="hiddenSistemaRefBitacora" name="sistema_referencia_bitacora"
                 value="{{ sistema_ref_sesion or '' }}" />
@@ -290,7 +291,24 @@ function _syncHiddenSistemaRef() {
 // Called when the user changes the reference system combo
 function onSistemaReferenciaChange() {
   _syncHiddenSistemaRef();
+  actualizarTiposEntradaBitacora();
   calcularSoporteManual(_getSistemaReferencia());
+}
+
+// When reference system changes, set non-selected fields to accept free text
+function actualizarTiposEntradaBitacora() {
+  const sistema = _getSistemaReferencia();
+  _clasifActivas.forEach(function(sid) {
+    const inputEl = _getInputValor(sid);
+    if (!inputEl) return;
+    if (sid === sistema) {
+      inputEl.type = (_clasifTipos[sid] === 'numerico') ? 'number' : 'text';
+      inputEl.removeAttribute('data-manual');
+    } else {
+      inputEl.type = 'text';
+      inputEl.setAttribute('data-manual', '1');
+    }
+  });
 }
 
 // Auto-calcular soporte al cambiar cualquier campo de clasificación
@@ -524,6 +542,9 @@ document.getElementById('btnGuardar').closest('form').addEventListener('submit',
     evt.target.submit();
   }, 'image/png');
 });
+
+// Apply initial field types on page load
+actualizarTiposEntradaBitacora();
 </script>
 {% endblock %}
 
