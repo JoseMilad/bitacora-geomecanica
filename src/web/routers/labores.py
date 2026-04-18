@@ -127,6 +127,8 @@ async def nueva_labor_save(
         for key, val in form_data.items()
         if key.startswith("clasif_") and str(val).strip()
     }
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    ok, msg = model.agregar_labor(
         nombre_labor=nombre.upper(),
         gsi=gsi.upper(),
         rmr=rmr.upper(),
