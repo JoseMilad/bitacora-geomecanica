@@ -80,6 +80,7 @@ async def listar_labores(request: Request, q: str = ""):
         df = model._leer_labores_df()
         labores = df.to_dict(orient="records") if not df.empty else []
     flash = _get_flash(request)
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "labores/list.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -88,6 +89,7 @@ async def listar_labores(request: Request, q: str = ""):
         "flash": flash,
         "active_page": "labores",
         "is_admin": _is_admin(request),
+        **clasif_ctx,
     })
 
 

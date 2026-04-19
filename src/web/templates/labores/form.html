@@ -28,6 +28,14 @@
             </div>
             {% endif %}
 
+            {# Determine the active reference system at render time so every field
+               gets the right initial <input type> before JavaScript runs.
+               A number input whose value is non-numeric is silently cleared by
+               the browser before DOMContentLoaded, which would make the field
+               appear empty even when the saved value is a valid text string. #}
+            {% set _init_ref = (labor.get('Sistema_Referencia', '') if labor else '') %}
+            {% if not _init_ref and clasif_activas %}{% set _init_ref = clasif_activas[0] %}{% endif %}
+
             <!-- Sistema de referencia — visible solo si hay 2+ clasificaciones activas -->
             {% if clasif_activas | length > 1 %}
             <div class="col-12">
@@ -52,7 +60,7 @@
             {% if 'GSI' in clasif_activas %}
             <div class="col-md-6">
               <label class="form-label fw-semibold">GSI</label>
-              <input type="{{ 'number' if clasif_tipos.get('GSI') == 'numerico' else 'text' }}"
+              <input type="{{ 'number' if clasif_tipos.get('GSI') == 'numerico' and _init_ref == 'GSI' else 'text' }}"
                 name="gsi" id="inputGSI" class="form-control"
                 value="{{ labor.get('GSI', '') if labor else '' }}"
                 placeholder="Valor GSI"
@@ -66,9 +74,9 @@
             {% if 'RMR' in clasif_activas %}
             <div class="col-md-6">
               <label class="form-label fw-semibold">RMR</label>
-              <input type="{{ 'number' if clasif_tipos.get('RMR') == 'numerico' else 'text' }}"
+              <input type="{{ 'number' if clasif_tipos.get('RMR') == 'numerico' and _init_ref == 'RMR' else 'text' }}"
                 name="rmr" id="inputRMR" class="form-control"
-                {% if clasif_tipos.get('RMR') == 'numerico' %}min="0" max="100" step="1"{% endif %}
+                {% if clasif_tipos.get('RMR') == 'numerico' and _init_ref == 'RMR' %}min="0" max="100" step="1"{% endif %}
                 value="{{ labor.get('RMR', '') if labor else '' }}"
                 placeholder="Valor RMR"
                 oninput="calcularSoporteLabor()" />
@@ -82,7 +90,7 @@
               {% if cid not in ('GSI', 'RMR') %}
               <div class="col-md-6">
                 <label class="form-label fw-semibold">{{ clasif_nombres.get(cid, cid) }}</label>
-                <input type="{{ 'number' if clasif_tipos.get(cid) == 'numerico' else 'text' }}"
+                <input type="{{ 'number' if clasif_tipos.get(cid) == 'numerico' and _init_ref == cid else 'text' }}"
                   name="clasif_{{ cid }}" id="inputClasif_{{ cid }}" class="form-control"
                   value="{{ labor.get(cid, '') if labor else '' }}"
                   placeholder="Valor {{ cid }}"
