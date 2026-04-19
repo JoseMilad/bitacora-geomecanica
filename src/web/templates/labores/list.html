@@ -46,6 +46,11 @@
             <th>Labor</th>
             <th>GSI</th>
             <th>RMR</th>
+            {% for cid in clasif_activas %}
+              {% if cid not in ('GSI', 'RMR') %}
+            <th>{{ clasif_nombres.get(cid, cid) }}</th>
+              {% endif %}
+            {% endfor %}
             <th>Soporte</th>
             <th>Tipo</th>
             <th>Fase</th>
@@ -60,6 +65,11 @@
               <td class="fw-semibold">{{ l.get('Labor', '') }}</td>
               <td>{{ l.get('GSI', '') }}</td>
               <td>{{ l.get('RMR', '') }}</td>
+              {% for cid in clasif_activas %}
+                {% if cid not in ('GSI', 'RMR') %}
+              <td>{{ l.get(cid, '') }}</td>
+                {% endif %}
+              {% endfor %}
               <td><small>{{ l.get('Soporte', '') }}</small></td>
               <td>
                 <span class="badge {{ 'badge-permanente' if l.get('Tipo') == 'Permanente' else 'badge-temporal' }}">
@@ -86,7 +96,10 @@
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="8" class="text-center text-muted py-5">
+            {# base columns: Labor, GSI, RMR, Soporte, Tipo, Fase, KPI, Acciones = 8 #}
+            {% set _base_cols = 8 %}
+            {% set _custom_cols = clasif_activas | reject('equalto', 'GSI') | reject('equalto', 'RMR') | list | length %}
+            <tr><td colspan="{{ _base_cols + _custom_cols }}" class="text-center text-muted py-5">
               <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
               No se encontraron labores
             </td></tr>
