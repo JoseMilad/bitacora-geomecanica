@@ -155,6 +155,7 @@ class DatabaseManager:
                     soporte         TEXT,
                     observaciones   TEXT,
                     imagen_path     TEXT,
+                    datos_adicionales TEXT DEFAULT NULL,
                     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -222,6 +223,8 @@ class DatabaseManager:
             self._migrate_labores_sistema_referencia(conn)
             # ── Migration: add datos_adicionales to labores if missing ──
             self._migrate_labores_datos_adicionales(conn)
+            # ── Migration: add datos_adicionales to bitacora if missing ──
+            self._migrate_bitacora_datos_adicionales(conn)
             # ── Ensure default empresa exists ──
             row = conn.execute("SELECT COUNT(*) as cnt FROM empresas").fetchone()
             if row["cnt"] == 0:
@@ -304,7 +307,22 @@ class DatabaseManager:
         except Exception:
             pass
 
-
+    def _migrate_bitacora_datos_adicionales(self, conn) -> None:
+        """Adds datos_adicionales column to bitacora if missing (stores custom classification values as JSON)."""
+        try:
+            row = conn.execute(
+                """SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=%s AND TABLE_NAME='bitacora'
+                   AND COLUMN_NAME='datos_adicionales'""",
+                (self.mysql_config["database"],),
+            ).fetchone()
+            if row and row["cnt"] == 0:
+                conn.execute(
+                    "ALTER TABLE bitacora ADD COLUMN datos_adicionales TEXT DEFAULT NULL"
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     @staticmethod
     def _row_to_dict(row: dict) -> dict:
@@ -377,10 +395,15 @@ class DatabaseManager:
 
     def _insertar_bitacora(self, conn, datos: dict) -> tuple[bool, str]:
         """Inserta una fila en la tabla bitacora."""
+        # Collect custom classification values (any key outside the standard schema)
+        _standard_keys = {"Fecha", "Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones", "imagen_path"}
+        extra = {k: v for k, v in datos.items() if k not in _standard_keys}
+        datos_adicionales_json = json.dumps(extra, ensure_ascii=False) if extra else None
+
         conn.execute(
             """INSERT INTO bitacora (empresa_id, fecha, turno, labor, gsi, rmr, soporte,
-                                     observaciones, imagen_path)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                     observaciones, imagen_path, datos_adicionales)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 self.empresa_id,
                 datos.get("Fecha", ""),
@@ -391,10 +414,22 @@ class DatabaseManager:
                 datos.get("Soporte", ""),
                 datos.get("Observaciones", ""),
                 datos.get("imagen_path", ""),
+                datos_adicionales_json,
             ),
         )
         conn.commit()
         return True, "Registro guardado exitosamente"
+
+    @staticmethod
+    def _expand_bitacora_datos_adicionales(raw) -> dict:
+        """Deserializes the datos_adicionales JSON field from a bitacora row into a dict."""
+        if not raw:
+            return {}
+        try:
+            extra = json.loads(raw)
+            return extra if isinstance(extra, dict) else {}
+        except (json.JSONDecodeError, ValueError):
+            return {}
 
     def obtener_bitacora(self) -> list[dict]:
         """
@@ -422,6 +457,7 @@ class DatabaseManager:
                         "Observaciones": r["observaciones"],
                         "imagen_path": r["imagen_path"],
                         "created_at": r["created_at"],
+                        **self._expand_bitacora_datos_adicionales(r.get("datos_adicionales")),
                     }
                     for r in rows
                 ]
@@ -465,6 +501,7 @@ class DatabaseManager:
                         "Observaciones": r["observaciones"],
                         "imagen_path": r["imagen_path"],
                         "created_at": r["created_at"],
+                        **self._expand_bitacora_datos_adicionales(r.get("datos_adicionales")),
                     }
 
                     if labor and labor.lower() not in registro["Labor"].lower():
@@ -502,11 +539,11 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                cur = conn.execute(
-                    "SELECT id FROM bitacora WHERE id=? AND empresa_id=?",
+                row = conn.execute(
+                    "SELECT * FROM bitacora WHERE id=? AND empresa_id=?",
                     (record_id, self.empresa_id),
-                )
-                if not cur.fetchone():
+                ).fetchone()
+                if not row:
                     return False, "Registro no encontrado"
 
                 # Mapa fijo UI → columna DB — actúa como lista blanca;
@@ -527,6 +564,15 @@ class DatabaseManager:
                     if clave_ui in datos:
                         sets.append(f"{col_db}=?")
                         vals.append(str(datos[clave_ui]))
+
+                # Merge custom classification values into datos_adicionales
+                _standard_keys = set(campo_map.keys())
+                extra_nuevo = {k: v for k, v in datos.items() if k not in _standard_keys}
+                if extra_nuevo:
+                    existentes = self._expand_bitacora_datos_adicionales(row.get("datos_adicionales"))
+                    existentes.update(extra_nuevo)
+                    sets.append("datos_adicionales=?")
+                    vals.append(json.dumps(existentes, ensure_ascii=False))
 
                 if not sets:
                     return False, "No hay campos para actualizar"

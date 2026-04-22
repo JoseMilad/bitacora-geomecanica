@@ -264,6 +264,13 @@ async def nuevo_bitacora_save(request: Request):
         "Observaciones": observaciones,
         "imagen_path": imagen_path,
     }
+
+    # Read custom classification fields from the form (clasif_<id>)
+    from src.utils.config_manager import obtener_clasificaciones_activas
+    for cid in obtener_clasificaciones_activas():
+        if cid not in ("GSI", "RMR"):
+            datos[cid] = form.get(f"clasif_{cid}", "")
+
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     if forzar == "1":
         ok, msg = model.guardar_registro_forzado(datos)
@@ -352,6 +359,11 @@ async def duplicar_bitacora(request: Request, id: int):
         "Observaciones": registro.get("Observaciones", ""),
         "imagen_path": "",
     }
+    # Copy custom classification values
+    from src.utils.config_manager import obtener_clasificaciones_activas
+    for cid in obtener_clasificaciones_activas():
+        if cid not in ("GSI", "RMR"):
+            datos[cid] = registro.get(cid, "")
     ok, msg = model.guardar_registro_forzado(datos)
     if ok:
         username = _get_username(request)
@@ -434,6 +446,12 @@ async def editar_bitacora_save(request: Request, id: int):
     }
     if imagen_path:
         datos["imagen_path"] = imagen_path
+
+    # Read custom classification fields from the form (clasif_<id>)
+    from src.utils.config_manager import obtener_clasificaciones_activas
+    for cid in obtener_clasificaciones_activas():
+        if cid not in ("GSI", "RMR"):
+            datos[cid] = form.get(f"clasif_{cid}", "")
 
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     ok, msg = model.editar_registro_por_id(id, datos)

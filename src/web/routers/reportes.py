@@ -37,6 +37,18 @@ def _get_empresa_id(request: Request) -> int:
     return 1
 
 
+def _html_fecha_a_app(fecha_html: str) -> str | None:
+    """Converts an HTML date (YYYY-MM-DD) to the app's internal format (dd/mm/YYYY).
+    Returns None if the input is empty or unparseable."""
+    if not fecha_html:
+        return None
+    try:
+        dt = datetime.strptime(fecha_html, "%Y-%m-%d")
+        return dt.strftime("%d/%m/%Y")
+    except ValueError:
+        return fecha_html or None
+
+
 # ── Helpers PDF ───────────────────────────────────────────────────────────────
 
 def _crear_estilos_pdf():
@@ -160,14 +172,15 @@ def _generar_pdf_bitacora(df, fi_str: str = "", ff_str: str = "") -> bytes:
     activas = obtener_clasificaciones_activas()
     estilos = _crear_estilos_pdf()
 
-    cols_clasificacion = [c for c in ["GSI", "RMR"] if c in activas and c in df.columns]
+    # Include all active classification columns that are present in the DataFrame
+    cols_clasificacion = [c for c in activas if c in df.columns]
     cols_mostrar = ["Fecha", "Turno", "Labor"] + cols_clasificacion + ["Soporte", "Observaciones"]
     cols_mostrar = [c for c in cols_mostrar if c in df.columns]
 
     ancho_base = {"Fecha": 60, "Turno": 42, "Labor": 85,
                   "GSI": 34, "RMR": 34,
                   "Soporte": 120, "Observaciones": 120}
-    col_widths = [ancho_base.get(c, 60) for c in cols_mostrar]
+    col_widths = [ancho_base.get(c, 50) for c in cols_mostrar]
 
     periodo = f"{fi_str} — {ff_str}" if fi_str and ff_str else "Completo"
     lineas_info = [
@@ -306,8 +319,8 @@ async def exportar_bitacora(
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.buscar_registros(
         labor=labor,
-        fecha_inicio=fecha_inicio or None,
-        fecha_fin=fecha_fin or None,
+        fecha_inicio=_html_fecha_a_app(fecha_inicio),
+        fecha_fin=_html_fecha_a_app(fecha_fin),
     )
 
     output = io.BytesIO()
@@ -333,7 +346,7 @@ async def exportar_sostenimiento(
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_sostenimiento(
-        fecha=fecha_inicio or None,
+        fecha=_html_fecha_a_app(fecha_inicio),
         labor=labor or None,
     )
 
@@ -359,10 +372,12 @@ async def pdf_bitacora(
     labor: str = "",
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    fi_app = _html_fecha_a_app(fecha_inicio)
+    ff_app = _html_fecha_a_app(fecha_fin)
     df = model.buscar_registros(
         labor=labor,
-        fecha_inicio=fecha_inicio or None,
-        fecha_fin=fecha_fin or None,
+        fecha_inicio=fi_app,
+        fecha_fin=ff_app,
     )
     if not df.empty:
         df = ordenar_df_por_labor(df)
@@ -387,7 +402,7 @@ async def pdf_sostenimiento(
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     df = model.obtener_sostenimiento(
-        fecha=fecha_inicio or None,
+        fecha=_html_fecha_a_app(fecha_inicio),
         labor=labor or None,
     )
 

@@ -514,7 +514,7 @@ class BitacoraModel:
             fecha_fin (str): Filtro fecha fin (formato dd/mm/yyyy)
         
         Returns:
-            DataFrame: Registros filtrados (incluye id e imagen_path)
+            DataFrame: Registros filtrados (incluye id e imagen_path, y clasificaciones personalizadas)
         """
         # Columnas extra necesarias para identificar registros y mostrar imágenes
         _COLS_EXTRA = ["id", "imagen_path"]
@@ -522,11 +522,14 @@ class BitacoraModel:
             registros = self.db.buscar_registros(labor, fecha_inicio, fecha_fin)
             if registros:
                 df = pd.DataFrame(registros)
-                cols_mostrar = (
+                # Include standard columns + extras + any custom classification columns present
+                cols_base = (
                     [c for c in _COLS_EXTRA if c in df.columns]
                     + [c for c in COLUMNAS_BITACORA if c in df.columns]
                 )
-                return df[cols_mostrar]
+                cols_extra_clasif = [c for c in df.columns if c not in cols_base
+                                     and c not in ("created_at",)]
+                return df[cols_base + cols_extra_clasif]
             return pd.DataFrame(columns=_COLS_EXTRA + COLUMNAS_BITACORA)
         except Exception as e:
             print(f"Error al buscar: {str(e)}")
