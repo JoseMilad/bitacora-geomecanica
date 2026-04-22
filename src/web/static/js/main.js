@@ -89,7 +89,11 @@ async function autocompletarLabor(nombre) {
 
     if (gsiInput && datos.GSI !== undefined)     gsiInput.value    = datos.GSI    || '';
     if (rmrInput && datos.RMR !== undefined)     rmrInput.value    = datos.RMR    || '';
-    if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
+    let soporteLabor = '';
+    if (soporteInput && datos.Soporte !== undefined) {
+      soporteInput.value = datos.Soporte || '';
+      soporteLabor = (datos.Soporte || '').toString().trim();
+    }
     if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
 
     // Issue 2: Pre-select the reference system stored for this labor
@@ -109,7 +113,7 @@ async function autocompletarLabor(nombre) {
     }
 
     // Si hay un campo de referencia activo y tiene valor, calcular soporte
-    if (typeof calcularSoporte === 'function') {
+    if (typeof calcularSoporte === 'function' && !soporteLabor) {
       setTimeout(calcularSoporte, 200);
     }
   } catch (err) {

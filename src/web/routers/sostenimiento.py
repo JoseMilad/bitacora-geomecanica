@@ -78,6 +78,11 @@ def _turnos_config():
     return config.get("turnos", TURNOS)
 
 
+def _shotcrete_requiere_tipo(datos: dict) -> bool:
+    """Returns True when Shotcrete_m3 > 0 but Tipo_Shotcrete is missing."""
+    return float(datos.get("Shotcrete_m3", 0) or 0) > 0 and not datos.get("Tipo_Shotcrete", "")
+
+
 # ── Listar sostenimiento ──────────────────────────────────────────────────────
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -199,7 +204,23 @@ async def nuevo_sostenimiento_save(request: Request):
         except (ValueError, TypeError):
             datos[col] = 0
 
+    # Server-side validation: shotcrete type is required when Shotcrete_m3 > 0
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    if _shotcrete_requiere_tipo(datos):
+        labores_nombres = model.obtener_labores_guardadas()
+        return templates.TemplateResponse(request, "sostenimiento/form.html", context={
+            "request": request,
+            "app_version": APP_VERSION,
+            "registro": datos,
+            "labores": labores_nombres,
+            "turnos": _turnos_config(),
+            "campos": _campos_sost(),
+            "action": "/sostenimiento/nuevo",
+            "titulo": "Nuevo Registro de Sostenimiento",
+            "flash": {"tipo": "danger", "mensaje": "Debe seleccionar el tipo de shotcrete cuando se registra Shotcrete."},
+            "active_page": "sostenimiento",
+        })
+
     if forzar == "1":
         ok, msg = model.guardar_sostenimiento_forzado(datos)
     else:
@@ -283,6 +304,13 @@ async def editar_sostenimiento_save(request: Request, id: int):
         "Labor": labor,
         "Observaciones": observaciones,
     }
+    # Tipo shotcrete
+    tipo_shotcrete = form.get("tipo_shotcrete", "")
+    if tipo_shotcrete and " - " in tipo_shotcrete:
+        datos["Tipo_Shotcrete"] = tipo_shotcrete.split(" - ")[0]
+    else:
+        datos["Tipo_Shotcrete"] = tipo_shotcrete
+
     for campo in _campos_sost():
         col = campo["columna"]
         val = form.get(col, "0")
@@ -291,7 +319,28 @@ async def editar_sostenimiento_save(request: Request, id: int):
         except (ValueError, TypeError):
             datos[col] = 0
 
+    # Server-side validation: shotcrete type is required when Shotcrete_m3 > 0
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    if _shotcrete_requiere_tipo(datos):
+        labores_nombres = model.obtener_labores_guardadas()
+        # Reload the registro so the form can pre-populate correctly
+        registros_list = model.db.obtener_sostenimiento()
+        registro = next((r for r in registros_list if r.get("id") == id), datos)
+        registro.update(datos)
+        registro["Fecha"] = _fecha_app_a_html(datos.get("Fecha", ""))
+        return templates.TemplateResponse(request, "sostenimiento/form.html", context={
+            "request": request,
+            "app_version": APP_VERSION,
+            "registro": registro,
+            "labores": labores_nombres,
+            "turnos": _turnos_config(),
+            "campos": _campos_sost(),
+            "action": f"/sostenimiento/{id}/editar",
+            "titulo": "Editar Registro de Sostenimiento",
+            "flash": {"tipo": "danger", "mensaje": "Debe seleccionar el tipo de shotcrete cuando se registra Shotcrete."},
+            "active_page": "sostenimiento",
+        })
+
     ok, msg = model.editar_sostenimiento_por_id(id, datos)
     if ok:
         _set_flash(request, "success", msg)
