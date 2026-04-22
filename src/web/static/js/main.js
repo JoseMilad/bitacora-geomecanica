@@ -89,6 +89,7 @@ async function autocompletarLabor(nombre) {
 
     if (gsiInput && datos.GSI !== undefined)     gsiInput.value    = datos.GSI    || '';
     if (rmrInput && datos.RMR !== undefined)     rmrInput.value    = datos.RMR    || '';
+    const soporteLabor = (datos.Soporte || '').toString().trim();
     if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
     if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
 
@@ -109,7 +110,7 @@ async function autocompletarLabor(nombre) {
     }
 
     // Si hay un campo de referencia activo y tiene valor, calcular soporte
-    if (typeof calcularSoporte === 'function') {
+    if (typeof calcularSoporte === 'function' && !soporteLabor) {
       setTimeout(calcularSoporte, 200);
     }
   } catch (err) {

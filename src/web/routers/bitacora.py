@@ -506,8 +506,12 @@ async def calcular_soporte(request: Request, rmr: str = "", labor: str = ""):
     tipo = "Temporal"
     if labor:
         datos = model.obtener_datos_labor(labor)
-        if datos and datos.get("Tipo"):
-            tipo = str(datos["Tipo"])
+        if datos:
+            soporte_labor = str(datos.get("Soporte") or "").strip()
+            if soporte_labor:
+                return JSONResponse({"soporte": soporte_labor})
+            if datos.get("Tipo"):
+                tipo = str(datos["Tipo"])
     soporte = model.recomendar_soporte(rmr_val, tipo=tipo, sistema="RMR", tipo_valor="numerico") or ""
     return JSONResponse({"soporte": soporte})
 
@@ -524,10 +528,14 @@ async def calcular_soporte_gen(request: Request, sistema: str = "", valor: str =
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
     # Use explicitly-passed tipo if provided; else look up from the labor catalog
     tipo_efectivo = tipo.strip() if tipo.strip() in ("Temporal", "Permanente") else ""
-    if not tipo_efectivo and labor:
+    if labor:
         datos = model.obtener_datos_labor(labor)
-        if datos and datos.get("Tipo"):
-            tipo_efectivo = str(datos["Tipo"])
+        if datos:
+            soporte_labor = str(datos.get("Soporte") or "").strip()
+            if soporte_labor:
+                return JSONResponse({"soporte": soporte_labor})
+            if not tipo_efectivo and datos.get("Tipo"):
+                tipo_efectivo = str(datos["Tipo"])
     if not tipo_efectivo:
         tipo_efectivo = "Temporal"
     tipo_valor = get_tipo_valor_clasificacion(sistema)
@@ -559,4 +567,3 @@ async def servir_imagen(filename: str):
     if str(alt_filepath).startswith(str(resolved_data)) and alt_filepath.exists():
         return FileResponse(str(alt_filepath))
     return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
-
