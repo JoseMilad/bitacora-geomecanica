@@ -89,8 +89,11 @@ async function autocompletarLabor(nombre) {
 
     if (gsiInput && datos.GSI !== undefined)     gsiInput.value    = datos.GSI    || '';
     if (rmrInput && datos.RMR !== undefined)     rmrInput.value    = datos.RMR    || '';
-    const soporteLabor = (datos.Soporte || '').toString().trim();
-    if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
+    let soporteLabor = '';
+    if (soporteInput && datos.Soporte !== undefined) {
+      soporteInput.value = datos.Soporte || '';
+      soporteLabor = (datos.Soporte || '').toString().trim();
+    }
     if (infoLbl && datos.Tipo)  infoLbl.textContent = `Tipo: ${datos.Tipo}`;
 
     // Issue 2: Pre-select the reference system stored for this labor
