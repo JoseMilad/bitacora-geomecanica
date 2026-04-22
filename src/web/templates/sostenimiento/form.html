@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center mt-3">
-  <div class="col-lg-8">
+  <div class="col-lg-9">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-white border-0 fw-semibold">
         <i class="fa-solid fa-layer-group me-2 text-primary"></i>{{ titulo }}
@@ -24,6 +24,7 @@
             {% for c in campos %}
             <input type="hidden" name="{{ c.columna }}" value="{{ registro.get(c.columna, 0) }}" />
             {% endfor %}
+            <input type="hidden" name="tipo_shotcrete" value="{{ registro.get('Tipo_Shotcrete','') }}" />
             <input type="hidden" name="forzar" value="1" />
             <button type="submit" class="btn btn-warning btn-sm">
               <i class="fa-solid fa-save me-1"></i>Guardar de todas formas
@@ -33,7 +34,13 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ action }}">
+        {% if flash and flash.tipo == 'danger' %}
+        <div class="alert alert-danger">
+          <i class="fa-solid fa-circle-exclamation me-2"></i>{{ flash.mensaje }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ action }}" id="formSostenimiento">
           <div class="row g-3">
             <!-- Fecha -->
             <div class="col-md-4">
@@ -68,35 +75,68 @@
               </div>
             </div>
 
-            <!-- Campos dinámicos de sostenimiento -->
+            <!-- Selector de tipos de sostenimiento -->
             <div class="col-12">
               <hr class="my-2" />
-              <p class="fw-semibold text-muted mb-3">
-                <i class="fa-solid fa-layer-group me-1"></i>Cantidades de Sostenimiento
+              <p class="fw-semibold mb-2">
+                <i class="fa-solid fa-layer-group me-1 text-primary"></i>
+                Seleccione los tipos de sostenimiento a registrar:
               </p>
+              <div class="d-flex flex-wrap gap-2 mb-1">
+                {% for c in campos %}
+                <div>
+                  <input type="checkbox" class="btn-check sost-selector"
+                    id="chk_{{ c.columna }}" autocomplete="off"
+                    onchange="toggleSost('{{ c.columna }}')">
+                  <label class="btn btn-outline-primary btn-sm" for="chk_{{ c.columna }}">
+                    <i class="fa-solid fa-plus me-1"></i>{{ c.display }}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+              <small class="text-muted">Haga clic para seleccionar / deseleccionar.</small>
             </div>
+
+            <!-- Campos de cantidad: always in DOM (submit value 0 when hidden) -->
             {% for c in campos %}
-            <div class="col-md-4">
+            <div class="col-md-4 sost-campo-wrapper" id="wrapper_{{ c.columna }}" style="display:none;">
               <label class="form-label fw-semibold">{{ c.display }}</label>
               <input
-                type="{{ 'number' }}"
+                type="number"
                 step="{{ '0.01' if c.tipo == 'float' else '1' }}"
                 min="0"
                 name="{{ c.columna }}"
+                id="input_{{ c.columna }}"
                 class="form-control"
                 value="{{ registro.get(c.columna, 0) if registro else 0 }}"
               />
-              <!-- Tipo Shotcrete solo para Shotcrete_m3 -->
               {% if c.columna == 'Shotcrete_m3' %}
               <div class="mt-2">
-                <select name="tipo_shotcrete" class="form-select form-select-sm">
-                  <option value="">— Tipo de shotcrete —</option>
-                  <option value="X1 - Lanzado para avance"      {% if registro and registro.get('Tipo_Shotcrete','').startswith('X1') %}selected{% endif %}>X1 — Lanzado para avance</option>
-                  <option value="X5 - Lanzado para reforzamiento" {% if registro and registro.get('Tipo_Shotcrete','').startswith('X5') %}selected{% endif %}>X5 — Lanzado para reforzamiento</option>
-                  <option value="X6 - Lanzado sobre zona inestable" {% if registro and registro.get('Tipo_Shotcrete','').startswith('X6') %}selected{% endif %}>X6 — Lanzado sobre zona inestable</option>
-                  <option value="X7 - Lanzado sobre malla"      {% if registro and registro.get('Tipo_Shotcrete','').startswith('X7') %}selected{% endif %}>X7 — Lanzado sobre malla</option>
-                  <option value="X10 - Lanzado para resane"     {% if registro and registro.get('Tipo_Shotcrete','').startswith('X10') %}selected{% endif %}>X10 — Lanzado para resane</option>
+                <label class="form-label small fw-semibold">
+                  Tipo de shotcrete <span class="text-danger">*</span>
+                </label>
+                <select name="tipo_shotcrete" id="selectTipoShotcrete"
+                  class="form-select form-select-sm">
+                  <option value="">— Seleccione tipo —</option>
+                  <option value="X1 - Lanzado para avance"
+                    {% if registro and registro.get('Tipo_Shotcrete','').startswith('X1') %}selected{% endif %}>
+                    X1 — Lanzado para avance</option>
+                  <option value="X5 - Lanzado para reforzamiento"
+                    {% if registro and registro.get('Tipo_Shotcrete','').startswith('X5') %}selected{% endif %}>
+                    X5 — Lanzado para reforzamiento</option>
+                  <option value="X6 - Lanzado sobre zona inestable"
+                    {% if registro and registro.get('Tipo_Shotcrete','').startswith('X6') %}selected{% endif %}>
+                    X6 — Lanzado sobre zona inestable</option>
+                  <option value="X7 - Lanzado sobre malla"
+                    {% if registro and registro.get('Tipo_Shotcrete','').startswith('X7') %}selected{% endif %}>
+                    X7 — Lanzado sobre malla</option>
+                  <option value="X10 - Lanzado para resane"
+                    {% if registro and registro.get('Tipo_Shotcrete','').startswith('X10') %}selected{% endif %}>
+                    X10 — Lanzado para resane</option>
                 </select>
+                <div class="invalid-feedback" id="errorTipoShotcrete">
+                  Debe seleccionar el tipo de shotcrete.
+                </div>
               </div>
               {% endif %}
             </div>
@@ -111,7 +151,7 @@
           </div>
 
           <div class="mt-4 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary" id="btnGuardarSost">
               <i class="fa-solid fa-save me-1"></i>Guardar
             </button>
             <a href="/sostenimiento" class="btn btn-outline-secondary">
@@ -129,5 +169,58 @@
 <script>
 const _laboresSostForm = {{ labores | tojson }};
 initLaborTypeahead('inputLaborSost', 'dropdownLaborSost', _laboresSostForm);
+
+// Toggle visibility of a campo wrapper and reset value when deselected
+function toggleSost(columna) {
+  const chk = document.getElementById('chk_' + columna);
+  const wrapper = document.getElementById('wrapper_' + columna);
+  const input = document.getElementById('input_' + columna);
+  if (chk.checked) {
+    wrapper.style.display = '';
+    // Clear default "0" so the user types a fresh value
+    if (input && (input.value === '0' || input.value === '')) {
+      input.value = '';
+    }
+    if (input) input.focus();
+  } else {
+    wrapper.style.display = 'none';
+    if (input) input.value = 0;
+  }
+}
+
+// On page load: reveal wrappers for any campo that already has a non-zero value (edit mode)
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.sost-campo-wrapper').forEach(function (wrapper) {
+    const col = wrapper.id.replace('wrapper_', '');
+    const input = document.getElementById('input_' + col);
+    const chk   = document.getElementById('chk_' + col);
+    if (input && chk && parseFloat(input.value) > 0) {
+      chk.checked = true;
+      wrapper.style.display = '';
+    }
+  });
+});
+
+// Client-side validation: shotcrete type is required when Shotcrete_m3 > 0
+const _formSost = document.getElementById('formSostenimiento');
+if (_formSost) {
+  _formSost.addEventListener('submit', function (e) {
+    const shotcreteInput = document.getElementById('input_Shotcrete_m3');
+    const tipoSelect     = document.getElementById('selectTipoShotcrete');
+    const errorDiv       = document.getElementById('errorTipoShotcrete');
+
+    if (shotcreteInput && tipoSelect) {
+      if (parseFloat(shotcreteInput.value) > 0 && !tipoSelect.value) {
+        e.preventDefault();
+        tipoSelect.classList.add('is-invalid');
+        if (errorDiv) errorDiv.style.display = 'block';
+        tipoSelect.focus();
+      } else {
+        tipoSelect.classList.remove('is-invalid');
+        if (errorDiv) errorDiv.style.display = '';
+      }
+    }
+  });
+}
 </script>
 {% endblock %}
