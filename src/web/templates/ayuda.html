@@ -1,0 +1,1092 @@
+{% extends "base.html" %}
+{% block title %}Ayuda & Soporte — Bitácora Geomecánica{% endblock %}
+{% block page_title %}<i class="fa-solid fa-circle-question me-2 text-warning"></i>Ayuda & Soporte{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Hero ─────────────────────────────────────────────────── */
+  .help-hero {
+    background: linear-gradient(135deg, #1a2540 0%, #1a6fc4 100%);
+    border-radius: 18px;
+    padding: 2.5rem 2rem;
+    color: #fff;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .help-hero::after {
+    content: "";
+    position: absolute;
+    right: -40px; top: -60px;
+    width: 280px; height: 280px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+  }
+  .help-hero::before {
+    content: "";
+    position: absolute;
+    right: 80px; bottom: -80px;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+
+  /* ── Section cards ────────────────────────────────────────── */
+  .help-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary);
+    padding-bottom: 0.4rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Module cards ─────────────────────────────────────────── */
+  .module-card {
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform 0.18s, box-shadow 0.18s;
+    height: 100%;
+    background: #fff;
+  }
+  .module-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.10);
+  }
+  .module-card-header {
+    padding: 1.25rem 1.25rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .module-icon {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .module-card-body { padding: 0 1.25rem 1.25rem; }
+  .module-card-body ul {
+    padding-left: 1.2rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0;
+  }
+  .module-card-body ul li { margin-bottom: 0.3rem; }
+
+  /* ── Step guide ───────────────────────────────────────────── */
+  .step-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1.1rem 1.25rem;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid var(--card-border);
+    margin-bottom: 0.75rem;
+    transition: box-shadow 0.18s;
+  }
+  .step-item:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+  .step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-content h6 { font-weight: 700; margin-bottom: 0.2rem; font-size: 0.95rem; }
+  .step-content p  { font-size: 0.83rem; color: var(--text-muted); margin: 0; }
+
+  /* ── Screen preview ───────────────────────────────────────── */
+  .screen-preview {
+    border-radius: 14px;
+    border: 1px solid var(--card-border);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+  }
+  .screen-preview .preview-bar {
+    background: var(--sidebar-bg);
+    padding: 0.55rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .preview-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .preview-body {
+    display: flex;
+    min-height: 160px;
+  }
+  .preview-sidebar {
+    width: 48px;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem 0;
+    gap: 0.7rem;
+  }
+  .preview-sidebar i { font-size: 0.9rem; color: rgba(255,255,255,0.5); }
+  .preview-sidebar i.active { color: #f59e0b; }
+  .preview-main {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--surface);
+  }
+  .preview-topbar {
+    height: 22px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--card-border);
+  }
+  .preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+  }
+  .preview-kpi {
+    background: #fff;
+    border-radius: 6px;
+    height: 38px;
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .preview-chart {
+    background: #fff;
+    border-radius: 6px;
+    height: 60px;
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+  }
+  .preview-bar-el {
+    width: 10px;
+    border-radius: 3px 3px 0 0;
+    background: var(--primary);
+    opacity: 0.7;
+  }
+
+  /* ── FAQ ──────────────────────────────────────────────────── */
+  .faq-accordion .accordion-button {
+    font-weight: 600;
+    font-size: 0.93rem;
+    color: var(--text-primary);
+    background: #fff;
+    box-shadow: none;
+  }
+  .faq-accordion .accordion-button:not(.collapsed) {
+    color: var(--primary);
+    background: rgba(26,111,196,0.05);
+  }
+  .faq-accordion .accordion-button::after {
+    filter: none;
+  }
+  .faq-accordion .accordion-item {
+    border: 1px solid var(--card-border);
+    border-radius: 10px !important;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+  }
+  .faq-accordion .accordion-body {
+    font-size: 0.87rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  /* ── Tip cards ────────────────────────────────────────────── */
+  .tip-card {
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.6rem;
+  }
+  .tip-card i { font-size: 1.2rem; margin-top: 0.1rem; flex-shrink: 0; }
+  .tip-card p { font-size: 0.85rem; margin: 0; }
+  .tip-card strong { display: block; margin-bottom: 0.1rem; }
+
+  /* ── Contact ──────────────────────────────────────────────── */
+  .contact-card {
+    border-radius: 14px;
+    padding: 1.5rem;
+    text-align: center;
+    border: 1px solid var(--card-border);
+    background: #fff;
+    transition: transform 0.18s, box-shadow 0.18s;
+    height: 100%;
+  }
+  .contact-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.09);
+  }
+  .contact-icon {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    margin: 0 auto 1rem;
+  }
+
+  /* ── Dark mode overrides ─────────────────────────────────── */
+  [data-theme="dark"] .module-card,
+  [data-theme="dark"] .step-item,
+  [data-theme="dark"] .screen-preview,
+  [data-theme="dark"] .faq-accordion .accordion-item,
+  [data-theme="dark"] .faq-accordion .accordion-button,
+  [data-theme="dark"] .faq-accordion .accordion-body,
+  [data-theme="dark"] .contact-card {
+    background: #1e2d45;
+    border-color: rgba(255,255,255,0.1);
+    color: #c8d6e5;
+  }
+  [data-theme="dark"] .faq-accordion .accordion-button {
+    color: #c8d6e5;
+  }
+  [data-theme="dark"] .faq-accordion .accordion-button:not(.collapsed) {
+    color: #63a9ff;
+    background: rgba(26,111,196,0.15);
+  }
+  [data-theme="dark"] .preview-kpi,
+  [data-theme="dark"] .preview-topbar,
+  [data-theme="dark"] .preview-chart {
+    background: #253552;
+    border-color: rgba(255,255,255,0.08);
+    color: #8ab4d4;
+  }
+  [data-theme="dark"] .preview-main { background: #172035; }
+  [data-theme="dark"] .tip-card { border-color: rgba(255,255,255,0.08) !important; }
+  [data-theme="dark"] .step-content p,
+  [data-theme="dark"] .module-card-body ul,
+  [data-theme="dark"] .faq-accordion .accordion-body { color: #8ab4d4; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pt-3">
+
+  {# ── Hero ──────────────────────────────────────────────────────────────── #}
+  <div class="help-hero">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h2 class="fw-800 mb-1" style="font-weight:800;">
+          <i class="fa-solid fa-circle-question me-2" style="color:#f59e0b;"></i>
+          Centro de Ayuda
+        </h2>
+        <p class="mb-3" style="color:rgba(255,255,255,0.75);font-size:1rem;">
+          Todo lo que necesitas saber para aprovechar al máximo la plataforma
+          <strong>Bitácora Geomecánica</strong>. Explora los módulos, sigue la guía
+          de inicio rápido y consulta las preguntas frecuentes.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="#inicio-rapido" class="btn btn-warning btn-sm fw-600">
+            <i class="fa-solid fa-rocket me-1"></i>Inicio rápido
+          </a>
+          <a href="#modulos" class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-th-large me-1"></i>Módulos
+          </a>
+          <a href="#faq" class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-comments me-1"></i>Preguntas frecuentes
+          </a>
+          <a href="#contacto" class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-headset me-1"></i>Soporte
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4 d-none d-md-flex justify-content-end align-items-center" style="position:relative;z-index:1;">
+        <div style="font-size:7rem;opacity:0.18;line-height:1;">
+          <i class="fa-solid fa-mountain-sun"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Índice rápido ────────────────────────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+    {% set quick = [
+      ("inicio-rapido",  "fa-rocket",           "warning", "Inicio rápido",     "Primeros pasos en la plataforma"),
+      ("modulos",        "fa-th-large",          "primary", "Módulos",           "Guía de cada sección disponible"),
+      ("faq",            "fa-comments",          "success", "FAQ",               "Preguntas y respuestas frecuentes"),
+      ("contacto",       "fa-headset",           "danger",  "Soporte",           "Cómo obtener ayuda adicional"),
+    ] %}
+    {% for anchor, icon, color, label, desc in quick %}
+    <div class="col-6 col-md-3">
+      <a href="#{{ anchor }}" class="text-decoration-none">
+        <div class="module-card p-3 text-center h-100">
+          <div class="mb-2">
+            <span class="module-icon bg-{{ color }} bg-opacity-10 mx-auto" style="width:50px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+              <i class="fa-solid {{ icon }} text-{{ color }} fs-5"></i>
+            </span>
+          </div>
+          <div class="fw-700 mb-1" style="font-size:0.9rem;">{{ label }}</div>
+          <div style="font-size:0.77rem;color:var(--text-muted);">{{ desc }}</div>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── ¿Qué es Bitácora Geomecánica? ────────────────────────────────────── #}
+  <div class="card border-0 shadow-sm rounded-3 mb-4 p-4">
+    <div class="row align-items-center g-4">
+      <div class="col-md-7">
+        <h4 class="fw-700 mb-2">
+          <i class="fa-solid fa-info-circle text-primary me-2"></i>
+          ¿Qué es Bitácora Geomecánica?
+        </h4>
+        <p style="font-size:0.93rem;line-height:1.75;color:var(--text-muted);">
+          <strong>Bitácora Geomecánica</strong> es una plataforma empresarial diseñada
+          para la gestión integral de operaciones mineras subterráneas. Permite a los
+          equipos de geomecánica registrar, analizar y reportar datos de:
+        </p>
+        <ul style="font-size:0.88rem;line-height:1.8;color:var(--text-muted);">
+          <li><strong>Bitácoras de turno</strong> con fotografías y observaciones geotécnicas.</li>
+          <li><strong>Sostenimiento diario</strong> (shotcrete, pernos, cimbras, malla, etc.).</li>
+          <li><strong>Labores activas</strong> organizadas por frentes, fases y sectores.</li>
+          <li><strong>Estándares de clasificación</strong> RMR, Q y GSI.</li>
+          <li><strong>Reportes automáticos</strong> en PDF y Excel.</li>
+          <li><strong>Dashboard interactivo</strong> con KPIs y gráficos en tiempo real.</li>
+        </ul>
+        <p style="font-size:0.88rem;color:var(--text-muted);">
+          Soporta múltiples empresas y usuarios con roles diferenciados
+          (<em>administrador</em> y <em>usuario</em>), garantizando la seguridad y
+          privacidad de cada organización.
+        </p>
+      </div>
+      <div class="col-md-5">
+        {# ── Maqueta visual de la interfaz ── #}
+        <div class="screen-preview">
+          <div class="preview-bar">
+            <div class="preview-dot" style="background:#f87171;"></div>
+            <div class="preview-dot" style="background:#fbbf24;"></div>
+            <div class="preview-dot" style="background:#34d399;"></div>
+            <span style="font-size:0.6rem;color:rgba(255,255,255,0.45);margin-left:0.5rem;">bitacora-geomecanica.app</span>
+          </div>
+          <div class="preview-body">
+            <div class="preview-sidebar">
+              <i class="fa-solid fa-mountain-sun active"></i>
+              <i class="fa-solid fa-chart-line"></i>
+              <i class="fa-solid fa-clipboard-list"></i>
+              <i class="fa-solid fa-layer-group"></i>
+              <i class="fa-solid fa-hard-hat"></i>
+              <i class="fa-solid fa-file-pdf"></i>
+              <i class="fa-solid fa-gear"></i>
+            </div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-grid">
+                <div class="preview-kpi"><i class="fa-solid fa-clipboard-list me-1" style="color:var(--primary);"></i>Registros</div>
+                <div class="preview-kpi"><i class="fa-solid fa-hard-hat me-1" style="color:var(--secondary);"></i>Labores</div>
+                <div class="preview-kpi"><i class="fa-solid fa-layer-group me-1" style="color:#f59e0b;"></i>Sost.</div>
+              </div>
+              <div class="preview-chart">
+                <div class="preview-bar-el" style="height:30%;"></div>
+                <div class="preview-bar-el" style="height:55%;"></div>
+                <div class="preview-bar-el" style="height:40%;"></div>
+                <div class="preview-bar-el" style="height:75%;"></div>
+                <div class="preview-bar-el" style="height:60%;"></div>
+                <div class="preview-bar-el" style="height:85%;"></div>
+                <div class="preview-bar-el" style="height:50%;"></div>
+                <div class="preview-bar-el" style="height:90%;"></div>
+                <div class="preview-bar-el" style="height:65%;"></div>
+                <div class="preview-bar-el" style="height:45%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="text-center mt-2 mb-0" style="font-size:0.72rem;color:var(--text-muted);">
+          <i class="fa-solid fa-eye me-1"></i>Vista previa de la interfaz principal
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# ── Inicio rápido ────────────────────────────────────────────────────── #}
+  <div id="inicio-rapido" class="mb-4" style="scroll-margin-top:70px;">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-rocket me-2"></i>Guía de inicio rápido
+    </h5>
+    <div class="row g-3">
+      <div class="col-md-6">
+
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h6>Crear tu cuenta</h6>
+            <p>Haz clic en <strong>Registrarse</strong> en la pantalla de bienvenida. Completa el formulario con tu nombre, usuario, correo y contraseña. Si tu organización ya existe en el sistema, un administrador puede invitarte directamente.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h6>Iniciar sesión</h6>
+            <p>Ingresa tu usuario y contraseña en la pantalla de <strong>Iniciar sesión</strong>. Una vez autenticado, serás redirigido al inicio donde verás todos los módulos disponibles.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h6>Configurar tu empresa y labores</h6>
+            <p>Ve a <strong>Configuración</strong> para personalizar el nombre de tu empresa, logo y preferencias. Luego ingresa a <strong>Labores</strong> para registrar los frentes activos de tu operación antes de comenzar con la bitácora.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h6>Registrar tu primera bitácora</h6>
+            <p>Accede al módulo <strong>Bitácora</strong>, haz clic en <em>Nuevo registro</em> y completa los campos: fecha, turno, labor, observaciones y fotografías. Guarda el registro.</p>
+          </div>
+        </div>
+
+      </div>
+      <div class="col-md-6">
+
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h6>Registrar sostenimiento diario</h6>
+            <p>En el módulo <strong>Sostenimiento</strong>, ingresa los metros cúbicos de shotcrete, pernos, cimbras u otros elementos utilizados por labor y turno.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h6>Revisar el Dashboard</h6>
+            <p>El <strong>Dashboard</strong> muestra KPIs en tiempo real: total de registros, labores activas, sostenimiento acumulado y gráficos de actividad. Usa los filtros de fecha y labor para explorar los datos.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <h6>Generar reportes</h6>
+            <p>Desde <strong>Reportes</strong> puedes exportar la información a <em>PDF</em> o <em>Excel</em> seleccionando el rango de fechas y el tipo de informe.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <h6>Consultar el registro de actividad</h6>
+            <p>El módulo <strong>Actividad</strong> guarda un historial de todas las acciones realizadas en la plataforma, útil para auditorías y seguimiento de cambios.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── Módulos ──────────────────────────────────────────────────────────── #}
+  <div id="modulos" class="mb-4" style="scroll-margin-top:70px;">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-th-large me-2"></i>Módulos de la plataforma
+    </h5>
+    <div class="row g-3">
+
+      {# Dashboard #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(26,111,196,0.12);">
+              <i class="fa-solid fa-chart-line" style="color:var(--primary);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Dashboard</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Métricas y análisis</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Panel central con indicadores clave de rendimiento (KPIs) y gráficos interactivos.
+            </p>
+            <ul>
+              <li>KPIs: total de registros, labores, sostenimiento</li>
+              <li>Gráfico de registros por fecha</li>
+              <li>Top labores por actividad</li>
+              <li>Gráficos de sostenimiento por labor y fase</li>
+              <li>Filtros por fecha, labor y tipo de sostenimiento</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Bitácora #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(45,138,110,0.12);">
+              <i class="fa-solid fa-clipboard-list" style="color:var(--secondary);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Bitácora</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Registro de turno</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Corazón de la plataforma: registro detallado de cada turno en terreno.
+            </p>
+            <ul>
+              <li>Fecha, turno y labor asociada</li>
+              <li>Observaciones geotécnicas y de seguridad</li>
+              <li>Adjunto de fotografías por registro</li>
+              <li>Búsqueda y filtros avanzados</li>
+              <li>Exportación de registros individuales</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Sostenimiento #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(245,158,11,0.12);">
+              <i class="fa-solid fa-layer-group" style="color:#f59e0b;"></i>
+            </div>
+            <div>
+              <div class="fw-700">Sostenimiento</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Control de materiales</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Control diario del sostenimiento instalado en cada labor.
+            </p>
+            <ul>
+              <li>Shotcrete (m³) por tipo: X1, X5, X6, X7, X10</li>
+              <li>Pernos de anclaje y grouting</li>
+              <li>Cimbras metálicas y malla electrosoldada</li>
+              <li>Registro por labor y fecha de turno</li>
+              <li>Totales acumulados por labor</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Labores #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(217,79,61,0.12);">
+              <i class="fa-solid fa-hard-hat" style="color:var(--danger);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Labores</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Gestión de frentes</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Administra los frentes de trabajo y su clasificación.
+            </p>
+            <ul>
+              <li>Alta, edición y baja de labores</li>
+              <li>Tipo de labor (galería, crucero, chimenea, etc.)</li>
+              <li>Fase (desarrollo, preparación, explotación)</li>
+              <li>Sector y zona minera</li>
+              <li>Clasificación geomecánica (RMR / Q / GSI)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Estándar #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(99,102,241,0.12);">
+              <i class="fa-solid fa-table" style="color:#6366f1;"></i>
+            </div>
+            <div>
+              <div class="fw-700">Estándar RMR/Q/GSI</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Clasificación geomecánica</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Tablas y clasificaciones geomecánicas de referencia para el equipo.
+            </p>
+            <ul>
+              <li>Rock Mass Rating (RMR de Bieniawski)</li>
+              <li>Sistema Q de Barton</li>
+              <li>Geological Strength Index (GSI)</li>
+              <li>Tabla de sostenimiento estándar por clase</li>
+              <li>Consulta rápida sin salir del registro</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Reportes #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(16,185,129,0.12);">
+              <i class="fa-solid fa-chart-bar" style="color:var(--success);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Reportes</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">PDF y Excel</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Genera informes formales listos para presentación o archivo.
+            </p>
+            <ul>
+              <li>Reporte diario de bitácora en PDF</li>
+              <li>Informe de sostenimiento acumulado</li>
+              <li>Exportación completa a Excel (.xlsx)</li>
+              <li>Filtros por rango de fecha y labor</li>
+              <li>Incluye encabezado con logo y empresa</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Actividad #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(107,114,128,0.12);">
+              <i class="fa-solid fa-clock-rotate-left" style="color:var(--text-muted);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Actividad</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Historial de acciones</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Registro de auditoría de todas las acciones realizadas en la plataforma.
+            </p>
+            <ul>
+              <li>Quién creó, editó o eliminó un registro</li>
+              <li>Fecha y hora exacta de cada acción</li>
+              <li>Filtro por usuario y módulo</li>
+              <li>Útil para auditorías de seguridad</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Configuración #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(26,111,196,0.10);">
+              <i class="fa-solid fa-gear" style="color:var(--primary);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Configuración</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Personalización</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Adapta la plataforma a tu organización y preferencias personales.
+            </p>
+            <ul>
+              <li>Nombre y logo de la empresa</li>
+              <li>Tipos de sostenimiento activos</li>
+              <li>Plantillas de observaciones predefinidas</li>
+              <li>Modo oscuro / claro</li>
+              <li>Gestión de usuarios (solo administrador)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Gestión de usuarios #}
+      <div class="col-md-6 col-lg-4">
+        <div class="module-card">
+          <div class="module-card-header">
+            <div class="module-icon" style="background:rgba(217,79,61,0.10);">
+              <i class="fa-solid fa-users" style="color:var(--danger);"></i>
+            </div>
+            <div>
+              <div class="fw-700">Usuarios <span class="badge bg-warning text-dark" style="font-size:0.6rem;vertical-align:middle;">Admin</span></div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">Solo administrador</div>
+            </div>
+          </div>
+          <div class="module-card-body">
+            <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.6rem;">
+              Administra el acceso de los miembros del equipo.
+            </p>
+            <ul>
+              <li>Ver todos los usuarios registrados</li>
+              <li>Crear cuentas manualmente</li>
+              <li>Cambiar roles (admin / usuario)</li>
+              <li>Activar o desactivar cuentas</li>
+              <li>Restablecer contraseñas</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {# ── Consejos de uso ──────────────────────────────────────────────────── #}
+  <div class="mb-4">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-lightbulb me-2"></i>Consejos y buenas prácticas
+    </h5>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="tip-card border" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.3)!important;">
+          <i class="fa-solid fa-lightbulb" style="color:#f59e0b;"></i>
+          <p>
+            <strong>Registra al finalizar cada turno</strong>
+            Completa la bitácora y el sostenimiento al término de cada turno para mantener datos precisos y evitar pérdidas de información.
+          </p>
+        </div>
+        <div class="tip-card border" style="background:rgba(26,111,196,0.06);border-color:rgba(26,111,196,0.3)!important;">
+          <i class="fa-solid fa-camera" style="color:var(--primary);"></i>
+          <p>
+            <strong>Añade fotografías siempre que puedas</strong>
+            Las fotos son evidencia clave del estado de las labores. Agrega imágenes desde terreno directamente al registro de bitácora.
+          </p>
+        </div>
+        <div class="tip-card border" style="background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3)!important;">
+          <i class="fa-solid fa-filter" style="color:var(--success);"></i>
+          <p>
+            <strong>Usa los filtros del Dashboard</strong>
+            Los filtros de rango de fecha y labor te permiten analizar períodos específicos de trabajo y comparar el desempeño entre frentes.
+          </p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="tip-card border" style="background:rgba(217,79,61,0.06);border-color:rgba(217,79,61,0.3)!important;">
+          <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);"></i>
+          <p>
+            <strong>Verifica la información antes de eliminar</strong>
+            Los registros eliminados no se pueden recuperar. Si necesitas corregir un dato, usa la opción de edición en lugar de eliminar y volver a crear.
+          </p>
+        </div>
+        <div class="tip-card border" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.3)!important;">
+          <i class="fa-solid fa-file-export" style="color:#6366f1;"></i>
+          <p>
+            <strong>Exporta respaldos regularmente</strong>
+            Usa el módulo de Reportes para exportar a Excel periódicamente como respaldo adicional de tu información.
+          </p>
+        </div>
+        <div class="tip-card border" style="background:rgba(107,114,128,0.06);border-color:rgba(107,114,128,0.3)!important;">
+          <i class="fa-solid fa-moon" style="color:var(--text-muted);"></i>
+          <p>
+            <strong>Modo oscuro disponible</strong>
+            Activa el modo oscuro desde el botón <i class="fa-solid fa-moon"></i> en la barra superior para mayor comodidad en ambientes oscuros o de noche.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Preguntas frecuentes ─────────────────────────────────────────────── #}
+  <div id="faq" class="mb-4" style="scroll-margin-top:70px;">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-comments me-2"></i>Preguntas frecuentes (FAQ)
+    </h5>
+    <div class="accordion faq-accordion" id="accordionFaq">
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+            <i class="fa-solid fa-user-plus me-2 text-primary"></i>
+            ¿Cómo creo una cuenta nueva?
+          </button>
+        </h2>
+        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Desde la pantalla de bienvenida (<strong>/</strong>), haz clic en <em>Registrarse</em>.
+            Completa el formulario con tu nombre completo, nombre de usuario, correo electrónico y
+            contraseña. Si ya existe una empresa en el sistema, un administrador puede asignarte a
+            ella; de lo contrario, se creará automáticamente con tu cuenta.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+            <i class="fa-solid fa-key me-2 text-warning"></i>
+            Olvidé mi contraseña, ¿qué hago?
+          </button>
+        </h2>
+        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Contacta al <strong>administrador</strong> de tu empresa dentro de la plataforma. El
+            administrador puede restablecer tu contraseña desde el módulo
+            <em>Gestión de Usuarios</em> (<strong>/auth/usuarios</strong>). Si eres el único usuario
+            y perdiste acceso, consulta la sección de <a href="#contacto">Soporte</a>.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+            <i class="fa-solid fa-building me-2 text-success"></i>
+            ¿Puedo tener varias empresas en la misma plataforma?
+          </button>
+        </h2>
+        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Sí. La plataforma es <strong>multi-empresa</strong>: cada empresa tiene su propia base
+            de datos aislada. Los usuarios de una empresa no pueden ver ni modificar datos de otra.
+            Cada usuario pertenece a exactamente una empresa.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+            <i class="fa-solid fa-camera me-2 text-danger"></i>
+            ¿Cómo adjunto fotografías a un registro?
+          </button>
+        </h2>
+        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Al crear o editar un registro de bitácora, encontrarás un campo de carga de imágenes.
+            Puedes seleccionar una o varias fotos desde tu dispositivo. Los formatos soportados son
+            <strong>JPG, PNG y WEBP</strong>. Las imágenes se almacenan asociadas al registro y
+            pueden visualizarse dentro del detalle del mismo.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+            <i class="fa-solid fa-file-pdf me-2 text-primary"></i>
+            ¿Cómo genero un reporte en PDF?
+          </button>
+        </h2>
+        <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Ve al módulo <strong>Reportes</strong> desde el menú lateral. Selecciona el tipo de
+            informe (bitácora diaria, sostenimiento, etc.), el rango de fechas y las labores que
+            deseas incluir. Haz clic en <em>Generar PDF</em>. El archivo se descargará
+            automáticamente en tu navegador con encabezado corporativo.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+            <i class="fa-solid fa-user-shield me-2 text-warning"></i>
+            ¿Cuál es la diferencia entre rol "admin" y "usuario"?
+          </button>
+        </h2>
+        <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            <ul class="mb-0">
+              <li><strong>Administrador:</strong> acceso completo. Puede gestionar usuarios, cambiar roles, eliminar cualquier registro, modificar la configuración de empresa y ver el historial de actividad completo.</li>
+              <li><strong>Usuario:</strong> puede crear, editar y consultar registros de bitácora y sostenimiento de su empresa. No puede gestionar usuarios ni acceder a configuraciones avanzadas.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">
+            <i class="fa-solid fa-table me-2 text-success"></i>
+            ¿Qué es el módulo Estándar (RMR/Q/GSI)?
+          </button>
+        </h2>
+        <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Es una sección de consulta rápida con las tablas de clasificación geomecánica más
+            utilizadas en minería subterránea:
+            <ul>
+              <li><strong>RMR</strong> (Rock Mass Rating, Bieniawski 1989): clasifica el macizo en clases I–V.</li>
+              <li><strong>Sistema Q</strong> (Barton et al.): determina la calidad del macizo y el soporte recomendado.</li>
+              <li><strong>GSI</strong> (Geological Strength Index, Hoek): estima la resistencia del macizo rocoso.</li>
+            </ul>
+            Estas tablas sirven como referencia al completar los registros de bitácora.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq8">
+            <i class="fa-solid fa-moon me-2 text-secondary"></i>
+            ¿Cómo activo el modo oscuro?
+          </button>
+        </h2>
+        <div id="faq8" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Haz clic en el botón <i class="fa-solid fa-moon"></i> ubicado en la barra superior
+            derecha. La preferencia se guarda automáticamente en tu navegador y se mantendrá
+            en tu próxima visita.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">
+            <i class="fa-solid fa-database me-2 text-primary"></i>
+            ¿Dónde se almacenan mis datos?
+          </button>
+        </h2>
+        <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Los datos se almacenan localmente en archivos <strong>SQLite</strong> y <strong>Excel</strong>
+            en el servidor donde está instalada la plataforma. No se comparten con terceros. Si
+            necesitas migrar o respaldar tus datos, usa la exportación a Excel desde el módulo
+            de Reportes o consulta con el administrador del sistema.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">
+            <i class="fa-solid fa-mobile-screen me-2 text-success"></i>
+            ¿Funciona en dispositivos móviles?
+          </button>
+        </h2>
+        <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#accordionFaq">
+          <div class="accordion-body">
+            Sí. La interfaz es <strong>responsive</strong> y se adapta a teléfonos y tabletas.
+            Puedes registrar bitácoras, subir fotos y consultar el dashboard desde cualquier
+            dispositivo con navegador web moderno (Chrome, Firefox, Safari, Edge).
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {# ── Atajos de teclado / interfaz ─────────────────────────────────────── #}
+  <div class="mb-4">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-keyboard me-2"></i>Elementos de la interfaz
+    </h5>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-3 p-3 h-100">
+          <h6 class="fw-700 mb-3"><i class="fa-solid fa-sidebar me-2 text-primary"></i>Menú lateral (Sidebar)</h6>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem;">
+            El menú lateral izquierdo contiene accesos directos a todos los módulos.
+          </p>
+          <ul style="font-size:0.83rem;color:var(--text-muted);">
+            <li>Haz clic en el ícono <i class="fa-solid fa-bars"></i> para <strong>colapsar o expandir</strong> el menú.</li>
+            <li>El módulo activo aparece resaltado en azul.</li>
+            <li>En móviles, el menú se oculta automáticamente.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-3 p-3 h-100">
+          <h6 class="fw-700 mb-3"><i class="fa-solid fa-bell me-2 text-warning"></i>Notificaciones de estado</h6>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem;">
+            La plataforma muestra alertas contextuales:
+          </p>
+          <ul style="font-size:0.83rem;color:var(--text-muted);">
+            <li><span class="badge bg-success">Verde</span> — Operación exitosa (guardado, exportación).</li>
+            <li><span class="badge bg-warning text-dark">Amarillo</span> — Advertencia o información importante.</li>
+            <li><span class="badge bg-danger">Rojo</span> — Error o acción no permitida.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Soporte / Contacto ───────────────────────────────────────────────── #}
+  <div id="contacto" class="mb-4" style="scroll-margin-top:70px;">
+    <h5 class="help-section-title">
+      <i class="fa-solid fa-headset me-2"></i>Soporte & Contacto
+    </h5>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="contact-card">
+          <div class="contact-icon" style="background:rgba(26,111,196,0.1);">
+            <i class="fa-solid fa-book text-primary"></i>
+          </div>
+          <h6 class="fw-700 mb-1">Documentación API</h6>
+          <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.75rem;">
+            Explora la documentación interactiva generada automáticamente por FastAPI.
+          </p>
+          <a href="/docs" target="_blank" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-external-link-alt me-1"></i>Abrir API Docs
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="contact-card">
+          <div class="contact-icon" style="background:rgba(16,185,129,0.1);">
+            <i class="fa-brands fa-github text-success"></i>
+          </div>
+          <h6 class="fw-700 mb-1">Repositorio GitHub</h6>
+          <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.75rem;">
+            Reporta un bug, solicita una funcionalidad o contribuye al proyecto.
+          </p>
+          <a href="https://github.com/JoseMilad/bitacora-geomecanica" target="_blank" rel="noopener noreferrer" class="btn btn-success btn-sm">
+            <i class="fa-brands fa-github me-1"></i>Ver en GitHub
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="contact-card">
+          <div class="contact-icon" style="background:rgba(245,158,11,0.1);">
+            <i class="fa-solid fa-gear" style="color:#f59e0b;"></i>
+          </div>
+          <h6 class="fw-700 mb-1">Administrador</h6>
+          <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.75rem;">
+            Para problemas de acceso o configuración específicos de tu empresa, contacta al administrador de tu organización.
+          </p>
+          <a href="/configuracion" class="btn btn-warning btn-sm text-dark">
+            <i class="fa-solid fa-gear me-1"></i>Configuración
+          </a>
+        </div>
+      </div>
+    </div>
+
+    {# Información de versión #}
+    <div class="card border-0 rounded-3 p-3" style="background:rgba(26,111,196,0.05);border:1px solid rgba(26,111,196,0.15)!important;">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <i class="fa-solid fa-circle-info text-primary me-1"></i>
+          <strong>Versión de la plataforma:</strong>
+          <span class="badge bg-primary ms-1">v{{ app_version }}</span>
+        </div>
+        <div style="color:var(--text-muted);font-size:0.85rem;">
+          <i class="fa-solid fa-mountain-sun me-1"></i>
+          Bitácora Geomecánica — Plataforma empresarial de gestión minera
+        </div>
+        <div class="ms-auto" style="font-size:0.8rem;color:var(--text-muted);">
+          Powered by <strong>Milad</strong> &bull; FastAPI + Bootstrap 5
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
