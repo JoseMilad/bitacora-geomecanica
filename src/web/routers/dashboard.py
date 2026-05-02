@@ -135,7 +135,7 @@ async def dashboard(
             break
 
     # Totales sostenimiento — computed after df_sost_full is available (later in the function)
-    # to respect the tipo_shotcrete filter; placeholder initialised here for early KPI display.
+    # to respect the tipo_shotcrete filter; placeholder initialized here for early KPI display.
     total_shotcrete = 0.0
 
     # Últimos 10 registros (del período filtrado)

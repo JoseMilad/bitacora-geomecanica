@@ -1,4 +1,4 @@
-"""Router de ayuda y soporte — Bitácora Geomecánica."""
+"""Router de ayuda y soporte — RockLog."""
 import sys
 from pathlib import Path
 

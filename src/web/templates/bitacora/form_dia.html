@@ -231,11 +231,17 @@ function toggleEntry(btn) {
   } else {
     body.style.display = 'none';
     icon.className = 'fa-solid fa-chevron-down';
-    // Show labor name in header when minimized
+    // Show labor name in header when minimized (use textContent to avoid XSS)
     const laborInput = btn.closest('.card').querySelector('.input-labor');
     if (laborInput && laborInput.value) {
       const titleEl = btn.closest('.card').querySelector('.labor-entry-title');
-      if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-hard-hat me-2"></i>' + laborInput.value;
+      if (titleEl) {
+        titleEl.textContent = '';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-hard-hat me-2';
+        titleEl.appendChild(icon);
+        titleEl.appendChild(document.createTextNode(laborInput.value));
+      }
     }
   }
 }
