@@ -209,7 +209,7 @@ def _generar_pdf_bitacora(df, fi_str: str = "", ff_str: str = "") -> bytes:
     tabla = Table(data, colWidths=col_widths, repeatRows=1)
     tabla.setStyle(_tabla_estilo_principal())
 
-    elementos = _construir_header_pdf(estilos, "Bitácora Geomecánica", lineas_info)
+    elementos = _construir_header_pdf(estilos, "RockLog", lineas_info)
     elementos.append(tabla)
 
     pdf.build(elementos, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)

@@ -27,12 +27,18 @@ def validar_gsi(valor):
         return None
     return texto
 
-def _obtener_turno_automatico():
+def _obtener_turno_automatico(tz_name: str | None = None):
     """
     Determina el turno según la hora actual y los horarios configurados.
     Soporta cualquier número de turnos personalizados usando el dict 'turnos_horas'.
     El turno se determina como aquel cuyo inicio es el más cercano sin superar la
     hora actual (ordenado cíclicamente).
+
+    Parameters
+    ----------
+    tz_name : str | None
+        Nombre de zona horaria IANA (p.ej. 'America/Santiago'). Si se proporciona,
+        la hora local del usuario se usa en lugar de la hora del servidor.
     """
     from utils.config_manager import cargar_config
     config = cargar_config()
@@ -72,7 +78,8 @@ def _obtener_turno_automatico():
     if not turno_minutos:
         return turnos[0] if turnos else "Día"
 
-    ahora = datetime.now()
+    # Resolve current time — prefer user's timezone when available
+    ahora = _hora_local(tz_name)
     minutos_actual = ahora.hour * 60 + ahora.minute
 
     # Sort shifts by start time ascending.
@@ -89,6 +96,20 @@ def _obtener_turno_automatico():
     if turno_actual not in turnos:
         return turnos[0] if turnos else "Día"
     return turno_actual
+
+
+def _hora_local(tz_name: str | None = None):
+    """Devuelve un objeto datetime con la hora local del usuario (si se conoce su zona horaria)
+    o la hora del servidor como fallback."""
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import timezone as _tz
+            tz = ZoneInfo(tz_name)
+            return datetime.now(tz=tz)
+        except Exception:
+            pass
+    return datetime.now()
 
 def validar_campos_obligatorios(labor, turno):
     """Valida campos obligatorios"""

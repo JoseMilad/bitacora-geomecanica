@@ -57,6 +57,11 @@ def _is_admin(request: Request) -> bool:
     return user is not None and user.get("rol") in ("admin", "empresa_admin")
 
 
+def _get_user_tz(request: Request) -> str | None:
+    """Obtiene la zona horaria del usuario desde la cookie 'user_tz'."""
+    return request.cookies.get("user_tz") or None
+
+
 def _campos_sost():
     """Devuelve los campos activos de sostenimiento desde la config viva."""
     config = cargar_config()
@@ -90,8 +95,15 @@ async def listar_sostenimiento(
     request: Request,
     fecha: str = "",
     labor: str = "",
+    ver_anteriores: str = "",
 ):
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+
+    # Default to today when no date filter is active and user hasn't asked for past records
+    hoy_html = datetime.now().strftime("%Y-%m-%d")
+    if not fecha and not ver_anteriores:
+        fecha = hoy_html
+
     fecha_app = _fecha_html_a_app(fecha) if fecha else None
     df = model.obtener_sostenimiento(
         fecha=fecha_app,
@@ -109,7 +121,9 @@ async def listar_sostenimiento(
         "labores": labores_nombres,
         "campos": campos,
         "fecha": fecha,
+        "fecha_hoy": hoy_html,
         "labor": labor,
+        "ver_anteriores": ver_anteriores,
         "flash": flash,
         "active_page": "sostenimiento",
         "is_admin": _is_admin(request),
@@ -163,7 +177,7 @@ async def nuevo_sostenimiento_form(request: Request):
         "registro": None,
         "labores": labores_nombres,
         "turnos": _turnos_config(),
-        "turno_auto": _obtener_turno_automatico(),
+        "turno_auto": _obtener_turno_automatico(_get_user_tz(request)),
         "campos": _campos_sost(),
         "action": "/sostenimiento/nuevo",
         "titulo": "Nuevo Registro de Sostenimiento",

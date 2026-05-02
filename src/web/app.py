@@ -1,4 +1,4 @@
-"""Aplicación FastAPI principal — Bitácora Geomecánica Web."""
+"""Aplicación FastAPI principal — RockLog."""
 import os
 import sys
 from pathlib import Path
@@ -23,7 +23,7 @@ from src.utils.config import APP_VERSION
 
 # ── Instancia principal ───────────────────────────────────────────────────────
 app = FastAPI(
-    title="Bitácora Geomecánica - Web",
+    title="RockLog - Web",
     version="1.0.0",
     description="Plataforma web empresarial para gestión de bitácora geomecánica minera.",
 )

@@ -3,12 +3,59 @@
 {% block page_title %}Sostenimiento Diario{% endblock %}
 
 {% block content %}
-<!-- Filtros -->
-<div class="card shadow-sm border-0 mt-3">
-  <div class="card-body">
+
+{# ── Header de fecha activa ──────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+  <div>
+    {% if fecha == fecha_hoy %}
+      <span class="badge bg-primary fs-6 py-2 px-3">
+        <i class="fa-solid fa-calendar-day me-2"></i>Hoy — {{ fecha }}
+      </span>
+    {% elif fecha %}
+      <span class="badge bg-secondary fs-6 py-2 px-3">
+        <i class="fa-solid fa-calendar me-2"></i>{{ fecha }}
+      </span>
+    {% else %}
+      <span class="badge bg-secondary fs-6 py-2 px-3">
+        <i class="fa-solid fa-calendar me-2"></i>Todos los registros
+      </span>
+    {% endif %}
+    {% if labor %}
+      <span class="badge bg-outline border ms-1 py-2 px-3 text-body">
+        <i class="fa-solid fa-hard-hat me-1"></i>{{ labor }}
+      </span>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    {# Ver días anteriores / Volver a hoy toggle #}
+    {% if ver_anteriores or (fecha and fecha != fecha_hoy) %}
+      <a href="/sostenimiento" class="btn btn-sm btn-outline-primary">
+        <i class="fa-solid fa-calendar-day me-1"></i>Ir a hoy
+      </a>
+    {% else %}
+      <a href="/sostenimiento?ver_anteriores=1" class="btn btn-sm btn-outline-secondary">
+        <i class="fa-solid fa-clock-rotate-left me-1"></i>Ver días anteriores
+      </a>
+    {% endif %}
+    <a href="/sostenimiento/totales" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-sigma me-1"></i>Ver Totales
+    </a>
+    <a href="/sostenimiento/nuevo" class="btn btn-primary btn-sm">
+      <i class="fa-solid fa-plus me-1"></i>Nuevo Registro
+    </a>
+  </div>
+</div>
+
+{# ── Filtros — visible solo cuando el usuario quiere ver días anteriores #}
+{% if ver_anteriores or (fecha and fecha != fecha_hoy) %}
+<div class="card shadow-sm border-0 mb-3" id="filtroAnteriores">
+  <div class="card-body py-2">
     <form method="get" action="/sostenimiento" class="row g-3 align-items-end">
+      <input type="hidden" name="ver_anteriores" value="1" />
       <div class="col-md-4">
-        <label class="form-label fw-semibold">Fecha</label>
+        <label class="form-label fw-semibold">
+          <i class="fa-solid fa-calendar me-1 text-primary"></i>Fecha
+        </label>
         <input type="date" name="fecha" value="{{ fecha }}" class="form-control" />
       </div>
       <div class="col-md-4">
@@ -24,25 +71,14 @@
         <button type="submit" class="btn btn-primary flex-grow-1">
           <i class="fa-solid fa-filter me-1"></i>Filtrar
         </button>
-        <a href="/sostenimiento" class="btn btn-outline-secondary">
+        <a href="/sostenimiento?ver_anteriores=1" class="btn btn-outline-secondary">
           <i class="fa-solid fa-xmark"></i>
         </a>
       </div>
     </form>
   </div>
 </div>
-
-<!-- Acciones -->
-<div class="d-flex justify-content-between align-items-center mt-4 mb-2">
-  <div class="d-flex gap-2">
-    <a href="/sostenimiento/totales" class="btn btn-outline-secondary btn-sm">
-      <i class="fa-solid fa-sigma me-1"></i>Ver Totales
-    </a>
-  </div>
-  <a href="/sostenimiento/nuevo" class="btn btn-primary">
-    <i class="fa-solid fa-plus me-1"></i>Nuevo Registro
-  </a>
-</div>
+{% endif %}
 
 <!-- Tabla -->
 <div class="card shadow-sm border-0">
@@ -103,7 +139,16 @@
           {% else %}
             <tr><td colspan="{{ 5 + campos|length }}" class="text-center text-muted py-5">
               <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
-              No se encontraron registros
+              {% if fecha == fecha_hoy %}
+                No hay registros para hoy.
+                <div class="mt-2">
+                  <a href="/sostenimiento/nuevo" class="btn btn-primary btn-sm">
+                    <i class="fa-solid fa-plus me-1"></i>Agregar primer registro del día
+                  </a>
+                </div>
+              {% else %}
+                No se encontraron registros para el filtro seleccionado.
+              {% endif %}
             </td></tr>
           {% endif %}
         </tbody>
@@ -116,6 +161,8 @@
 {% block extra_scripts %}
 <script>
 const _laboresSost = {{ labores | tojson }};
+{% if ver_anteriores or (fecha and fecha != fecha_hoy) %}
 initLaborTypeahead('filterLaborSost', 'dropdownFilterLaborSost', _laboresSost, { showAll: true });
+{% endif %}
 </script>
 {% endblock %}

@@ -134,11 +134,9 @@ async def dashboard(
             nombre_col_principal = s.get("display", col_principal)
             break
 
-    # Totales sostenimiento
-    totales_sost = model.obtener_totales_sostenimiento(labor=labor_filter or None)
+    # Totales sostenimiento — computed after df_sost_full is available (later in the function)
+    # to respect the tipo_shotcrete filter; placeholder initialised here for early KPI display.
     total_shotcrete = 0.0
-    if totales_sost is not None and not totales_sost.empty and col_principal in totales_sost.columns:
-        total_shotcrete = float(totales_sost[col_principal].sum())
 
     # Últimos 10 registros (del período filtrado)
     ultimos_10 = []
@@ -196,7 +194,9 @@ async def dashboard(
         # Aplicar filtro de tipo de shotcrete cuando corresponda
         if tipos_shotcrete_sel and not df_sost_full.empty and col_principal.lower().startswith("shotcrete") and "Tipo_Shotcrete" in df_sost_full.columns:
             df_sost_full = df_sost_full[df_sost_full["Tipo_Shotcrete"].isin(tipos_shotcrete_sel)]
+        # Compute total_shotcrete here so the tipo_shotcrete filter is already applied
         if not df_sost_full.empty and col_principal in df_sost_full.columns:
+            total_shotcrete = round(float(df_sost_full[col_principal].sum()), 2)
             grp = df_sost_full.groupby("Labor")[col_principal].sum().sort_values(ascending=False).head(10)
             labels_sost_labor = grp.index.tolist()
             data_sost_labor = [round(float(v), 2) for v in grp.values.tolist()]
