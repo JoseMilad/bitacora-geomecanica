@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — RockLog{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-3">
+  <div class="col-xl-10 col-lg-12">
+
+    {% if flash and flash.mensaje %}
+    <div class="alert alert-{{ flash.tipo }} alert-dismissible fade show">
+      <i class="fa-solid fa-circle-info me-2"></i>{{ flash.mensaje }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {# ── Instruction banner ──────────────────────────────────────────────── #}
+    <div class="alert alert-info d-flex align-items-start gap-3 border-0 mb-4">
+      <i class="fa-solid fa-circle-info fa-lg mt-1 flex-shrink-0"></i>
+      <div>
+        <strong>Registro Diario de Sostenimiento</strong> — Selecciona la fecha y el turno una sola vez.
+        Luego agrega todas las labores del día haciendo clic en
+        <em>"+ Añadir Labor"</em>. Cuando termines, pulsa <em>"Guardar todo"</em>.
+      </div>
+    </div>
+
+    <form method="POST" action="{{ action }}" id="formDiaSost">
+      {# ── Fecha + Turno ──────────────────────────────────────────────────── #}
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-calendar-day me-2 text-primary"></i>Datos del Día
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Fecha <span class="text-danger">*</span></label>
+              <input type="date" name="fecha" id="fechaDiaSost" class="form-control"
+                value="{{ fecha_hoy }}" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Turno <span class="text-danger">*</span></label>
+              <select name="turno" class="form-select" required>
+                {% for t in turnos %}
+                <option value="{{ t }}"
+                  {% if turno_auto is defined and turno_auto == t %}selected{% endif %}>
+                  {{ t }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Contenedor de entradas de labor ────────────────────────────────── #}
+      <div id="contLaboresSost"></div>
+
+      {# ── Campo oculto con el total de entradas ──────────────────────────── #}
+      <input type="hidden" id="nLaboresSost" name="n_labores" value="0" />
+
+      {# ── Botón añadir labor ─────────────────────────────────────────────── #}
+      <div class="d-flex justify-content-center my-3">
+        <button type="button" class="btn btn-outline-primary" onclick="agregarLaborSost()">
+          <i class="fa-solid fa-plus me-2"></i>Añadir Labor
+        </button>
+      </div>
+
+      {# ── Guardar / Cancelar ─────────────────────────────────────────────── #}
+      <div class="d-flex gap-2 justify-content-end mt-2">
+        <a href="/sostenimiento" class="btn btn-outline-secondary">
+          <i class="fa-solid fa-arrow-left me-1"></i>Cancelar
+        </a>
+        <button type="submit" class="btn btn-primary" id="btnGuardarTodoSost">
+          <i class="fa-solid fa-save me-1"></i>Guardar todo
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Template HTML para una entrada de labor (clonado por JS) ──────────── #}
+<template id="tmplSostEntry">
+  <div class="card shadow-sm border-0 mb-3 labor-entry-sost" data-idx="">
+    <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center py-2">
+      <span class="fw-semibold text-secondary labor-entry-title">
+        <i class="fa-solid fa-layer-group me-2"></i>Labor <span class="entry-num"></span>
+      </span>
+      <div class="d-flex gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+          onclick="toggleEntrySost(this)" title="Minimizar">
+          <i class="fa-solid fa-chevron-up"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+          onclick="eliminarLaborSost(this)" title="Eliminar">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>
+    <div class="card-body entry-body">
+      <div class="row g-3">
+        {# Labor #}
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Labor <span class="text-danger">*</span></label>
+          <div class="position-relative">
+            <input type="text" name="" class="form-control input-labor-sost" autocomplete="off"
+              placeholder="Escriba para buscar labor..." required />
+            <div class="labor-dropdown-sost list-group position-absolute w-100 shadow-sm"
+              style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
+          </div>
+        </div>
+
+        {# Selector de tipos de sostenimiento #}
+        <div class="col-12">
+          <hr class="my-2" />
+          <p class="fw-semibold mb-2">
+            <i class="fa-solid fa-layer-group me-1 text-primary"></i>
+            Seleccione los tipos de sostenimiento a registrar:
+          </p>
+          <div class="d-flex flex-wrap gap-2 mb-1 sost-selector-group">
+            {# Los checkboxes se generan dinámicamente por JS #}
+          </div>
+          <small class="text-muted">Haga clic para seleccionar / deseleccionar.</small>
+        </div>
+
+        {# Campos de cantidad: generados dinámicamente por JS #}
+        <div class="sost-campos-wrapper col-12 row g-3" style="display:none;"></div>
+
+        {# Observaciones #}
+        <div class="col-12">
+          <label class="form-label fw-semibold">Observaciones</label>
+          <textarea name="" class="form-control input-obs-sost" rows="2"
+            placeholder="Observaciones opcionales"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const todasLaboresSost = {{ labores | tojson }};
+const _camposSost = {{ campos | tojson }};
+let _nEntradasSost = 0;
+
+function agregarLaborSost() {
+  const tmpl = document.getElementById('tmplSostEntry');
+  const clone = tmpl.content.cloneNode(true);
+  const idx = _nEntradasSost;
+  const card = clone.querySelector('.labor-entry-sost');
+  card.dataset.idx = idx;
+  clone.querySelector('.entry-num').textContent = idx + 1;
+
+  // Wire up names
+  clone.querySelector('.input-labor-sost').name = 'labor_' + idx;
+  clone.querySelector('.input-obs-sost').name = 'observaciones_' + idx;
+
+  // Build sostenimiento selector checkboxes and campo wrappers
+  const selectorGroup = clone.querySelector('.sost-selector-group');
+  const camposWrapper = clone.querySelector('.sost-campos-wrapper');
+
+  _camposSost.forEach(function(campo) {
+    const col = campo.columna;
+    const display = campo.display;
+    const tipo = campo.tipo;
+
+    // Checkbox btn
+    const chkDiv = document.createElement('div');
+    const chkId = 'chk_' + col + '_' + idx;
+    chkDiv.innerHTML =
+      '<input type="checkbox" class="btn-check sost-sel-chk" id="' + chkId + '" autocomplete="off">' +
+      '<label class="btn btn-outline-primary btn-sm" for="' + chkId + '">' +
+      '<i class="fa-solid fa-plus me-1"></i>' + display + '</label>';
+    const chkEl = chkDiv.querySelector('input');
+    chkEl.addEventListener('change', function() {
+      toggleSostCampo(col, idx, this.checked);
+    });
+    selectorGroup.appendChild(chkDiv.querySelector('input'));
+    selectorGroup.appendChild(chkDiv.querySelector('label'));
+
+    // Campo wrapper (hidden by default)
+    const wrapDiv = document.createElement('div');
+    wrapDiv.className = 'col-md-4 sost-campo-entry';
+    wrapDiv.id = 'wrapper_' + col + '_' + idx;
+    wrapDiv.style.display = 'none';
+
+    const step = tipo === 'float' ? '0.01' : '1';
+    let inner =
+      '<label class="form-label fw-semibold">' + display + '</label>' +
+      '<input type="number" step="' + step + '" min="0" ' +
+      'name="' + col + '_' + idx + '" ' +
+      'id="input_' + col + '_' + idx + '" ' +
+      'class="form-control" value="0" />';
+
+    if (col === 'Shotcrete_m3') {
+      inner +=
+        '<div class="mt-2">' +
+        '<label class="form-label small fw-semibold">Tipo de shotcrete <span class="text-danger">*</span></label>' +
+        '<select name="tipo_shotcrete_' + idx + '" id="sel_tipo_shotcrete_' + idx + '" class="form-select form-select-sm">' +
+        '<option value="">— Seleccione tipo —</option>' +
+        '<option value="X1 - Lanzado para avance">X1 — Lanzado para avance</option>' +
+        '<option value="X5 - Lanzado para reforzamiento">X5 — Lanzado para reforzamiento</option>' +
+        '<option value="X6 - Lanzado sobre zona inestable">X6 — Lanzado sobre zona inestable</option>' +
+        '<option value="X7 - Lanzado sobre malla">X7 — Lanzado sobre malla</option>' +
+        '<option value="X10 - Lanzado para resane">X10 — Lanzado para resane</option>' +
+        '</select></div>';
+    }
+
+    wrapDiv.innerHTML = inner;
+    camposWrapper.appendChild(wrapDiv);
+  });
+
+  // Append to container
+  const cont = document.getElementById('contLaboresSost');
+  const fragDiv = document.createElement('div');
+  fragDiv.appendChild(clone);
+  cont.appendChild(fragDiv.firstElementChild);
+
+  // Init typeahead on the new labor input
+  const addedCard = cont.lastElementChild;
+  const laborInput = addedCard.querySelector('.input-labor-sost');
+  const laborDropdown = addedCard.querySelector('.labor-dropdown-sost');
+  const laborInputId = 'inputLaborSost_' + idx;
+  const laborDropdownId = 'dropdownLaborSost_' + idx;
+  laborInput.id = laborInputId;
+  laborDropdown.id = laborDropdownId;
+  initLaborTypeahead(laborInputId, laborDropdownId, todasLaboresSost, {});
+
+  _nEntradasSost++;
+  document.getElementById('nLaboresSost').value = _nEntradasSost;
+
+  // Auto-scroll to new entry
+  addedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function toggleSostCampo(col, idx, checked) {
+  const wrapper = document.getElementById('wrapper_' + col + '_' + idx);
+  const input = document.getElementById('input_' + col + '_' + idx);
+  if (!wrapper) return;
+  if (checked) {
+    wrapper.style.display = '';
+    const camposWrapper = wrapper.closest('.sost-campos-wrapper');
+    if (camposWrapper) camposWrapper.style.display = '';
+    if (input && (input.value === '0' || input.value === '')) {
+      input.value = '';
+    }
+    if (input) input.focus();
+  } else {
+    wrapper.style.display = 'none';
+    if (input) input.value = 0;
+    // Hide wrapper container if all campos are hidden
+    const camposWrapper = wrapper.closest('.sost-campos-wrapper');
+    if (camposWrapper) {
+      const visible = camposWrapper.querySelectorAll('.sost-campo-entry:not([style*="display: none"])');
+      if (visible.length === 0) camposWrapper.style.display = 'none';
+    }
+  }
+}
+
+function eliminarLaborSost(btn) {
+  const card = btn.closest('.labor-entry-sost');
+  if (card) card.remove();
+  document.querySelectorAll('.labor-entry-sost').forEach(function(c, i) {
+    const numEl = c.querySelector('.entry-num');
+    if (numEl) numEl.textContent = i + 1;
+  });
+}
+
+function toggleEntrySost(btn) {
+  const body = btn.closest('.card').querySelector('.entry-body');
+  const icon = btn.querySelector('i');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    icon.className = 'fa-solid fa-chevron-up';
+  } else {
+    body.style.display = 'none';
+    icon.className = 'fa-solid fa-chevron-down';
+    const laborInput = btn.closest('.card').querySelector('.input-labor-sost');
+    if (laborInput && laborInput.value) {
+      const titleEl = btn.closest('.card').querySelector('.labor-entry-title');
+      if (titleEl) {
+        titleEl.textContent = '';
+        const ico = document.createElement('i');
+        ico.className = 'fa-solid fa-layer-group me-2';
+        titleEl.appendChild(ico);
+        titleEl.appendChild(document.createTextNode(laborInput.value));
+      }
+    }
+  }
+}
+
+// Validate at least one labor before submit
+document.getElementById('formDiaSost').addEventListener('submit', function(e) {
+  const labores = document.querySelectorAll('.input-labor-sost');
+  const filled = Array.from(labores).some(function(inp) { return inp.value.trim() !== ''; });
+  if (!filled) {
+    e.preventDefault();
+    alert('Debes añadir al menos una labor antes de guardar.');
+    return;
+  }
+  document.getElementById('nLaboresSost').value = _nEntradasSost;
+});
+
+// Add first entry automatically on page load
+agregarLaborSost();
+</script>
+{% endblock %}
