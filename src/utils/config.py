@@ -27,7 +27,7 @@ BACKUP_DIR = DATA_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
 
 # Configuración de la aplicación
-APP_NAME = "Bitácora Geomecánica"
+APP_NAME = "RockLog"
 APP_VERSION = "1.0.0"
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 700

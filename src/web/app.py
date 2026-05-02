@@ -1,4 +1,4 @@
-"""Aplicación FastAPI principal — Bitácora Geomecánica Web."""
+"""Aplicación FastAPI principal — RockLog."""
 import os
 import sys
 from pathlib import Path
@@ -17,13 +17,13 @@ from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth, actividad
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth, actividad, ayuda
 from src.models.auth import inicializar_tabla_usuarios
 from src.utils.config import APP_VERSION
 
 # ── Instancia principal ───────────────────────────────────────────────────────
 app = FastAPI(
-    title="Bitácora Geomecánica - Web",
+    title="RockLog - Web",
     version="1.0.0",
     description="Plataforma web empresarial para gestión de bitácora geomecánica minera.",
 )
@@ -42,7 +42,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # ── Middleware de autenticación ───────────────────────────────────────────────
 # Rutas públicas que NO requieren autenticación
-_PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/auth/registro", "/static", "/docs", "/openapi.json", "/redoc", "/"}
+_PUBLIC_PATHS = {"/auth/login", "/auth/logout", "/auth/registro", "/static", "/docs", "/openapi.json", "/redoc", "/", "/ayuda"}
 
 
 async def auth_middleware(request: Request, call_next):
@@ -83,6 +83,7 @@ app.include_router(configuracion.router, prefix="/configuracion")
 app.include_router(estandar.router, prefix="/estandar")
 app.include_router(clasificaciones.router, prefix="/clasificaciones")
 app.include_router(actividad.router)
+app.include_router(ayuda.router)
 
 
 # ── Ruta raíz — Pantalla de bienvenida ────────────────────────────────────────

@@ -1,7 +1,18 @@
 /* ═══════════════════════════════════════════════════════════
-   Bitácora Geomecánica — main.js
+   RockLog — main.js
    ═══════════════════════════════════════════════════════════ */
 
+// ── Browser timezone auto-detection ──────────────────────────────────────────
+// Detect the user's local timezone and store it in a cookie so the server can
+// use it when auto-selecting the current shift (Día/Noche).
+(function () {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) {
+      document.cookie = 'user_tz=' + encodeURIComponent(tz) + '; path=/; SameSite=Lax; max-age=' + (365 * 24 * 3600);
+    }
+  } catch (e) { /* ignore */ }
+})();
 // ── Reusable Labor Typeahead Component ───────────────────────────────────────
 /**
  * Initializes a typeahead autocomplete on a text input for labor filtering.

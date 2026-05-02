@@ -117,13 +117,12 @@ def _get_clasif_context(empresa_id: int) -> dict:
     }
 
 
-def _turnos_config():
-    """Devuelve los turnos configurados."""
-    config = cargar_config()
-    return config.get("turnos", TURNOS)
+def _get_user_tz(request: Request) -> str | None:
+    """Obtiene la zona horaria del usuario desde la cookie 'user_tz'."""
+    return request.cookies.get("user_tz") or None
 
 
-# ── Listar ────────────────────────────────────────────────────────────────────
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 async def listar_bitacora(
@@ -215,7 +214,7 @@ async def nuevo_bitacora_form(request: Request):
         "registro": None,
         "labores": labores_nombres,
         "turnos": _turnos_config(),
-        "turno_auto": _obtener_turno_automatico(),
+        "turno_auto": _obtener_turno_automatico(_get_user_tz(request)),
         "action": "/bitacora/nuevo",
         "titulo": "Nuevo Registro",
         "flash": flash,
@@ -585,3 +584,119 @@ async def servir_imagen(filename: str):
     if str(alt_filepath).startswith(str(resolved_data)) and alt_filepath.exists():
         return FileResponse(str(alt_filepath))
     return JSONResponse({"error": "Imagen no encontrada"}, status_code=404)
+
+
+# ── Nuevo registro por día — formulario (multi-labor) ────────────────────────
+@router.get("/nuevo-dia", response_class=HTMLResponse)
+async def nuevo_dia_form(request: Request):
+    """Formulario de registro diario: una fecha + turno, múltiples labores."""
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    labores_nombres = model.obtener_labores_guardadas()
+    flash = _get_flash(request)
+    clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+    sistema_ref_sesion = request.session.get("ultimo_sistema_referencia", "")
+    fecha_hoy = date.today().strftime("%Y-%m-%d")
+    return templates.TemplateResponse(request, "bitacora/form_dia.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "labores": labores_nombres,
+        "turnos": _turnos_config(),
+        "turno_auto": _obtener_turno_automatico(_get_user_tz(request)),
+        "action": "/bitacora/nuevo-dia",
+        "titulo": "Nuevo Registro Diario",
+        "flash": flash,
+        "active_page": "bitacora",
+        "sistema_ref_sesion": sistema_ref_sesion,
+        "fecha_hoy": fecha_hoy,
+        **clasif_ctx,
+    })
+
+
+# ── Nuevo registro por día — guardar (multi-labor) ────────────────────────────
+@router.post("/nuevo-dia")
+async def nuevo_dia_save(request: Request):
+    """Procesa y guarda múltiples registros de labor de un mismo día."""
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    n_labores_str = form.get("n_labores", "0")
+    try:
+        n_labores = max(0, int(n_labores_str))
+    except (ValueError, TypeError):
+        n_labores = 0
+
+    from src.utils.config_manager import obtener_clasificaciones_activas
+    clasif_activas = obtener_clasificaciones_activas()
+
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    username = _get_username(request)
+
+    saved, errors = 0, []
+    for i in range(n_labores):
+        labor = (form.get(f"labor_{i}", "") or "").strip()
+        if not labor:
+            continue  # skip empty entries
+
+        gsi = form.get(f"gsi_{i}", "")
+        rmr = form.get(f"rmr_{i}", "")
+        soporte = form.get(f"soporte_{i}", "")
+        observaciones = form.get(f"obs_{i}", "")
+
+        # Imagen opcional por entrada
+        imagen_path = ""
+        imagen_file = form.get(f"imagen_{i}")
+        if imagen_file and hasattr(imagen_file, "filename") and imagen_file.filename:
+            ext = Path(imagen_file.filename).suffix.lower()
+            if ext in _ALLOWED_EXTENSIONS:
+                filename = f"{uuid.uuid4().hex}{ext}"
+                filepath = UPLOAD_DIR / filename
+                content = await imagen_file.read()
+                filepath.write_bytes(content)
+                imagen_path = str(filepath)
+
+        datos = {
+            "Fecha": _fecha_html_a_app(fecha),
+            "Turno": turno,
+            "Labor": labor,
+            "GSI": gsi,
+            "RMR": rmr,
+            "Soporte": soporte,
+            "Observaciones": observaciones,
+            "imagen_path": imagen_path,
+        }
+        for cid in clasif_activas:
+            if cid not in ("GSI", "RMR"):
+                datos[cid] = form.get(f"clasif_{cid}_{i}", "")
+
+        ok, msg = model.guardar_registro_forzado(datos)
+        if ok:
+            model.db.registrar_actividad(username, "crear_registro",
+                                         f"Registro diario: {fecha} - {labor}")
+            saved += 1
+        else:
+            errors.append(f"{labor}: {msg}")
+
+    if saved == 0 and errors:
+        clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+        labores_nombres = model.obtener_labores_guardadas()
+        return templates.TemplateResponse(request, "bitacora/form_dia.html", context={
+            "request": request,
+            "app_version": APP_VERSION,
+            "labores": labores_nombres,
+            "turnos": _turnos_config(),
+            "action": "/bitacora/nuevo-dia",
+            "titulo": "Nuevo Registro Diario",
+            "flash": {"tipo": "danger", "mensaje": "; ".join(errors)},
+            "active_page": "bitacora",
+            "fecha_hoy": fecha,
+            "sistema_ref_sesion": request.session.get("ultimo_sistema_referencia", ""),
+            **clasif_ctx,
+        })
+
+    if errors:
+        _set_flash(request, "warning",
+                   f"{saved} registro(s) guardado(s). Errores: {'; '.join(errors)}")
+    else:
+        _set_flash(request, "success",
+                   f"{saved} registro(s) del día {_fecha_html_a_app(fecha)} guardados exitosamente.")
+    return RedirectResponse(url="/bitacora", status_code=303)
