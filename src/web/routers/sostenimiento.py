@@ -83,6 +83,14 @@ def _turnos_config():
     return config.get("turnos", TURNOS)
 
 
+def _get_username(request: Request) -> str:
+    """Obtiene el nombre del usuario actual de la sesión."""
+    user = request.session.get("user")
+    if user:
+        return user.get("nombre") or user.get("username", "sistema")
+    return "sistema"
+
+
 def _shotcrete_requiere_tipo(datos: dict) -> bool:
     """Returns True when Shotcrete_m3 > 0 but Tipo_Shotcrete is missing."""
     return float(datos.get("Shotcrete_m3", 0) or 0) > 0 and not datos.get("Tipo_Shotcrete", "")
@@ -258,6 +266,106 @@ async def nuevo_sostenimiento_save(request: Request):
         "duplicado": True,
         "active_page": "sostenimiento",
     })
+
+
+# ── Nuevo registro por día — formulario (multi-labor) ────────────────────────
+@router.get("/nuevo-dia", response_class=HTMLResponse)
+async def nuevo_dia_sost_form(request: Request):
+    """Formulario de registro diario de sostenimiento: una fecha + turno, múltiples labores."""
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    labores_nombres = model.obtener_labores_guardadas()
+    flash = _get_flash(request)
+    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+    return templates.TemplateResponse(request, "sostenimiento/form_dia.html", context={
+        "request": request,
+        "app_version": APP_VERSION,
+        "labores": labores_nombres,
+        "turnos": _turnos_config(),
+        "turno_auto": _obtener_turno_automatico(_get_user_tz(request)),
+        "campos": _campos_sost(),
+        "action": "/sostenimiento/nuevo-dia",
+        "titulo": "Nuevo Registro Diario de Sostenimiento",
+        "flash": flash,
+        "active_page": "sostenimiento",
+        "fecha_hoy": fecha_hoy,
+    })
+
+
+# ── Nuevo registro por día — guardar (multi-labor) ────────────────────────────
+@router.post("/nuevo-dia")
+async def nuevo_dia_sost_save(request: Request):
+    """Procesa y guarda múltiples registros de sostenimiento de un mismo día."""
+    form = await request.form()
+    fecha = form.get("fecha", "")
+    turno = form.get("turno", "")
+    n_labores_str = form.get("n_labores", "0")
+    try:
+        n_labores = max(0, int(n_labores_str))
+    except (ValueError, TypeError):
+        n_labores = 0
+
+    model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    username = _get_username(request)
+
+    saved, errors = 0, []
+    for i in range(n_labores):
+        labor = (form.get(f"labor_{i}", "") or "").strip()
+        if not labor:
+            continue  # omitir entradas vacías
+
+        observaciones = form.get(f"observaciones_{i}", "")
+        tipo_shotcrete_raw = form.get(f"tipo_shotcrete_{i}", "")
+        if tipo_shotcrete_raw and " - " in tipo_shotcrete_raw:
+            tipo_shotcrete = tipo_shotcrete_raw.split(" - ")[0]
+        else:
+            tipo_shotcrete = tipo_shotcrete_raw
+
+        datos = {
+            "Fecha": _fecha_html_a_app(fecha),
+            "Turno": turno,
+            "Labor": labor,
+            "Observaciones": observaciones,
+            "Tipo_Shotcrete": tipo_shotcrete,
+        }
+
+        for campo in _campos_sost():
+            col = campo["columna"]
+            val = form.get(f"{col}_{i}", "0")
+            try:
+                datos[col] = float(val) if campo["tipo"] == "float" else int(val)
+            except (ValueError, TypeError):
+                datos[col] = 0
+
+        ok, msg = model.guardar_sostenimiento_forzado(datos)
+        if ok:
+            model.db.registrar_actividad(username, "crear_sostenimiento",
+                                         f"Registro diario: {fecha} - {labor}")
+            saved += 1
+        else:
+            errors.append(f"{labor}: {msg}")
+
+    if saved == 0 and errors:
+        labores_nombres = model.obtener_labores_guardadas()
+        return templates.TemplateResponse(request, "sostenimiento/form_dia.html", context={
+            "request": request,
+            "app_version": APP_VERSION,
+            "labores": labores_nombres,
+            "turnos": _turnos_config(),
+            "campos": _campos_sost(),
+            "action": "/sostenimiento/nuevo-dia",
+            "titulo": "Nuevo Registro Diario de Sostenimiento",
+            "flash": {"tipo": "danger", "mensaje": "; ".join(errors)},
+            "active_page": "sostenimiento",
+            "fecha_hoy": fecha,
+        })
+
+    if errors:
+        _set_flash(request, "warning",
+                   f"{saved} registro(s) guardado(s). Errores: {'; '.join(errors)}")
+    else:
+        _set_flash(request, "success",
+                   f"{saved} registro(s) del día {_fecha_html_a_app(fecha)} guardados exitosamente.")
+    return RedirectResponse(url="/sostenimiento", status_code=303)
 
 
 # ── Editar — formulario ───────────────────────────────────────────────────────

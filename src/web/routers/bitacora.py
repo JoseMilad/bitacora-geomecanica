@@ -96,6 +96,12 @@ def _config_clasificaciones():
     return config.get("clasificaciones_activas", ["RMR"])
 
 
+def _turnos_config():
+    """Devuelve los turnos configurados."""
+    config = cargar_config()
+    return config.get("turnos", TURNOS)
+
+
 def _get_clasif_context(empresa_id: int) -> dict:
     """Returns extra classification context for form templates."""
     from src.utils.config_manager import (
