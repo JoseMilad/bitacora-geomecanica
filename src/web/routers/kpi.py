@@ -1,7 +1,9 @@
 """Router de Análisis KPI Geomecánico — proyectado vs ejecutado."""
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 for _p in (str(_ROOT), str(_ROOT / "src")):
@@ -60,8 +62,7 @@ def _puede_ingresar_avances(request: Request) -> bool:
     return user is not None and user.get("rol") in ("admin", "empresa_admin", "planeamiento")
 
 
-import re as _re
-_PERIODO_RE = _re.compile(r"^\d{4}-\d{2}$")
+_PERIODO_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
 def _sanitizar_periodo(periodo: str) -> str:
@@ -202,7 +203,7 @@ async def kpi_guardar_estandar(request: Request):
     kpi_model = KpiModel(empresa_id=empresa_id)
     ok, msg = kpi_model.guardar_kpi_estandar_bulk(registros, periodo)
     _set_flash(request, "success" if ok else "danger", msg)
-    return RedirectResponse(url=f"/kpi/mensual?periodo={periodo}", status_code=303)
+    return RedirectResponse(url="/kpi/mensual?" + urlencode({"periodo": periodo}), status_code=303)
 
 
 @router.post("/mensual/guardar-ejecucion")
@@ -235,7 +236,7 @@ async def kpi_guardar_ejecucion(request: Request):
     kpi_model = KpiModel(empresa_id=empresa_id)
     ok, msg = kpi_model.guardar_ejecucion_bulk(registros, periodo)
     _set_flash(request, "success" if ok else "danger", msg)
-    return RedirectResponse(url=f"/kpi/mensual?periodo={periodo}", status_code=303)
+    return RedirectResponse(url="/kpi/mensual?" + urlencode({"periodo": periodo}), status_code=303)
 
 
 # ── Vista semanal ─────────────────────────────────────────────────────────────

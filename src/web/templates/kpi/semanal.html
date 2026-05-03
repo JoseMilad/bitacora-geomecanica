@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (window.location.hash === '#collapseForm') {
     const el = document.getElementById('collapseForm');
     if (el) {
-      const bsCollapse = new bootstrap.Collapse(el, { show: true });
+      new bootstrap.Collapse(el, { show: true });
     }
   }
 });
