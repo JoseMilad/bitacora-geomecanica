@@ -17,8 +17,9 @@ from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth, actividad, ayuda
+from src.web.routers import dashboard, bitacora, labores, sostenimiento, reportes, configuracion, estandar, clasificaciones, auth, actividad, ayuda, kpi
 from src.models.auth import inicializar_tabla_usuarios
+from src.models.kpi_model import inicializar_tablas_kpi
 from src.utils.config import APP_VERSION
 
 # ── Instancia principal ───────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY)
 async def startup_event():
     """Inicializa la tabla de usuarios al arrancar."""
     inicializar_tabla_usuarios()
+    inicializar_tablas_kpi()
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ app.include_router(reportes.router, prefix="/reportes")
 app.include_router(configuracion.router, prefix="/configuracion")
 app.include_router(estandar.router, prefix="/estandar")
 app.include_router(clasificaciones.router, prefix="/clasificaciones")
+app.include_router(kpi.router, prefix="/kpi")
 app.include_router(actividad.router)
 app.include_router(ayuda.router)
 
