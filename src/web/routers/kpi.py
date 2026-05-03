@@ -60,6 +60,17 @@ def _puede_ingresar_avances(request: Request) -> bool:
     return user is not None and user.get("rol") in ("admin", "empresa_admin", "planeamiento")
 
 
+import re as _re
+_PERIODO_RE = _re.compile(r"^\d{4}-\d{2}$")
+
+
+def _sanitizar_periodo(periodo: str) -> str:
+    """Valida y devuelve el período en formato YYYY-MM; si no es válido, usa el mes actual."""
+    if periodo and _PERIODO_RE.match(periodo):
+        return periodo
+    return date.today().strftime("%Y-%m")
+
+
 def _periodos_disponibles() -> list[dict]:
     """Genera lista de los últimos 12 meses + próximos 2, en formato YYYY-MM."""
     hoy = date.today()
@@ -172,9 +183,7 @@ async def kpi_mensual(request: Request, periodo: str = ""):
 @router.post("/mensual/guardar-estandar")
 async def kpi_guardar_estandar(request: Request):
     form = await request.form()
-    periodo = form.get("periodo", "")
-    if not periodo:
-        periodo = date.today().strftime("%Y-%m")
+    periodo = _sanitizar_periodo(form.get("periodo", ""))
 
     empresa_id = _get_empresa_id(request)
     labores_info = _obtener_labores_info(empresa_id)
@@ -199,9 +208,7 @@ async def kpi_guardar_estandar(request: Request):
 @router.post("/mensual/guardar-ejecucion")
 async def kpi_guardar_ejecucion(request: Request):
     form = await request.form()
-    periodo = form.get("periodo", "")
-    if not periodo:
-        periodo = date.today().strftime("%Y-%m")
+    periodo = _sanitizar_periodo(form.get("periodo", ""))
 
     empresa_id = _get_empresa_id(request)
     labores_info = _obtener_labores_info(empresa_id)
