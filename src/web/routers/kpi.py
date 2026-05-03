@@ -98,8 +98,6 @@ def _periodos_disponibles() -> list[dict]:
             d = date(anio, mes, 1)
         value = d.strftime("%Y-%m")
         label = d.strftime("%B %Y").capitalize()
-        # Capitalize only first letter
-        label = label[0].upper() + label[1:]
         if not any(m["value"] == value for m in meses):
             meses.append({"value": value, "label": label})
     # Sort by value
