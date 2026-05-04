@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+{% block title %}Análisis KPI Mensual — RockLog{% endblock %}
+{% block page_title %}<i class="fa-solid fa-chart-column me-2 text-warning"></i>Análisis KPI{% endblock %}
+
+{% block extra_head %}
+<style>
+  .kpi-diff-pos { color: #198754; font-weight: 600; }
+  .kpi-diff-neg { color: #dc3545; font-weight: 600; }
+  .kpi-table th, .kpi-table td { white-space: nowrap; font-size: 0.85rem; }
+  .kpi-total-row { background: #1a2540 !important; color: #fff; font-weight: 700; }
+  .semaforo-verde { background: #d1fae5; }
+  .semaforo-amarillo { background: #fef3c7; }
+  .semaforo-rojo { background: #fee2e2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mt-3">
+
+  <!-- Encabezado con selector de período -->
+  <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+    <form method="GET" action="/kpi/mensual" class="d-flex align-items-center gap-2">
+      <label class="fw-semibold me-1 mb-0"><i class="fa-solid fa-calendar me-1 text-primary"></i>Período:</label>
+      <select name="periodo" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+        {% for p in periodos %}
+        <option value="{{ p.value }}" {% if p.value == periodo %}selected{% endif %}>{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="/kpi/semanal" class="btn btn-sm btn-outline-secondary ms-auto">
+      <i class="fa-solid fa-calendar-week me-1"></i>Vista Semanal
+    </a>
+  </div>
+
+  <!-- Tarjetas resumen -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1"><i class="fa-solid fa-bullseye me-1"></i>KPI General Proyectado</div>
+          <div class="fs-4 fw-bold text-primary">
+            {% if totales.kpi_general_proyectado is not none %}
+              {{ "%.4f"|format(totales.kpi_general_proyectado) }}
+              <small class="fs-6 fw-normal text-muted">und/m</small>
+            {% else %}
+              <span class="text-muted fs-6">Sin datos</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1"><i class="fa-solid fa-chart-line me-1"></i>KPI General Ejecutado</div>
+          <div class="fs-4 fw-bold
+            {% if totales.kpi_general_ejecutado is not none and totales.kpi_general_proyectado is not none %}
+              {% if totales.kpi_general_ejecutado >= totales.kpi_general_proyectado %}text-success{% else %}text-danger{% endif %}
+            {% else %}text-muted{% endif %}">
+            {% if totales.kpi_general_ejecutado is not none %}
+              {{ "%.4f"|format(totales.kpi_general_ejecutado) }}
+              <small class="fs-6 fw-normal text-muted">und/m</small>
+            {% else %}
+              <span class="text-muted fs-6">Sin datos</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1"><i class="fa-solid fa-road me-1"></i>Metros Avanzados Totales</div>
+          <div class="fs-4 fw-bold text-dark">
+            {{ "%.2f"|format(totales.metros_avanzados) }}
+            <small class="fs-6 fw-normal text-muted">m</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Diferencia KPI General</div>
+          <div class="fs-4 fw-bold
+            {% if totales.diferencia_general is not none %}
+              {% if totales.diferencia_general >= 0 %}text-success
+              {% elif totales.diferencia_general >= -2 %}text-warning
+              {% else %}text-danger{% endif %}
+            {% else %}text-muted{% endif %}">
+            {% if totales.diferencia_general is not none %}
+              {% if totales.diferencia_general >= 0 %}+{% endif %}{{ "%.4f"|format(totales.diferencia_general) }}
+            {% else %}
+              <span class="text-muted fs-6">Sin datos</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav Tabs -->
+  <ul class="nav nav-tabs border-0 mb-0" id="kpiTabs">
+    <li class="nav-item">
+      <a class="nav-link active fw-semibold border" href="#tabAnalisis" data-bs-toggle="tab">
+        <i class="fa-solid fa-table-cells me-1"></i>Análisis
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link border" href="#tabEstandar" data-bs-toggle="tab">
+        <i class="fa-solid fa-sliders me-1"></i>KPI Estándar
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link border" href="#tabEjecucion" data-bs-toggle="tab">
+        <i class="fa-solid fa-pen-to-square me-1"></i>Ingresar Ejecución
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link border" href="#tabGrafico" data-bs-toggle="tab">
+        <i class="fa-solid fa-chart-bar me-1"></i>Gráfico
+      </a>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- Tab: Análisis -->
+    <div class="tab-pane fade show active" id="tabAnalisis">
+      <div class="card shadow-sm border-0 rounded-0 rounded-bottom rounded-end">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover kpi-table mb-0">
+              <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                <tr>
+                  <th>Tipo Labor</th>
+                  <th>Fase</th>
+                  <th class="text-end">KPI Proyectado<br><small class="fw-normal text-muted">(und/m)</small></th>
+                  <th class="text-end">Metros Avanzados<br><small class="fw-normal text-muted">(m)</small></th>
+                  <th class="text-end">Und Proyectadas</th>
+                  <th class="text-end">Und Instaladas</th>
+                  <th class="text-end">KPI Ejecutado<br><small class="fw-normal text-muted">(und/m)</small></th>
+                  <th class="text-end">Diferencia KPI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if filas %}
+                  {% for f in filas %}
+                  <tr class="
+                    {% if f.diferencia_kpi is not none %}
+                      {% if f.diferencia_kpi >= 0 %}semaforo-verde
+                      {% elif f.diferencia_kpi >= -2 %}semaforo-amarillo
+                      {% else %}semaforo-rojo{% endif %}
+                    {% endif %}">
+                    <td class="fw-semibold">{{ f.labor }}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary-emphasis">{{ f.fase or '—' }}</span></td>
+                    <td class="text-end">{{ "%.4f"|format(f.kpi_proyectado) }}</td>
+                    <td class="text-end">{{ "%.2f"|format(f.metros_avanzados) }}</td>
+                    <td class="text-end">{{ "%.2f"|format(f.und_proyectadas) }}</td>
+                    <td class="text-end">{{ "%.2f"|format(f.und_instaladas) }}</td>
+                    <td class="text-end">
+                      {% if f.kpi_ejecutado is not none %}{{ "%.4f"|format(f.kpi_ejecutado) }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                      {% if f.diferencia_kpi is not none %}
+                        <span class="{% if f.diferencia_kpi >= 0 %}kpi-diff-pos{% else %}kpi-diff-neg{% endif %}">
+                          {% if f.diferencia_kpi >= 0 %}+{% endif %}{{ "%.4f"|format(f.diferencia_kpi) }}
+                        </span>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                      <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
+                      No hay labores registradas. Agrega labores en el módulo <a href="/labores">Labores</a>.
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+              {% if filas %}
+              <tfoot>
+                <tr class="kpi-total-row">
+                  <td colspan="2">KPI GENERAL</td>
+                  <td class="text-end">
+                    {% if totales.kpi_general_proyectado is not none %}{{ "%.4f"|format(totales.kpi_general_proyectado) }}{% else %}—{% endif %}
+                  </td>
+                  <td class="text-end">{{ "%.2f"|format(totales.metros_avanzados) }}</td>
+                  <td class="text-end">{{ "%.2f"|format(totales.und_proyectadas) }}</td>
+                  <td class="text-end">{{ "%.2f"|format(totales.und_instaladas) }}</td>
+                  <td class="text-end">
+                    {% if totales.kpi_general_ejecutado is not none %}{{ "%.4f"|format(totales.kpi_general_ejecutado) }}{% else %}—{% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if totales.diferencia_general is not none %}
+                      {% if totales.diferencia_general >= 0 %}+{% endif %}{{ "%.4f"|format(totales.diferencia_general) }}
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+              </tfoot>
+              {% endif %}
+            </table>
+          </div>
+        </div>
+        <!-- Leyenda semáforo -->
+        <div class="card-footer bg-white border-0 pt-0">
+          <small class="text-muted">
+            <span class="semaforo-verde px-2 py-1 rounded me-2">■ KPI ≥ 0 (Cumple)</span>
+            <span class="semaforo-amarillo px-2 py-1 rounded me-2">■ -2 ≤ KPI &lt; 0 (Alerta)</span>
+            <span class="semaforo-rojo px-2 py-1 rounded">■ KPI &lt; -2 (Crítico)</span>
+          </small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: KPI Estándar -->
+    <div class="tab-pane fade" id="tabEstandar">
+      <div class="card shadow-sm border-0 rounded-0 rounded-bottom rounded-end">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-sliders me-2 text-primary"></i>KPI Estándar Proyectado — {{ periodo }}
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/kpi/mensual/guardar-estandar">
+            <input type="hidden" name="periodo" value="{{ periodo }}" />
+            <div class="table-responsive">
+              <table class="table kpi-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>Labor</th>
+                    <th>Fase</th>
+                    <th>KPI Proyectado (und/m)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for f in filas %}
+                  <tr>
+                    <td class="fw-semibold">{{ f.labor }}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary-emphasis">{{ f.fase or '—' }}</span></td>
+                    <td style="width:200px;">
+                      <input type="number" step="0.0001" min="0"
+                             name="kpi_proy_{{ f.labor }}"
+                             value="{{ "%.4f"|format(f.kpi_proyectado) }}"
+                             class="form-control form-control-sm" />
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="3" class="text-center text-muted py-4">
+                      No hay labores registradas.
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if filas %}
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk me-1"></i>Guardar KPI Estándar
+            </button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Ingresar Ejecución -->
+    <div class="tab-pane fade" id="tabEjecucion">
+      <div class="card shadow-sm border-0 rounded-0 rounded-bottom rounded-end">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-pen-to-square me-2 text-success"></i>Ingresar Ejecución Real — {{ periodo }}
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/kpi/mensual/guardar-ejecucion">
+            <input type="hidden" name="periodo" value="{{ periodo }}" />
+            <div class="table-responsive">
+              <table class="table kpi-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>Labor</th>
+                    <th>Fase</th>
+                    <th>Metros Avanzados (m)</th>
+                    <th>Unidades Instaladas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for f in filas %}
+                  <tr>
+                    <td class="fw-semibold">{{ f.labor }}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary-emphasis">{{ f.fase or '—' }}</span></td>
+                    <td style="width:180px;">
+                      <input type="number" step="0.01" min="0"
+                             name="metros_{{ f.labor }}"
+                             value="{{ "%.2f"|format(f.metros_avanzados) }}"
+                             class="form-control form-control-sm" />
+                    </td>
+                    <td style="width:180px;">
+                      <input type="number" step="0.01" min="0"
+                             name="unidades_{{ f.labor }}"
+                             value="{{ "%.2f"|format(f.und_instaladas) }}"
+                             class="form-control form-control-sm" />
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                      No hay labores registradas.
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if filas %}
+            <button type="submit" class="btn btn-success">
+              <i class="fa-solid fa-floppy-disk me-1"></i>Guardar Ejecución
+            </button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Gráfico -->
+    <div class="tab-pane fade" id="tabGrafico">
+      <div class="card shadow-sm border-0 rounded-0 rounded-bottom rounded-end">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-chart-bar me-2 text-warning"></i>KPI Proyectado vs Ejecutado — {{ periodo }}
+        </div>
+        <div class="card-body">
+          {% if chart_labels %}
+          <canvas id="chartKPI" style="max-height:400px;"></canvas>
+          {% else %}
+          <div class="text-center text-muted py-5">
+            <i class="fa-solid fa-chart-bar fa-3x mb-3 d-block opacity-25"></i>
+            <p>No hay datos con metros avanzados para graficar.</p>
+            <p class="small">Ingresa los metros avanzados en la pestaña "Ingresar Ejecución".</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if chart_labels %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const labels = {{ chart_labels | tojson }};
+const kpiProy = {{ chart_kpi_proy | tojson }};
+const kpiEjec = {{ chart_kpi_ejec | tojson }};
+
+const ctx = document.getElementById('chartKPI').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: 'KPI Proyectado',
+        data: kpiProy,
+        backgroundColor: 'rgba(26,37,64,0.8)',
+        borderRadius: 4,
+      },
+      {
+        label: 'KPI Ejecutado',
+        data: kpiEjec,
+        backgroundColor: 'rgba(26,111,196,0.8)',
+        borderRadius: 4,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        callbacks: {
+          label: function(ctx) {
+            return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + ' und/m';
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        title: { display: true, text: 'KPI (und/m)' },
+        beginAtZero: true,
+      }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}
