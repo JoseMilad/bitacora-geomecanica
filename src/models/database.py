@@ -212,6 +212,21 @@ class DatabaseManager:
                     detalle         TEXT,
                     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS historial_cambios_labor (
+                    id                  INT PRIMARY KEY AUTO_INCREMENT,
+                    empresa_id          INT DEFAULT 1,
+                    labor               VARCHAR(255) NOT NULL,
+                    usuario             VARCHAR(100) DEFAULT '',
+                    campo_modificado    VARCHAR(100) NOT NULL,
+                    valor_anterior      TEXT,
+                    valor_nuevo         TEXT,
+                    sistema_referencia  VARCHAR(50) DEFAULT '',
+                    observacion         TEXT,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_historial_labor (labor, empresa_id),
+                    INDEX idx_historial_fecha (created_at)
+                );
             """)
             conn.commit()
 
@@ -338,7 +353,7 @@ class DatabaseManager:
     #  BITÁCORA – operaciones CRUD
     # ══════════════════════════════════════════════════════════════════════
 
-    def guardar_registro(self, datos: dict) -> tuple[bool, str]:
+    def guardar_registro(self, datos: dict, usuario: str = "sistema") -> tuple[bool, str]:
         """
         Guarda un nuevo registro en la bitácora.
 
@@ -347,6 +362,7 @@ class DatabaseManager:
         Args:
             datos: Diccionario con claves Fecha, Turno, Labor, GSI, RMR,
                    Soporte, Observaciones (e imagen_path opcional).
+            usuario: Usuario que está guardando el registro.
 
         Returns:
             (True, mensaje) si se guardó, (False, mensaje) si hubo duplicado o error.
@@ -368,18 +384,19 @@ class DatabaseManager:
                         False,
                         "DUPLICADO: Ya existe un registro para esta labor en este turno y fecha.",
                     )
-                return self._insertar_bitacora(conn, datos)
+                return self._insertar_bitacora(conn, datos, usuario)
             finally:
                 conn.close()
         except Exception as e:
             return False, f"Error al guardar: {e}"
 
-    def guardar_registro_forzado(self, datos: dict) -> tuple[bool, str]:
+    def guardar_registro_forzado(self, datos: dict, usuario: str = "sistema") -> tuple[bool, str]:
         """
         Guarda un registro omitiendo la verificación de duplicados.
 
         Args:
             datos: Diccionario con los datos del registro.
+            usuario: Usuario que está guardando el registro.
 
         Returns:
             (True, mensaje) o (False, mensaje de error).
@@ -387,19 +404,41 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             try:
-                return self._insertar_bitacora(conn, datos)
+                return self._insertar_bitacora(conn, datos, usuario)
             finally:
                 conn.close()
         except Exception as e:
             return False, f"Error al guardar: {e}"
 
-    def _insertar_bitacora(self, conn, datos: dict) -> tuple[bool, str]:
-        """Inserta una fila en la tabla bitacora."""
+    def _insertar_bitacora(self, conn, datos: dict, usuario: str = "sistema") -> tuple[bool, str]:
+        """
+        Inserta una fila en la tabla bitacora.
+        
+        Args:
+            conn: Conexión a la base de datos.
+            datos: Diccionario con los datos del registro.
+            usuario: Usuario que está guardando el registro.
+        """
+        labor = datos.get("Labor", "")
+        
+        # Get previous values for comparison
+        prev_row = conn.execute(
+            "SELECT * FROM bitacora WHERE labor=? AND empresa_id=? ORDER BY id DESC LIMIT 1",
+            (labor, self.empresa_id),
+        ).fetchone()
+        
+        # Get catalog values for comparison
+        catalog_row = conn.execute(
+            "SELECT * FROM labores WHERE labor=? AND empresa_id=?",
+            (labor, self.empresa_id),
+        ).fetchone()
+        
         # Collect custom classification values (any key outside the standard schema)
         _standard_keys = {"Fecha", "Turno", "Labor", "GSI", "RMR", "Soporte", "Observaciones", "imagen_path"}
         extra = {k: v for k, v in datos.items() if k not in _standard_keys}
         datos_adicionales_json = json.dumps(extra, ensure_ascii=False) if extra else None
 
+        # Insert the new registro
         conn.execute(
             """INSERT INTO bitacora (empresa_id, fecha, turno, labor, gsi, rmr, soporte,
                                      observaciones, imagen_path, datos_adicionales)
@@ -408,7 +447,7 @@ class DatabaseManager:
                 self.empresa_id,
                 datos.get("Fecha", ""),
                 datos.get("Turno", ""),
-                datos.get("Labor", ""),
+                labor,
                 datos.get("GSI", ""),
                 datos.get("RMR", ""),
                 datos.get("Soporte", ""),
@@ -418,6 +457,75 @@ class DatabaseManager:
             ),
         )
         conn.commit()
+        
+        # Detect changes and update catalog + history
+        campos_a_comparar = ["GSI", "RMR"] + list(extra.keys())
+        sistema_ref = extra.get("Sistema_Referencia", "")
+        
+        for campo in campos_a_comparar:
+            if campo == "Sistema_Referencia":
+                continue  # Skip sistema_referencia itself
+            
+            nuevo_valor = datos.get(campo, "")
+            
+            # Determine previous value
+            if prev_row:
+                # Compare against previous entry
+                if campo in ["GSI", "RMR"]:
+                    anterior_valor = prev_row.get(campo.lower(), "")
+                else:
+                    prev_extra = self._expand_bitacora_datos_adicionales(prev_row.get("datos_adicionales"))
+                    anterior_valor = prev_extra.get(campo, "")
+            elif catalog_row:
+                # No previous entry, compare against catalog
+                if campo in ["GSI", "RMR"]:
+                    anterior_valor = catalog_row.get(campo.lower(), "")
+                else:
+                    catalog_extra = self._expand_bitacora_datos_adicionales(catalog_row.get("datos_adicionales"))
+                    anterior_valor = catalog_extra.get(campo, "")
+            else:
+                # No previous data at all
+                anterior_valor = ""
+            
+            # Check if changed
+            if str(nuevo_valor).strip() and str(nuevo_valor) != str(anterior_valor):
+                # Register change in history
+                self.registrar_cambio_labor(
+                    labor=labor,
+                    usuario=usuario,
+                    campo=campo,
+                    valor_anterior=str(anterior_valor),
+                    valor_nuevo=str(nuevo_valor),
+                    sistema_referencia=sistema_ref,
+                    observacion=f"Cambio detectado al guardar bitácora {datos.get('Fecha', '')}"
+                )
+                
+                # Update catalog if it exists
+                if catalog_row:
+                    if campo in ["GSI", "RMR"]:
+                        conn.execute(
+                            f"UPDATE labores SET {campo.lower()}=? WHERE labor=? AND empresa_id=?",
+                            (nuevo_valor, labor, self.empresa_id),
+                        )
+                    else:
+                        # Update custom classification in datos_adicionales
+                        catalog_extra = self._expand_bitacora_datos_adicionales(catalog_row.get("datos_adicionales"))
+                        catalog_extra[campo] = nuevo_valor
+                        new_json = json.dumps(catalog_extra, ensure_ascii=False)
+                        conn.execute(
+                            "UPDATE labores SET datos_adicionales=? WHERE labor=? AND empresa_id=?",
+                            (new_json, labor, self.empresa_id),
+                        )
+                    
+                    # Also update sistema_referencia if provided
+                    if sistema_ref:
+                        conn.execute(
+                            "UPDATE labores SET sistema_referencia=? WHERE labor=? AND empresa_id=?",
+                            (sistema_ref, labor, self.empresa_id),
+                        )
+                    
+                    conn.commit()
+        
         return True, "Registro guardado exitosamente"
 
     @staticmethod
@@ -1680,6 +1788,79 @@ class DatabaseManager:
                 conn.close()
         except Exception as e:
             print(f"Error al registrar actividad: {e}")
+
+    def registrar_cambio_labor(
+        self,
+        labor: str,
+        usuario: str,
+        campo: str,
+        valor_anterior: str,
+        valor_nuevo: str,
+        sistema_referencia: str = "",
+        observacion: str = ""
+    ) -> None:
+        """
+        Registra un cambio en las clasificaciones de una labor en el historial.
+
+        Args:
+            labor: Nombre de la labor modificada.
+            usuario: Usuario que realizó el cambio.
+            campo: Campo modificado (GSI, RMR, u otra clasificación).
+            valor_anterior: Valor anterior del campo.
+            valor_nuevo: Nuevo valor del campo.
+            sistema_referencia: Sistema de referencia usado (RMR, GSI, etc.).
+            observacion: Observación adicional sobre el cambio.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                conn.execute(
+                    """INSERT INTO historial_cambios_labor 
+                       (empresa_id, labor, usuario, campo_modificado, valor_anterior, 
+                        valor_nuevo, sistema_referencia, observacion)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        self.empresa_id,
+                        str(labor)[:255],
+                        str(usuario)[:100],
+                        str(campo)[:100],
+                        str(valor_anterior)[:500] if valor_anterior else "",
+                        str(valor_nuevo)[:500],
+                        str(sistema_referencia)[:50],
+                        str(observacion)[:500]
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"Error al registrar cambio en historial: {e}")
+
+    def obtener_historial_labor(self, labor: str, limite: int = 50) -> list[dict]:
+        """
+        Obtiene el historial de cambios de una labor específica.
+
+        Args:
+            labor: Nombre de la labor.
+            limite: Número máximo de registros a retornar.
+
+        Returns:
+            Lista de dicts con los cambios históricos.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                rows = conn.execute(
+                    """SELECT * FROM historial_cambios_labor 
+                       WHERE labor=? AND empresa_id=? 
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (labor, self.empresa_id, limite),
+                ).fetchall()
+                return [dict(r) for r in rows]
+            finally:
+                conn.close()
+        except Exception:
+            return []
 
     def obtener_actividad_log(self, limite: int = 50) -> list[dict]:
         """

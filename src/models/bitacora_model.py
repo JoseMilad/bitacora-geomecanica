@@ -288,7 +288,7 @@ class BitacoraModel:
         except Exception as e:
             return False, f"Error al deshacer: {str(e)}"
 
-    def guardar_registro(self, datos):
+    def guardar_registro(self, datos, usuario="sistema"):
         """
         Guarda un nuevo registro en la bitácora.
         Verifica duplicados por (Fecha, Turno, Labor) antes de guardar.
@@ -296,6 +296,7 @@ class BitacoraModel:
         
         Args:
             datos (dict): Diccionario con los datos del registro
+            usuario (str): Usuario que está guardando el registro
         
         Returns:
             tuple: (éxito: bool, mensaje: str)
@@ -303,23 +304,24 @@ class BitacoraModel:
         try:
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            exito, mensaje = self.db.guardar_registro(datos)
+            exito, mensaje = self.db.guardar_registro(datos, usuario)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
                 labor = datos.get("Labor", "")
-                self.db.registrar_actividad("sistema", "crear_registro",
+                self.db.registrar_actividad(usuario, "crear_registro",
                                             f"Nuevo registro: {datos.get('Fecha', '')} - {labor}")
             return exito, mensaje
         except Exception as e:
             return False, f"Error al guardar: {str(e)}"
 
-    def guardar_registro_forzado(self, datos):
+    def guardar_registro_forzado(self, datos, usuario="sistema"):
         """
         Guarda un registro omitiendo la verificación de duplicados.
         Usa SQLite como almacenamiento primario y sincroniza a Excel.
         
         Args:
             datos (dict): Diccionario con los datos del registro
+            usuario (str): Usuario que está guardando el registro
         
         Returns:
             tuple: (éxito: bool, mensaje: str)
@@ -327,7 +329,7 @@ class BitacoraModel:
         try:
             self._hacer_backup()
             self._guardar_snapshot("Bitacora")
-            exito, mensaje = self.db.guardar_registro_forzado(datos)
+            exito, mensaje = self.db.guardar_registro_forzado(datos, usuario)
             if exito:
                 self._sincronizar_a_excel("Bitacora")
                 labor = datos.get("Labor", "")
