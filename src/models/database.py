@@ -710,16 +710,63 @@ class DatabaseManager:
 
     def obtener_datos_labor(self, nombre: str) -> dict | None:
         """
-        Retorna los datos técnicos de una labor o None si no existe.
+        Retorna los datos técnicos de una labor, priorizando el último registro
+        de bitácora sobre los datos del catálogo.
 
         Returns:
             dict con claves Labor, GSI, RMR, Soporte, Tipo, Fase,
-            Clasificacion_KPI y además las clasificaciones personalizadas
-            almacenadas en datos_adicionales — o None.
+            Clasificacion_KPI, Sistema_Referencia y además las clasificaciones
+            personalizadas almacenadas en datos_adicionales — o None.
         """
         try:
             conn = self._get_connection()
             try:
+                # Primero intentar obtener el último registro de bitácora
+                ultimo_reg = conn.execute(
+                    "SELECT * FROM bitacora WHERE labor=? AND empresa_id=? ORDER BY id DESC LIMIT 1",
+                    (nombre, self.empresa_id),
+                ).fetchone()
+                
+                # Si existe un registro previo, usarlo como base
+                if ultimo_reg:
+                    result = {
+                        "Labor": ultimo_reg["labor"],
+                        "GSI": ultimo_reg["gsi"],
+                        "RMR": ultimo_reg["rmr"],
+                        "Soporte": ultimo_reg["soporte"],
+                    }
+                    # Merge custom classification values from last entry
+                    raw = ultimo_reg.get("datos_adicionales") or ""
+                    if raw:
+                        try:
+                            extra = json.loads(raw)
+                            if isinstance(extra, dict):
+                                result.update(extra)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    
+                    # Obtener metadata adicional del catálogo (Tipo, Fase, etc.)
+                    catalog_row = conn.execute(
+                        "SELECT tipo, fase, clasificacion_kpi, sistema_referencia FROM labores WHERE labor=? AND empresa_id=?",
+                        (nombre, self.empresa_id),
+                    ).fetchone()
+                    if catalog_row:
+                        result["Tipo"] = catalog_row["tipo"]
+                        result["Fase"] = catalog_row["fase"]
+                        result["Clasificacion_KPI"] = catalog_row["clasificacion_kpi"]
+                        # Si el último registro tiene sistema_referencia en datos_adicionales, usarlo
+                        if "Sistema_Referencia" not in result:
+                            result["Sistema_Referencia"] = catalog_row.get("sistema_referencia", "") or ""
+                    else:
+                        # No hay entrada en catálogo, usar valores por defecto
+                        result.setdefault("Tipo", "Temporal")
+                        result.setdefault("Fase", "")
+                        result.setdefault("Clasificacion_KPI", "")
+                        result.setdefault("Sistema_Referencia", "")
+                    
+                    return result
+                
+                # Si no hay registro previo, usar datos del catálogo
                 row = conn.execute(
                     "SELECT * FROM labores WHERE labor=? AND empresa_id=?",
                     (nombre, self.empresa_id),
@@ -1466,7 +1513,7 @@ class DatabaseManager:
                 ).fetchone()
                 if not row:
                     return None
-                return {
+                result = {
                     "id": row["id"],
                     "Fecha": row["fecha"],
                     "Turno": row["turno"],
@@ -1478,6 +1525,16 @@ class DatabaseManager:
                     "imagen_path": row["imagen_path"],
                     "created_at": row["created_at"],
                 }
+                # Merge custom classification values from datos_adicionales
+                raw = row.get("datos_adicionales") or ""
+                if raw:
+                    try:
+                        extra = json.loads(raw)
+                        if isinstance(extra, dict):
+                            result.update(extra)
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                return result
             finally:
                 conn.close()
         except Exception:
