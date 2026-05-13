@@ -41,7 +41,7 @@
                 {% for e in empresas %}
                   {% if e.id == u.get('empresa_id', 1) %}{% set emp_name = e.nombre %}{% endif %}
                 {% endfor %}
-                <small>{{ emp_name or 'Empresa Principal' }}</small>
+                <small>{{ emp_name if emp_name else '—' }}</small>
               </td>
               <td>
                 {% if u.activo %}

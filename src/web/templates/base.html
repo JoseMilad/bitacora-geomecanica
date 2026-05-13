@@ -15,6 +15,7 @@
 <body>
   <div class="d-flex" id="app-wrapper">
     <!-- ── Sidebar ────────────────────────────────────────────────────── -->
+    {% set user = request.session.get('user') %}
     <nav id="sidebar">
       <div class="sidebar-header">
         <i class="fa-solid fa-mountain-sun me-2"></i>
@@ -47,11 +48,20 @@
             <i class="fa-solid fa-layer-group me-2"></i><span>Sostenimiento</span>
           </a>
         </li>
+        {% if user and user.get('rol') == 'admin' %}
         <li>
           <a href="/kpi/mensual" class="sidebar-link {% if active_page == 'kpi' %}active{% endif %}">
             <i class="fa-solid fa-chart-column me-2"></i><span>KPI</span>
           </a>
         </li>
+        {% else %}
+        <li>
+          <a href="#" class="sidebar-link disabled" onclick="event.preventDefault(); alert('Función en desarrollo. Solo disponible para el administrador global.');" title="Función en desarrollo">
+            <i class="fa-solid fa-chart-column me-2"></i><span>KPI</span>
+            <small class="badge bg-warning text-dark ms-2">Dev</small>
+          </a>
+        </li>
+        {% endif %}
         <li>
           <a href="/reportes" class="sidebar-link {% if active_page == 'reportes' %}active{% endif %}">
             <i class="fa-solid fa-chart-bar me-2"></i><span>Reportes</span>
@@ -91,7 +101,6 @@
           <button class="btn btn-sm btn-outline-secondary" id="darkModeToggle" title="Alternar modo oscuro">
             <i class="fa-solid fa-moon" id="darkModeIcon"></i>
           </button>
-          {% set user = request.session.get('user') %}
           {% if user %}
           <span class="text-muted small d-none d-md-inline">
             <i class="fa-solid fa-user-circle me-1"></i>{{ user.get('nombre') or user.get('username', '') }}
