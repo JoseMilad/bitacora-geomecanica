@@ -109,12 +109,15 @@ async def agregar_fila(
     else:
         nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
 
+    # Normalize input values once
+    input_tipo = tipo.strip()
+    
     # Issue 6: Check for duplicate range + tipo before adding
     for fila in filas:
         if tipo_valor == "texto":
             fila_val = str(fila.get(cols[0], "")).strip()
             fila_tipo = str(fila.get("Tipo", "")).strip()
-            if (fila_val == val_min.strip() and fila_tipo == tipo.strip()):
+            if (fila_val == val_min.strip() and fila_tipo == input_tipo):
                 _set_flash(request, "error",
                            f"Ya existe un estándar para el valor '{val_min}' con tipo '{tipo}'.")
                 sistema_seguro = _validar_sistema(sistema)
@@ -131,16 +134,18 @@ async def agregar_fila(
             try:
                 if (float(fila_min) == float(input_min) and 
                     float(fila_max) == float(input_max) and 
-                    fila_tipo == tipo.strip()):
+                    fila_tipo == input_tipo):
                     _set_flash(request, "error",
                                f"Ya existe un estándar para el rango '{input_min}–{input_max}' con tipo '{tipo}'.")
                     sistema_seguro = _validar_sistema(sistema)
                     return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                # Log conversion errors for debugging (values may not be numeric)
+                # This is expected for text-based classifications
                 # If conversion fails, compare as strings
                 if (fila_min == input_min and 
                     fila_max == input_max and 
-                    fila_tipo == tipo.strip()):
+                    fila_tipo == input_tipo):
                     _set_flash(request, "error",
                                f"Ya existe un estándar para el rango '{input_min}–{input_max}' con tipo '{tipo}'.")
                     sistema_seguro = _validar_sistema(sistema)

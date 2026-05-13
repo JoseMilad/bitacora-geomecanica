@@ -56,9 +56,9 @@
         </li>
         {% else %}
         <li>
-          <a href="#" class="sidebar-link disabled" onclick="event.preventDefault(); alert('Función en desarrollo. Solo disponible para el administrador global.');" title="Función en desarrollo">
+          <a href="#" class="sidebar-link disabled" id="kpiDevLink" title="Función en desarrollo">
             <i class="fa-solid fa-chart-column me-2"></i><span>KPI</span>
-            <small class="badge bg-warning text-dark ms-2">Dev</small>
+            <small class="badge bg-warning text-dark ms-2" aria-label="Función en desarrollo">Dev</small>
           </a>
         </li>
         {% endif %}
@@ -179,6 +179,18 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Custom JS -->
   <script src="/static/js/main.js"></script>
+  <script>
+    // Handle KPI dev link click
+    document.addEventListener('DOMContentLoaded', function() {
+      const kpiDevLink = document.getElementById('kpiDevLink');
+      if (kpiDevLink) {
+        kpiDevLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          alert('Función en desarrollo. Solo disponible para el administrador global.');
+        });
+      }
+    });
+  </script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
