@@ -314,8 +314,11 @@ function actualizarTiposEntradaBitacora() {
 // Auto-calcular soporte al cambiar cualquier campo de clasificación
 let _calcTimer = null;
 function calcularSoporteAuto(sistemaCambiado) {
-  // Solo auto-calcula si el sistema cambiado es el de referencia actual
-  if (_getSistemaReferencia() !== sistemaCambiado) return;
+  // If a reference system is selected, only auto-calculate for that system
+  const sistemaRef = _getSistemaReferencia();
+  if (sistemaRef && sistemaRef !== sistemaCambiado) return;
+  
+  // If no reference system is selected, auto-calculate for the changed system
   clearTimeout(_calcTimer);
   _calcTimer = setTimeout(() => calcularSoporteManual(sistemaCambiado), 700);
 }

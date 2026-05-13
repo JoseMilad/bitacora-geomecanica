@@ -109,23 +109,46 @@ async def agregar_fila(
     else:
         nueva = {cols[0]: val_min, cols[1]: val_max, "Tipo": tipo, "Soporte": soporte.upper()}
 
+    # Normalize input values once
+    input_tipo = tipo.strip()
+    
     # Issue 6: Check for duplicate range + tipo before adding
     for fila in filas:
         if tipo_valor == "texto":
-            if (str(fila.get(cols[0], "")).strip() == val_min.strip()
-                    and str(fila.get("Tipo", "")).strip() == tipo.strip()):
+            fila_val = str(fila.get(cols[0], "")).strip()
+            fila_tipo = str(fila.get("Tipo", "")).strip()
+            if (fila_val == val_min.strip() and fila_tipo == input_tipo):
                 _set_flash(request, "error",
                            f"Ya existe un estándar para el valor '{val_min}' con tipo '{tipo}'.")
                 sistema_seguro = _validar_sistema(sistema)
                 return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
         else:
-            if (str(fila.get(cols[0], "")).strip() == val_min.strip()
-                    and str(fila.get(cols[1], "")).strip() == val_max.strip()
-                    and str(fila.get("Tipo", "")).strip() == tipo.strip()):
-                _set_flash(request, "error",
-                           f"Ya existe un estándar para el rango '{val_min}–{val_max}' con tipo '{tipo}'.")
-                sistema_seguro = _validar_sistema(sistema)
-                return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
+            # For numeric values, compare both as strings after stripping
+            fila_min = str(fila.get(cols[0], "")).strip()
+            fila_max = str(fila.get(cols[1], "")).strip()
+            fila_tipo = str(fila.get("Tipo", "")).strip()
+            input_min = val_min.strip()
+            input_max = val_max.strip()
+            
+            # Compare as floats if both are numeric to handle "1.0" vs "1" cases
+            try:
+                if (float(fila_min) == float(input_min) and 
+                    float(fila_max) == float(input_max) and 
+                    fila_tipo == input_tipo):
+                    _set_flash(request, "error",
+                               f"Ya existe un estándar para el rango '{input_min}–{input_max}' con tipo '{tipo}'.")
+                    sistema_seguro = _validar_sistema(sistema)
+                    return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
+            except (ValueError, TypeError):
+                # If numeric conversion fails, fall back to string comparison
+                # This handles numeric ranges with non-numeric values or unexpected data types
+                if (fila_min == input_min and 
+                    fila_max == input_max and 
+                    fila_tipo == input_tipo):
+                    _set_flash(request, "error",
+                               f"Ya existe un estándar para el rango '{input_min}–{input_max}' con tipo '{tipo}'.")
+                    sistema_seguro = _validar_sistema(sistema)
+                    return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
 
     filas.append(nueva)
 
