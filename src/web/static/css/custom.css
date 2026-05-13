@@ -515,3 +515,178 @@ body {
 #darkModeToggle:hover {
   transform: rotate(20deg);
 }
+
+/* ── Toast Notifications ─────────────────────────────────────── */
+#toastContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  max-width: 400px;
+}
+
+.custom-toast {
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  margin-bottom: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: slideInRight 0.3s ease-out;
+  border-left: 4px solid;
+  min-width: 320px;
+  max-width: 100%;
+}
+
+.custom-toast.toast-success {
+  border-left-color: var(--success);
+}
+
+.custom-toast.toast-error {
+  border-left-color: var(--danger);
+}
+
+.custom-toast.toast-warning {
+  border-left-color: var(--accent);
+}
+
+.custom-toast.toast-info {
+  border-left-color: var(--primary);
+}
+
+.custom-toast .toast-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.custom-toast.toast-success .toast-icon {
+  color: var(--success);
+}
+
+.custom-toast.toast-error .toast-icon {
+  color: var(--danger);
+}
+
+.custom-toast.toast-warning .toast-icon {
+  color: var(--accent);
+}
+
+.custom-toast.toast-info .toast-icon {
+  color: var(--primary);
+}
+
+.custom-toast .toast-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.custom-toast .toast-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.custom-toast .toast-message {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.custom-toast .toast-close {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity var(--transition-speed);
+  flex-shrink: 0;
+}
+
+.custom-toast .toast-close:hover {
+  opacity: 1;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.custom-toast.toast-hiding {
+  animation: slideOutRight 0.2s ease-in forwards;
+}
+
+.dark-mode .custom-toast {
+  background-color: var(--dm-card);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.dark-mode .custom-toast .toast-title {
+  color: var(--dm-text);
+}
+
+.dark-mode .custom-toast .toast-message {
+  color: var(--dm-text-muted);
+}
+
+.dark-mode .custom-toast .toast-close {
+  color: var(--dm-text-muted);
+}
+
+/* ── Confirmation Modal ──────────────────────────────────────── */
+.confirm-modal .modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+
+.confirm-modal .modal-header {
+  border-bottom: 1px solid var(--card-border);
+  padding: 1.25rem 1.5rem;
+}
+
+.confirm-modal .modal-body {
+  padding: 1.5rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.confirm-modal .modal-footer {
+  border-top: 1px solid var(--card-border);
+  padding: 1rem 1.5rem;
+}
+
+.dark-mode .confirm-modal .modal-header,
+.dark-mode .confirm-modal .modal-footer {
+  border-color: var(--dm-border);
+}

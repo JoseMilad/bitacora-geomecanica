@@ -201,3 +201,181 @@ document.addEventListener('DOMContentLoaded', function () {
     }, 5000);
   });
 });
+
+// ── Toast Notifications ───────────────────────────────────────────────────────
+/**
+ * Muestra una notificación toast estética.
+ * @param {string} message - Mensaje a mostrar
+ * @param {string} type - Tipo: 'success', 'error', 'warning', 'info'
+ * @param {string} [title] - Título opcional
+ * @param {number} [duration] - Duración en ms (default: 4000)
+ */
+function showToast(message, type, title, duration) {
+  type = type || 'info';
+  duration = duration || 4000;
+  
+  // Ensure toast container exists
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    document.body.appendChild(container);
+  }
+  
+  // Icon mapping
+  const icons = {
+    success: '<i class="fa-solid fa-circle-check"></i>',
+    error: '<i class="fa-solid fa-circle-xmark"></i>',
+    warning: '<i class="fa-solid fa-triangle-exclamation"></i>',
+    info: '<i class="fa-solid fa-circle-info"></i>'
+  };
+  
+  // Title mapping
+  const titles = {
+    success: title || 'Éxito',
+    error: title || 'Error',
+    warning: title || 'Advertencia',
+    info: title || 'Información'
+  };
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = `custom-toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type]}</div>
+    <div class="toast-content">
+      <div class="toast-title">${titles[type]}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close" aria-label="Cerrar">&times;</button>
+  `;
+  
+  container.appendChild(toast);
+  
+  // Close button handler
+  const closeBtn = toast.querySelector('.toast-close');
+  closeBtn.addEventListener('click', function() {
+    removeToast(toast);
+  });
+  
+  // Auto-remove after duration
+  if (duration > 0) {
+    setTimeout(function() {
+      removeToast(toast);
+    }, duration);
+  }
+  
+  return toast;
+}
+
+/**
+ * Remueve un toast con animación.
+ * @param {HTMLElement} toast - Elemento toast a remover
+ */
+function removeToast(toast) {
+  toast.classList.add('toast-hiding');
+  setTimeout(function() {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 200);
+}
+
+// ── Confirmation Dialog ───────────────────────────────────────────────────────
+/**
+ * Muestra un diálogo de confirmación estético en lugar de window.confirm().
+ * @param {string} message - Mensaje de confirmación
+ * @param {function} onConfirm - Callback si el usuario confirma
+ * @param {function} [onCancel] - Callback opcional si el usuario cancela
+ * @param {object} [options] - Opciones: { title, confirmText, cancelText, danger }
+ */
+function showConfirm(message, onConfirm, onCancel, options) {
+  options = options || {};
+  const title = options.title || '¿Confirmar acción?';
+  const confirmText = options.confirmText || 'Confirmar';
+  const cancelText = options.cancelText || 'Cancelar';
+  const danger = options.danger || false;
+  
+  // Create modal backdrop
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop fade show';
+  document.body.appendChild(backdrop);
+  
+  // Create modal
+  const modal = document.createElement('div');
+  modal.className = 'modal fade show confirm-modal';
+  modal.style.display = 'block';
+  modal.setAttribute('tabindex', '-1');
+  modal.setAttribute('role', 'dialog');
+  modal.innerHTML = `
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">${title}</h5>
+          <button type="button" class="btn-close" data-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          ${message}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-action="cancel">${cancelText}</button>
+          <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.body.classList.add('modal-open');
+  
+  // Function to close and cleanup
+  function closeModal() {
+    modal.classList.remove('show');
+    backdrop.classList.remove('show');
+    setTimeout(function() {
+      if (modal.parentNode) modal.parentNode.removeChild(modal);
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      document.body.classList.remove('modal-open');
+    }, 150);
+  }
+  
+  // Handle buttons
+  modal.querySelector('[data-action="confirm"]').addEventListener('click', function() {
+    closeModal();
+    if (onConfirm) onConfirm();
+  });
+  
+  modal.querySelector('[data-action="cancel"]').addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  modal.querySelector('.btn-close').addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  // Close on backdrop click
+  backdrop.addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  // Show animation
+  setTimeout(function() {
+    modal.classList.add('show');
+  }, 10);
+}
+
+// Override window.alert and window.confirm to use our custom functions
+(function() {
+  window._originalAlert = window.alert;
+  window._originalConfirm = window.confirm;
+  
+  window.alert = function(message) {
+    showToast(message, 'info', 'Aviso', 5000);
+  };
+  
+  // window.confirm is trickier - we can't make it async, so we keep the original
+  // but provide showConfirm as a replacement that should be used instead
+})();

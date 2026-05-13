@@ -57,9 +57,9 @@
                   <i class="fa-solid fa-pen"></i>
                 </button>
                 {% if u.id != current_user.id %}
-                <form method="POST" action="/auth/usuarios/{{ u.id }}/eliminar" class="d-inline"
-                  onsubmit="return confirm('¿Eliminar al usuario {{ u.username }}?')">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                <form method="POST" action="/auth/usuarios/{{ u.id }}/eliminar" class="d-inline" id="formEliminarUsuario{{ u.id }}">
+                  <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar"
+                    onclick="showConfirm('¿Estás seguro de que deseas eliminar al usuario {{ u.username }}? Esta acción no se puede deshacer.', function() { document.getElementById('formEliminarUsuario{{ u.id }}').submit(); }, null, {title: 'Eliminar Usuario', confirmText: 'Eliminar', danger: true})">
                     <i class="fa-solid fa-trash"></i>
                   </button>
                 </form>
