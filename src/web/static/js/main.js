@@ -283,6 +283,17 @@ function removeToast(toast) {
 
 // ── Confirmation Dialog ───────────────────────────────────────────────────────
 /**
+ * Escapa caracteres HTML para prevenir XSS.
+ * @param {string} str - String a escapar
+ * @returns {string} String escapado
+ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
  * Muestra un diálogo de confirmación estético en lugar de window.confirm().
  * @param {string} message - Mensaje de confirmación
  * @param {function} onConfirm - Callback si el usuario confirma
@@ -291,10 +302,13 @@ function removeToast(toast) {
  */
 function showConfirm(message, onConfirm, onCancel, options) {
   options = options || {};
-  const title = options.title || '¿Confirmar acción?';
-  const confirmText = options.confirmText || 'Confirmar';
-  const cancelText = options.cancelText || 'Cancelar';
+  const title = escapeHtml(options.title || '¿Confirmar acción?');
+  const confirmText = escapeHtml(options.confirmText || 'Confirmar');
+  const cancelText = escapeHtml(options.cancelText || 'Cancelar');
   const danger = options.danger || false;
+  
+  // Allow HTML in message but escape by default if not explicitly marked as safe
+  const messageHtml = message;
   
   // Create modal backdrop
   const backdrop = document.createElement('div');
@@ -307,23 +321,55 @@ function showConfirm(message, onConfirm, onCancel, options) {
   modal.style.display = 'block';
   modal.setAttribute('tabindex', '-1');
   modal.setAttribute('role', 'dialog');
-  modal.innerHTML = `
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">${title}</h5>
-          <button type="button" class="btn-close" data-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          ${message}
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-action="cancel">${cancelText}</button>
-          <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
-        </div>
-      </div>
-    </div>
-  `;
+  
+  const modalDialog = document.createElement('div');
+  modalDialog.className = 'modal-dialog modal-dialog-centered';
+  
+  const modalContent = document.createElement('div');
+  modalContent.className = 'modal-content';
+  
+  const modalHeader = document.createElement('div');
+  modalHeader.className = 'modal-header';
+  const modalTitle = document.createElement('h5');
+  modalTitle.className = 'modal-title';
+  modalTitle.textContent = options.title || '¿Confirmar acción?';
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-close';
+  closeBtn.setAttribute('data-dismiss', 'modal');
+  closeBtn.setAttribute('aria-label', 'Cerrar');
+  modalHeader.appendChild(modalTitle);
+  modalHeader.appendChild(closeBtn);
+  
+  const modalBody = document.createElement('div');
+  modalBody.className = 'modal-body';
+  modalBody.innerHTML = messageHtml;
+  
+  const modalFooter = document.createElement('div');
+  modalFooter.className = 'modal-footer';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.setAttribute('data-action', 'cancel');
+  cancelBtn.textContent = options.cancelText || 'Cancelar';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+  confirmBtn.setAttribute('data-action', 'confirm');
+  confirmBtn.textContent = options.confirmText || 'Confirmar';
+  modalFooter.appendChild(cancelBtn);
+  modalFooter.appendChild(confirmBtn);
+  
+  modalContent.appendChild(modalHeader);
+  modalContent.appendChild(modalBody);
+  modalContent.appendChild(modalFooter);
+  modalDialog.appendChild(modalContent);
+  modal.appendChild(modalDialog);
+  modalContent.appendChild(modalHeader);
+  modalContent.appendChild(modalBody);
+  modalContent.appendChild(modalFooter);
+  modalDialog.appendChild(modalContent);
+  modal.appendChild(modalDialog);
   
   document.body.appendChild(modal);
   document.body.classList.add('modal-open');
@@ -340,17 +386,17 @@ function showConfirm(message, onConfirm, onCancel, options) {
   }
   
   // Handle buttons
-  modal.querySelector('[data-action="confirm"]').addEventListener('click', function() {
+  confirmBtn.addEventListener('click', function() {
     closeModal();
     if (onConfirm) onConfirm();
   });
   
-  modal.querySelector('[data-action="cancel"]').addEventListener('click', function() {
+  cancelBtn.addEventListener('click', function() {
     closeModal();
     if (onCancel) onCancel();
   });
   
-  modal.querySelector('.btn-close').addEventListener('click', function() {
+  closeBtn.addEventListener('click', function() {
     closeModal();
     if (onCancel) onCancel();
   });

@@ -1824,10 +1824,10 @@ class DatabaseManager:
                         str(labor)[:255],
                         str(usuario)[:100],
                         str(campo)[:100],
-                        str(valor_anterior)[:500] if valor_anterior else "",
-                        str(valor_nuevo)[:500],
+                        str(valor_anterior) if valor_anterior else "",
+                        str(valor_nuevo),
                         str(sistema_referencia)[:50],
-                        str(observacion)[:500]
+                        str(observacion) if observacion else ""
                     ),
                 )
                 conn.commit()
