@@ -24,6 +24,7 @@ _RETURN_TO_MAP: dict[str, str] = {
     "1": "/bitacora/nuevo",
     "2": "/bitacora/nuevo-dia",
     "3": "/sostenimiento/nuevo",
+    "4": "/sostenimiento/nuevo-dia",
 }
 
 

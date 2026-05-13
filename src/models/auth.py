@@ -204,7 +204,7 @@ def obtener_usuarios() -> list[dict]:
     conn = _get_conn()
     try:
         rows = conn.execute(
-            "SELECT id, username, nombre, rol, activo, created_at FROM usuarios ORDER BY id"
+            "SELECT id, username, nombre, rol, empresa_id, activo, created_at FROM usuarios ORDER BY id"
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -255,6 +255,7 @@ def editar_usuario(
     rol: str | None = None,
     activo: bool | None = None,
     password: str | None = None,
+    empresa_id: int | None = None,
 ) -> tuple[bool, str]:
     """Edita campos de un usuario existente."""
     conn = _get_conn()
@@ -272,6 +273,9 @@ def editar_usuario(
         if password is not None and password.strip():
             sets.append("password = ?")
             params.append(_hash_password(password.strip()))
+        if empresa_id is not None:
+            sets.append("empresa_id = ?")
+            params.append(empresa_id)
         if not sets:
             return False, "Nada que actualizar."
         params.append(user_id)

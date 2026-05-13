@@ -20,9 +20,12 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 @router.get("/ayuda", response_class=HTMLResponse)
 async def ayuda(request: Request):
     """Página de ayuda, soporte y preguntas frecuentes."""
+    user = request.session.get("user")
     return templates.TemplateResponse(request, "ayuda.html", context={
         "request": request,
         "app_version": APP_VERSION,
         "active_page": "ayuda",
         "flash": {},
+        "user": user,
+        "guest_view": user is None,
     })

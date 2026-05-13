@@ -297,10 +297,51 @@ document.getElementById('formDiaSost').addEventListener('submit', function(e) {
     alert('Debes añadir al menos una labor antes de guardar.');
     return;
   }
+  // Check that all filled labors exist in the catalog
+  const noRegistradas = [];
+  labores.forEach(function(inp) {
+    const val = inp.value.trim();
+    if (val && !todasLaboresSost.some(function(l) { return l.toLowerCase() === val.toLowerCase(); })) {
+      noRegistradas.push(val);
+    }
+  });
+  if (noRegistradas.length > 0) {
+    e.preventDefault();
+    const primera = noRegistradas[0];
+    document.getElementById('modalSostLaborNombre').textContent = primera;
+    document.getElementById('btnCrearLaborSost').href =
+      '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=4';
+    new bootstrap.Modal(document.getElementById('modalSostLaborNoExiste')).show();
+    return;
+  }
   document.getElementById('nLaboresSost').value = _nEntradasSost;
 });
 
 // Add first entry automatically on page load
 agregarLaborSost();
 </script>
+
+<!-- Modal: Labor no existe (sostenimiento form_dia) -->
+<div class="modal fade" id="modalSostLaborNoExiste" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">
+          <i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>Labor no registrada
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>La labor <strong id="modalSostLaborNombre"></strong> no está registrada en el sistema.</p>
+        <p class="text-muted mb-0">¿Deseas crearla ahora? Serás redirigido a la gestión de labores y podrás volver a este formulario.</p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <a id="btnCrearLaborSost" href="#" class="btn btn-warning">
+          <i class="fa-solid fa-plus me-1"></i>Crear labor
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
