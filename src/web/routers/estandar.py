@@ -141,7 +141,7 @@ async def agregar_fila(
                     return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
             except (ValueError, TypeError):
                 # If numeric conversion fails, fall back to string comparison
-                # This is expected for text-based or mixed-type classifications
+                # This handles numeric ranges with non-numeric values or unexpected data types
                 if (fila_min == input_min and 
                     fila_max == input_max and 
                     fila_tipo == input_tipo):
