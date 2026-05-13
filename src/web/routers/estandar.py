@@ -139,10 +139,9 @@ async def agregar_fila(
                                f"Ya existe un estándar para el rango '{input_min}–{input_max}' con tipo '{tipo}'.")
                     sistema_seguro = _validar_sistema(sistema)
                     return RedirectResponse(url=f"/estandar?sistema={quote(sistema_seguro)}", status_code=303)
-            except (ValueError, TypeError) as e:
-                # Log conversion errors for debugging (values may not be numeric)
-                # This is expected for text-based classifications
-                # If conversion fails, compare as strings
+            except (ValueError, TypeError):
+                # If numeric conversion fails, fall back to string comparison
+                # This is expected for text-based or mixed-type classifications
                 if (fila_min == input_min and 
                     fila_max == input_max and 
                     fila_tipo == input_tipo):
