@@ -1,8 +1,6 @@
 """Router de Labores — CRUD catálogo de labores."""
-import re as _re
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 for _p in (str(_ROOT), str(_ROOT / "src")):
@@ -19,6 +17,14 @@ from src.utils.clasificaciones import detectar_clasificacion, cargar_clasificaci
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
+
+# Allowlist of safe internal paths for the return_to redirect after labor creation
+_ALLOWED_RETURN_TO = frozenset({
+    "/bitacora/nuevo",
+    "/bitacora/nuevo-dia",
+    "/sostenimiento/nuevo",
+    "/labores",
+})
 
 
 def _get_flash(request: Request) -> dict:
@@ -149,15 +155,9 @@ async def nueva_labor_save(
     if ok:
         _set_flash(request, "success", msg)
         # Redirect back to caller page if provided (e.g., bitácora form).
-        # Only allow safe relative paths: no scheme, no netloc, no query string, no fragment.
-        if return_to:
-            parsed = urlparse(return_to)
-            if (not parsed.scheme and not parsed.netloc and not parsed.query
-                    and not parsed.fragment
-                    and parsed.path
-                    and _re.match(r'^/[a-zA-Z0-9/_\-]+$', parsed.path)):
-                safe_path = str(parsed.path)
-                return RedirectResponse(url=safe_path, status_code=303)
+        # Only allow a known set of safe internal paths.
+        if return_to in _ALLOWED_RETURN_TO:
+            return RedirectResponse(url=return_to, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {
