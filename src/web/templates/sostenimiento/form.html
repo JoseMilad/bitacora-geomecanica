@@ -202,6 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Client-side validation: shotcrete type is required when Shotcrete_m3 > 0
+// Also validate that the labor exists in the catalog
 const _formSost = document.getElementById('formSostenimiento');
 if (_formSost) {
   _formSost.addEventListener('submit', function (e) {
@@ -215,9 +216,20 @@ if (_formSost) {
         tipoSelect.classList.add('is-invalid');
         if (errorDiv) errorDiv.style.display = 'block';
         tipoSelect.focus();
+        return;
       } else {
         tipoSelect.classList.remove('is-invalid');
         if (errorDiv) errorDiv.style.display = '';
+      }
+    }
+
+    // Validate labor exists in catalog
+    const laborVal = (document.getElementById('inputLaborSost')?.value || '').trim();
+    if (laborVal && !_laboresSostForm.some(function(l) { return l.toLowerCase() === laborVal.toLowerCase(); })) {
+      e.preventDefault();
+      const confirmar = confirm('La labor "' + laborVal + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores.)');
+      if (confirmar) {
+        window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(laborVal) + '&return_to=' + encodeURIComponent(window.location.pathname);
       }
     }
   });

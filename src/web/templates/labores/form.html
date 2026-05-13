@@ -11,12 +11,20 @@
       </div>
       <div class="card-body">
         <form method="POST" action="{{ action }}">
+          <input type="hidden" name="return_to" value="{{ return_to or '' }}" />
+          {% if return_to %}
+          <div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Después de guardar serás redirigido de vuelta al formulario anterior.
+          </div>
+          {% endif %}
           <div class="row g-3">
             <!-- Nombre de labor (solo en creación) -->
             {% if not labor %}
             <div class="col-12">
               <label class="form-label fw-semibold">Nombre de Labor <span class="text-danger">*</span></label>
               <input type="text" name="nombre" id="inputNombreLabor" class="form-control" required
+                value="{{ nombre_prefill or '' }}"
                 placeholder="Ej: TJ01 Galería Principal Norte"
                 oninput="detectarClasificacion(this.value)" />
               <small class="text-muted">El tipo y fase se detectarán automáticamente según el prefijo del nombre.</small>

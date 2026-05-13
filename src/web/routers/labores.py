@@ -95,7 +95,7 @@ async def listar_labores(request: Request, q: str = ""):
 
 # ── Nueva labor — formulario ──────────────────────────────────────────────────
 @router.get("/nueva", response_class=HTMLResponse)
-async def nueva_labor_form(request: Request):
+async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = ""):
     flash = _get_flash(request)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     return templates.TemplateResponse(request, "labores/form.html", context={
@@ -106,6 +106,8 @@ async def nueva_labor_form(request: Request):
         "titulo": "Nueva Labor",
         "flash": flash,
         "active_page": "labores",
+        "nombre_prefill": nombre.upper() if nombre else "",
+        "return_to": return_to,
         **clasif_ctx,
     })
 
@@ -122,6 +124,7 @@ async def nueva_labor_save(
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
     sistema_referencia: str = Form(""),
+    return_to: str = Form(""),
 ):
     form_data = await request.form()
     extra_clasifs = {
@@ -143,6 +146,10 @@ async def nueva_labor_save(
     )
     if ok:
         _set_flash(request, "success", msg)
+        # Redirect back to caller page if provided (e.g., bitácora form)
+        import re as _re
+        if return_to and _re.match(r'^/[a-zA-Z0-9/_\-]*$', return_to):
+            return RedirectResponse(url=return_to, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {
@@ -161,6 +168,8 @@ async def nueva_labor_save(
         "titulo": "Nueva Labor",
         "flash": {"tipo": "error", "mensaje": msg},
         "active_page": "labores",
+        "nombre_prefill": "",
+        "return_to": return_to,
         **clasif_ctx,
     })
 
@@ -207,6 +216,8 @@ async def editar_labor_form(request: Request, nombre: str):
         "titulo": f"Editar Labor: {nombre}",
         "flash": flash,
         "active_page": "labores",
+        "nombre_prefill": "",
+        "return_to": "",
         **clasif_ctx,
     })
 
