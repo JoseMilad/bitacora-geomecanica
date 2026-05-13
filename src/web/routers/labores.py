@@ -149,12 +149,15 @@ async def nueva_labor_save(
     if ok:
         _set_flash(request, "success", msg)
         # Redirect back to caller page if provided (e.g., bitácora form).
-        # Only allow safe relative paths: must start with '/', no scheme, no netloc.
+        # Only allow safe relative paths: no scheme, no netloc, no query string, no fragment.
         if return_to:
             parsed = urlparse(return_to)
-            if (not parsed.scheme and not parsed.netloc
-                    and _re.match(r'^/[a-zA-Z0-9/_\-]*$', parsed.path or return_to)):
-                return RedirectResponse(url=parsed.path, status_code=303)
+            if (not parsed.scheme and not parsed.netloc and not parsed.query
+                    and not parsed.fragment
+                    and parsed.path
+                    and _re.match(r'^/[a-zA-Z0-9/_\-]+$', parsed.path)):
+                safe_path = str(parsed.path)
+                return RedirectResponse(url=safe_path, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {
