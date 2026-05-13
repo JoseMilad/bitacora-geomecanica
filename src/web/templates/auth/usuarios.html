@@ -37,11 +37,14 @@
                 </span>
               </td>
               <td>
-                {% set emp_name = '' %}
+                {% set user_empresa_id = u.empresa_id if u.empresa_id is defined else (u.get('empresa_id') if u.get('empresa_id') is not none else 1) %}
+                {% set empresa_nombre = '—' %}
                 {% for e in empresas %}
-                  {% if e.id == u.get('empresa_id', 1) %}{% set emp_name = e.nombre %}{% endif %}
+                  {% if e.id|int == user_empresa_id|int %}
+                    {% set empresa_nombre = e.nombre %}
+                  {% endif %}
                 {% endfor %}
-                <small>{{ emp_name if emp_name else '—' }}</small>
+                <small>{{ empresa_nombre }}</small>
               </td>
               <td>
                 {% if u.activo %}
@@ -86,8 +89,9 @@
                       <div class="mb-3">
                         <label class="form-label fw-semibold">Empresa</label>
                         <select name="empresa_id" class="form-select">
+                          {% set user_empresa_id = u.empresa_id if u.empresa_id is defined else (u.get('empresa_id') if u.get('empresa_id') is not none else 1) %}
                           {% for e in empresas %}
-                          <option value="{{ e.id }}" {% if e.id == u.get('empresa_id', 1) %}selected{% endif %}>{{ e.nombre }}</option>
+                          <option value="{{ e.id }}" {% if e.id|int == user_empresa_id|int %}selected{% endif %}>{{ e.nombre }}</option>
                           {% endfor %}
                         </select>
                       </div>
