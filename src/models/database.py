@@ -503,8 +503,10 @@ class DatabaseManager:
                 # Update catalog if it exists
                 if catalog_row:
                     if campo in ["GSI", "RMR"]:
+                        # Use explicit column mapping to prevent SQL injection
+                        column_name = "gsi" if campo == "GSI" else "rmr"
                         conn.execute(
-                            f"UPDATE labores SET {campo.lower()}=? WHERE labor=? AND empresa_id=?",
+                            f"UPDATE labores SET {column_name}=? WHERE labor=? AND empresa_id=?",
                             (nuevo_valor, labor, self.empresa_id),
                         )
                     else:

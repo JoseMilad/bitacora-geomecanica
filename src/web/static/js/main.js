@@ -238,22 +238,40 @@ function showToast(message, type, title, duration) {
     info: title || 'Información'
   };
   
-  // Create toast element
+  // Create toast element with DOM to prevent XSS
   const toast = document.createElement('div');
   toast.className = `custom-toast toast-${type}`;
-  toast.innerHTML = `
-    <div class="toast-icon">${icons[type]}</div>
-    <div class="toast-content">
-      <div class="toast-title">${titles[type]}</div>
-      <div class="toast-message">${message}</div>
-    </div>
-    <button class="toast-close" aria-label="Cerrar">&times;</button>
-  `;
+  
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'toast-icon';
+  iconDiv.innerHTML = icons[type];
+  
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'toast-content';
+  
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'toast-title';
+  titleDiv.textContent = titles[type];
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'toast-message';
+  messageDiv.textContent = message;
+  
+  contentDiv.appendChild(titleDiv);
+  contentDiv.appendChild(messageDiv);
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'toast-close';
+  closeBtn.setAttribute('aria-label', 'Cerrar');
+  closeBtn.innerHTML = '&times;';
+  
+  toast.appendChild(iconDiv);
+  toast.appendChild(contentDiv);
+  toast.appendChild(closeBtn);
   
   container.appendChild(toast);
   
   // Close button handler
-  const closeBtn = toast.querySelector('.toast-close');
   closeBtn.addEventListener('click', function() {
     removeToast(toast);
   });
@@ -295,20 +313,14 @@ function escapeHtml(str) {
 
 /**
  * Muestra un diálogo de confirmación estético en lugar de window.confirm().
- * @param {string} message - Mensaje de confirmación
+ * @param {string} message - Mensaje de confirmación (texto plano, se escapará automáticamente)
  * @param {function} onConfirm - Callback si el usuario confirma
  * @param {function} [onCancel] - Callback opcional si el usuario cancela
  * @param {object} [options] - Opciones: { title, confirmText, cancelText, danger }
  */
 function showConfirm(message, onConfirm, onCancel, options) {
   options = options || {};
-  const title = escapeHtml(options.title || '¿Confirmar acción?');
-  const confirmText = escapeHtml(options.confirmText || 'Confirmar');
-  const cancelText = escapeHtml(options.cancelText || 'Cancelar');
   const danger = options.danger || false;
-  
-  // Allow HTML in message but escape by default if not explicitly marked as safe
-  const messageHtml = message;
   
   // Create modal backdrop
   const backdrop = document.createElement('div');
