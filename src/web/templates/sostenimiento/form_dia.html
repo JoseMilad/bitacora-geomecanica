@@ -294,7 +294,7 @@ document.getElementById('formDiaSost').addEventListener('submit', function(e) {
   const filled = Array.from(labores).some(function(inp) { return inp.value.trim() !== ''; });
   if (!filled) {
     e.preventDefault();
-    alert('Debes añadir al menos una labor antes de guardar.');
+    showToast('Debes añadir al menos una labor antes de guardar.', 'warning', 'Validación', 4000);
     return;
   }
   // Check that all filled labors exist in the catalog

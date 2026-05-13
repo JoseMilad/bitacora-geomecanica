@@ -201,3 +201,235 @@ document.addEventListener('DOMContentLoaded', function () {
     }, 5000);
   });
 });
+
+// ── Toast Notifications ───────────────────────────────────────────────────────
+/**
+ * Muestra una notificación toast estética.
+ * @param {string} message - Mensaje a mostrar
+ * @param {string} type - Tipo: 'success', 'error', 'warning', 'info'
+ * @param {string} [title] - Título opcional
+ * @param {number} [duration] - Duración en ms (default: 4000)
+ */
+function showToast(message, type, title, duration) {
+  type = type || 'info';
+  duration = duration || 4000;
+  
+  // Ensure toast container exists
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    document.body.appendChild(container);
+  }
+  
+  // Icon mapping
+  const icons = {
+    success: '<i class="fa-solid fa-circle-check"></i>',
+    error: '<i class="fa-solid fa-circle-xmark"></i>',
+    warning: '<i class="fa-solid fa-triangle-exclamation"></i>',
+    info: '<i class="fa-solid fa-circle-info"></i>'
+  };
+  
+  // Title mapping
+  const titles = {
+    success: title || 'Éxito',
+    error: title || 'Error',
+    warning: title || 'Advertencia',
+    info: title || 'Información'
+  };
+  
+  // Create toast element with DOM to prevent XSS
+  const toast = document.createElement('div');
+  toast.className = `custom-toast toast-${type}`;
+  
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'toast-icon';
+  iconDiv.innerHTML = icons[type];
+  
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'toast-content';
+  
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'toast-title';
+  titleDiv.textContent = titles[type];
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'toast-message';
+  messageDiv.textContent = message;
+  
+  contentDiv.appendChild(titleDiv);
+  contentDiv.appendChild(messageDiv);
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'toast-close';
+  closeBtn.setAttribute('aria-label', 'Cerrar');
+  closeBtn.innerHTML = '&times;';
+  
+  toast.appendChild(iconDiv);
+  toast.appendChild(contentDiv);
+  toast.appendChild(closeBtn);
+  
+  container.appendChild(toast);
+  
+  // Close button handler
+  closeBtn.addEventListener('click', function() {
+    removeToast(toast);
+  });
+  
+  // Auto-remove after duration
+  if (duration > 0) {
+    setTimeout(function() {
+      removeToast(toast);
+    }, duration);
+  }
+  
+  return toast;
+}
+
+/**
+ * Remueve un toast con animación.
+ * @param {HTMLElement} toast - Elemento toast a remover
+ */
+function removeToast(toast) {
+  toast.classList.add('toast-hiding');
+  setTimeout(function() {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 200);
+}
+
+// ── Confirmation Dialog ───────────────────────────────────────────────────────
+/**
+ * Escapa caracteres HTML para prevenir XSS.
+ * @param {string} str - String a escapar
+ * @returns {string} String escapado
+ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
+ * Muestra un diálogo de confirmación estético en lugar de window.confirm().
+ * @param {string} message - Mensaje de confirmación (texto plano, se escapará automáticamente)
+ * @param {function} onConfirm - Callback si el usuario confirma
+ * @param {function} [onCancel] - Callback opcional si el usuario cancela
+ * @param {object} [options] - Opciones: { title, confirmText, cancelText, danger }
+ */
+function showConfirm(message, onConfirm, onCancel, options) {
+  options = options || {};
+  const danger = options.danger || false;
+  
+  // Create modal backdrop
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop fade show';
+  document.body.appendChild(backdrop);
+  
+  // Create modal
+  const modal = document.createElement('div');
+  modal.className = 'modal fade show confirm-modal';
+  modal.style.display = 'block';
+  modal.setAttribute('tabindex', '-1');
+  modal.setAttribute('role', 'dialog');
+  
+  const modalDialog = document.createElement('div');
+  modalDialog.className = 'modal-dialog modal-dialog-centered';
+  
+  const modalContent = document.createElement('div');
+  modalContent.className = 'modal-content';
+  
+  const modalHeader = document.createElement('div');
+  modalHeader.className = 'modal-header';
+  const modalTitle = document.createElement('h5');
+  modalTitle.className = 'modal-title';
+  modalTitle.textContent = options.title || '¿Confirmar acción?';
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-close';
+  closeBtn.setAttribute('data-dismiss', 'modal');
+  closeBtn.setAttribute('aria-label', 'Cerrar');
+  modalHeader.appendChild(modalTitle);
+  modalHeader.appendChild(closeBtn);
+  
+  const modalBody = document.createElement('div');
+  modalBody.className = 'modal-body';
+  // Use textContent to prevent XSS - if HTML is needed, it should be explicitly escaped
+  modalBody.textContent = message;
+  
+  const modalFooter = document.createElement('div');
+  modalFooter.className = 'modal-footer';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.setAttribute('data-action', 'cancel');
+  cancelBtn.textContent = options.cancelText || 'Cancelar';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+  confirmBtn.setAttribute('data-action', 'confirm');
+  confirmBtn.textContent = options.confirmText || 'Confirmar';
+  modalFooter.appendChild(cancelBtn);
+  modalFooter.appendChild(confirmBtn);
+  
+  modalContent.appendChild(modalHeader);
+  modalContent.appendChild(modalBody);
+  modalContent.appendChild(modalFooter);
+  modalDialog.appendChild(modalContent);
+  modal.appendChild(modalDialog);
+  
+  document.body.appendChild(modal);
+  document.body.classList.add('modal-open');
+  
+  // Function to close and cleanup
+  function closeModal() {
+    modal.classList.remove('show');
+    backdrop.classList.remove('show');
+    setTimeout(function() {
+      if (modal.parentNode) modal.parentNode.removeChild(modal);
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      document.body.classList.remove('modal-open');
+    }, 150);
+  }
+  
+  // Handle buttons
+  confirmBtn.addEventListener('click', function() {
+    closeModal();
+    if (onConfirm) onConfirm();
+  });
+  
+  cancelBtn.addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  closeBtn.addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  // Close on backdrop click
+  backdrop.addEventListener('click', function() {
+    closeModal();
+    if (onCancel) onCancel();
+  });
+  
+  // Show animation
+  setTimeout(function() {
+    modal.classList.add('show');
+  }, 10);
+}
+
+// Override window.alert and window.confirm to use our custom functions
+(function() {
+  window._originalAlert = window.alert;
+  window._originalConfirm = window.confirm;
+  
+  window.alert = function(message) {
+    showToast(message, 'info', 'Aviso', 5000);
+  };
+  
+  // window.confirm is trickier - we can't make it async, so we keep the original
+  // but provide showConfirm as a replacement that should be used instead
+})();

@@ -277,16 +277,13 @@ async def nuevo_bitacora_save(request: Request):
             datos[cid] = form.get(f"clasif_{cid}", "")
 
     model = BitacoraModel(empresa_id=_get_empresa_id(request))
+    username = _get_username(request)
     if forzar == "1":
-        ok, msg = model.guardar_registro_forzado(datos)
+        ok, msg = model.guardar_registro_forzado(datos, username)
     else:
-        ok, msg = model.guardar_registro(datos)
+        ok, msg = model.guardar_registro(datos, username)
 
     if ok:
-        # Log activity with actual username
-        username = _get_username(request)
-        model.db.registrar_actividad(username, "crear_registro",
-                                     f"Nuevo registro: {fecha} - {labor}")
         _set_flash(request, "success", msg)
         return RedirectResponse(url="/bitacora", status_code=303)
 
