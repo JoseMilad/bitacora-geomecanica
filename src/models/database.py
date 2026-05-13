@@ -1821,13 +1821,13 @@ class DatabaseManager:
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         self.empresa_id,
-                        str(labor)[:255],
-                        str(usuario)[:100],
-                        str(campo)[:100],
-                        str(valor_anterior) if valor_anterior else "",
-                        str(valor_nuevo),
-                        str(sistema_referencia)[:50],
-                        str(observacion) if observacion else ""
+                        str(labor)[:255],  # VARCHAR(255) - truncate to column limit
+                        str(usuario)[:100],  # VARCHAR(100) - truncate to column limit
+                        str(campo)[:100],  # VARCHAR(100) - truncate to column limit
+                        str(valor_anterior) if valor_anterior else "",  # TEXT - no truncation needed
+                        str(valor_nuevo),  # TEXT - no truncation needed
+                        str(sistema_referencia)[:50],  # VARCHAR(50) - truncate to column limit
+                        str(observacion) if observacion else ""  # TEXT - no truncation needed
                     ),
                 )
                 conn.commit()

@@ -343,7 +343,8 @@ function showConfirm(message, onConfirm, onCancel, options) {
   
   const modalBody = document.createElement('div');
   modalBody.className = 'modal-body';
-  modalBody.innerHTML = messageHtml;
+  // Use textContent to prevent XSS - if HTML is needed, it should be explicitly escaped
+  modalBody.textContent = message;
   
   const modalFooter = document.createElement('div');
   modalFooter.className = 'modal-footer';
@@ -360,11 +361,6 @@ function showConfirm(message, onConfirm, onCancel, options) {
   modalFooter.appendChild(cancelBtn);
   modalFooter.appendChild(confirmBtn);
   
-  modalContent.appendChild(modalHeader);
-  modalContent.appendChild(modalBody);
-  modalContent.appendChild(modalFooter);
-  modalDialog.appendChild(modalContent);
-  modal.appendChild(modalDialog);
   modalContent.appendChild(modalHeader);
   modalContent.appendChild(modalBody);
   modalContent.appendChild(modalFooter);

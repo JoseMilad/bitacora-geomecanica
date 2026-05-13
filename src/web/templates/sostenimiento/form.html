@@ -228,7 +228,7 @@ if (_formSost) {
     if (laborVal && !_laboresSostForm.some(function(l) { return l.toLowerCase() === laborVal.toLowerCase(); })) {
       e.preventDefault();
       showConfirm(
-        'La labor "' + laborVal + '" no está registrada en el sistema.<br><br>¿Deseas crearla ahora? Serás redirigido a la gestión de labores.',
+        'La labor "' + laborVal + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? Serás redirigido a la gestión de labores.',
         function() {
           window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(laborVal) + '&return_to=3';
         },
