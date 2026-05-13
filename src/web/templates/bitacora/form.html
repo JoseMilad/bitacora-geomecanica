@@ -545,6 +545,19 @@ document.getElementById('btnGuardar').closest('form').addEventListener('submit',
 
 // Apply initial field types on page load
 actualizarTiposEntradaBitacora();
+
+// Validate that the labor exists in the catalog before submit
+document.getElementById('btnGuardar').closest('form').addEventListener('submit', function laborExistenceCheck(e) {
+  const laborVal = (document.getElementById('inputLabor')?.value || '').trim();
+  if (laborVal && !todasLabores.some(function(l) { return l.toLowerCase() === laborVal.toLowerCase(); })) {
+    e.preventDefault();
+    const confirmar = confirm('La labor "' + laborVal + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores.)');
+    if (confirmar) {
+      window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(laborVal) + '&return_to=1';
+    }
+    return;
+  }
+}, true); // use capture=true so it fires before the canvas submit handler
 </script>
 {% endblock %}
 

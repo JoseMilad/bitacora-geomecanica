@@ -285,6 +285,7 @@ async def kpi_semanal(request: Request, semana: str = ""):
         "periodo": periodo,
         "filas": filas,
         "puede_editar": puede_editar,
+        "is_admin": _is_admin(request),
         "flash": flash,
         "active_page": "kpi",
     })

@@ -18,6 +18,14 @@ from src.utils.clasificaciones import detectar_clasificacion, cargar_clasificaci
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+# Map of numeric keys to safe internal paths for return_to redirect after labor creation.
+# Client passes the key (e.g., "1"), not the actual URL, to avoid open-redirect risk.
+_RETURN_TO_MAP: dict[str, str] = {
+    "1": "/bitacora/nuevo",
+    "2": "/bitacora/nuevo-dia",
+    "3": "/sostenimiento/nuevo",
+}
+
 
 def _get_flash(request: Request) -> dict:
     return request.session.pop("flash", None) or {}
@@ -95,9 +103,11 @@ async def listar_labores(request: Request, q: str = ""):
 
 # ── Nueva labor — formulario ──────────────────────────────────────────────────
 @router.get("/nueva", response_class=HTMLResponse)
-async def nueva_labor_form(request: Request):
+async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = ""):
     flash = _get_flash(request)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+    # Only accept numeric keys from our map (ignore arbitrary URL strings)
+    safe_return_to = return_to if return_to in _RETURN_TO_MAP else ""
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -106,6 +116,8 @@ async def nueva_labor_form(request: Request):
         "titulo": "Nueva Labor",
         "flash": flash,
         "active_page": "labores",
+        "nombre_prefill": nombre.upper() if nombre else "",
+        "return_to": safe_return_to,
         **clasif_ctx,
     })
 
@@ -122,6 +134,7 @@ async def nueva_labor_save(
     fase: str = Form(""),
     clasificacion_kpi: str = Form(""),
     sistema_referencia: str = Form(""),
+    return_to: str = Form(""),
 ):
     form_data = await request.form()
     extra_clasifs = {
@@ -143,6 +156,10 @@ async def nueva_labor_save(
     )
     if ok:
         _set_flash(request, "success", msg)
+        # Redirect back to caller page using a numeric key mapped to a known safe path.
+        safe_return_url = _RETURN_TO_MAP.get(return_to)
+        if safe_return_url:
+            return RedirectResponse(url=safe_return_url, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {
@@ -161,6 +178,8 @@ async def nueva_labor_save(
         "titulo": "Nueva Labor",
         "flash": {"tipo": "error", "mensaje": msg},
         "active_page": "labores",
+        "nombre_prefill": "",
+        "return_to": return_to,
         **clasif_ctx,
     })
 
@@ -207,6 +226,8 @@ async def editar_labor_form(request: Request, nombre: str):
         "titulo": f"Editar Labor: {nombre}",
         "flash": flash,
         "active_page": "labores",
+        "nombre_prefill": "",
+        "return_to": "",
         **clasif_ctx,
     })
 

@@ -203,7 +203,9 @@ function agregarLabor() {
   const laborDropdownId = 'dropdownLabor_' + idx;
   laborInput.id = laborInputId;
   laborDropdown.id = laborDropdownId;
-  initLaborTypeahead(laborInputId, laborDropdownId, todasLabores, {});
+  initLaborTypeahead(laborInputId, laborDropdownId, todasLabores, {
+    onSelect: function(labor) { autocompletarLaborEntrada(labor, addedCard); }
+  });
 
   _nEntradas++;
   document.getElementById('nLabores').value = _nEntradas;
@@ -246,13 +248,72 @@ function toggleEntry(btn) {
   }
 }
 
-// Validate at least one labor before submit
+// Auto-populate fields when a labor is selected in a multi-entry row
+async function autocompletarLaborEntrada(nombre, card) {
+  if (!nombre || !card) return;
+  try {
+    const res = await fetch('/labores/' + encodeURIComponent(nombre) + '/datos');
+    if (!res.ok) return;
+    const datos = await res.json();
+    if (datos.error) return;
+    const gsiInput    = card.querySelector('.input-gsi');
+    const rmrInput    = card.querySelector('.input-rmr');
+    const soporteInput = card.querySelector('.input-soporte');
+    if (gsiInput && datos.GSI !== undefined)     gsiInput.value    = datos.GSI    || '';
+    if (rmrInput && datos.RMR !== undefined)     rmrInput.value    = datos.RMR    || '';
+    if (soporteInput && datos.Soporte !== undefined) soporteInput.value = datos.Soporte || '';
+    // Custom classifications
+    _clasifActivas.filter(function(c) { return c !== 'GSI' && c !== 'RMR'; }).forEach(function(cid) {
+      const extraInput = card.querySelector('input[name^="clasif_' + cid + '_"]');
+      if (extraInput && datos[cid] !== undefined) extraInput.value = datos[cid] || '';
+    });
+    // If soporte is still empty and there is RMR/GSI value, request recommendation
+    const soporteVal = soporteInput ? soporteInput.value.trim() : '';
+    if (!soporteVal) {
+      const sistema = _clasifActivas.length > 0 ? _clasifActivas[0] : null;
+      if (sistema) {
+        const inputValor = sistema === 'GSI' ? card.querySelector('.input-gsi')
+                         : sistema === 'RMR' ? card.querySelector('.input-rmr')
+                         : card.querySelector('input[name^="clasif_' + sistema + '_"]');
+        if (inputValor && inputValor.value.trim()) {
+          const params = new URLSearchParams({ sistema: sistema, valor: inputValor.value.trim(), labor: nombre });
+          const rSoporte = await fetch('/bitacora/calcular-soporte-gen?' + params);
+          if (rSoporte.ok) {
+            const dSoporte = await rSoporte.json();
+            if (dSoporte.soporte && soporteInput) soporteInput.value = dSoporte.soporte;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('autocompletarLaborEntrada error:', err);
+  }
+}
+
+// Validate at least one labor before submit; check all labors exist in catalog
 document.getElementById('formDia').addEventListener('submit', function(e) {
-  const labores = document.querySelectorAll('.input-labor');
-  const filled = Array.from(labores).some(function(inp) { return inp.value.trim() !== ''; });
+  const laborInputs = document.querySelectorAll('.input-labor');
+  const filled = Array.from(laborInputs).some(function(inp) { return inp.value.trim() !== ''; });
   if (!filled) {
     e.preventDefault();
     alert('Debes añadir al menos una labor antes de guardar.');
+    return;
+  }
+  // Check that all filled labors exist in the catalog
+  const noRegistradas = [];
+  laborInputs.forEach(function(inp) {
+    const val = inp.value.trim();
+    if (val && !todasLabores.some(function(l) { return l.toLowerCase() === val.toLowerCase(); })) {
+      noRegistradas.push(val);
+    }
+  });
+  if (noRegistradas.length > 0) {
+    e.preventDefault();
+    const primera = noRegistradas[0];
+    const confirmar = confirm('La labor "' + primera + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores y podrás volver a este formulario.)');
+    if (confirmar) {
+      window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=2';
+    }
     return;
   }
   // Update n_labores to match current max index
