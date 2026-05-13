@@ -18,13 +18,13 @@ from src.utils.clasificaciones import detectar_clasificacion, cargar_clasificaci
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
-# Allowlist of safe internal paths for the return_to redirect after labor creation
-_ALLOWED_RETURN_TO = frozenset({
-    "/bitacora/nuevo",
-    "/bitacora/nuevo-dia",
-    "/sostenimiento/nuevo",
-    "/labores",
-})
+# Map of numeric keys to safe internal paths for return_to redirect after labor creation.
+# Client passes the key (e.g., "1"), not the actual URL, to avoid open-redirect risk.
+_RETURN_TO_MAP: dict[str, str] = {
+    "1": "/bitacora/nuevo",
+    "2": "/bitacora/nuevo-dia",
+    "3": "/sostenimiento/nuevo",
+}
 
 
 def _get_flash(request: Request) -> dict:
@@ -106,6 +106,8 @@ async def listar_labores(request: Request, q: str = ""):
 async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = ""):
     flash = _get_flash(request)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
+    # Only accept numeric keys from our map (ignore arbitrary URL strings)
+    safe_return_to = return_to if return_to in _RETURN_TO_MAP else ""
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -115,7 +117,7 @@ async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = 
         "flash": flash,
         "active_page": "labores",
         "nombre_prefill": nombre.upper() if nombre else "",
-        "return_to": return_to,
+        "return_to": safe_return_to,
         **clasif_ctx,
     })
 
@@ -154,10 +156,10 @@ async def nueva_labor_save(
     )
     if ok:
         _set_flash(request, "success", msg)
-        # Redirect back to caller page if provided (e.g., bitácora form).
-        # Only allow a known set of safe internal paths.
-        if return_to in _ALLOWED_RETURN_TO:
-            return RedirectResponse(url=return_to, status_code=303)
+        # Redirect back to caller page using a numeric key mapped to a known safe path.
+        safe_return_url = _RETURN_TO_MAP.get(return_to)
+        if safe_return_url:
+            return RedirectResponse(url=safe_return_url, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {

@@ -229,7 +229,7 @@ if (_formSost) {
       e.preventDefault();
       const confirmar = confirm('La labor "' + laborVal + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores.)');
       if (confirmar) {
-        window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(laborVal) + '&return_to=' + encodeURIComponent(window.location.pathname);
+        window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(laborVal) + '&return_to=3';
       }
     }
   });

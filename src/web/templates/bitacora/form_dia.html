@@ -312,7 +312,7 @@ document.getElementById('formDia').addEventListener('submit', function(e) {
     const primera = noRegistradas[0];
     const confirmar = confirm('La labor "' + primera + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores y podrás volver a este formulario.)');
     if (confirmar) {
-      window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=' + encodeURIComponent(window.location.pathname);
+      window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=2';
     }
     return;
   }
