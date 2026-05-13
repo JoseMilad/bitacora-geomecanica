@@ -1,6 +1,8 @@
 """Router de Labores — CRUD catálogo de labores."""
+import re as _re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 for _p in (str(_ROOT), str(_ROOT / "src")):
@@ -146,10 +148,13 @@ async def nueva_labor_save(
     )
     if ok:
         _set_flash(request, "success", msg)
-        # Redirect back to caller page if provided (e.g., bitácora form)
-        import re as _re
-        if return_to and _re.match(r'^/[a-zA-Z0-9/_\-]*$', return_to):
-            return RedirectResponse(url=return_to, status_code=303)
+        # Redirect back to caller page if provided (e.g., bitácora form).
+        # Only allow safe relative paths: must start with '/', no scheme, no netloc.
+        if return_to:
+            parsed = urlparse(return_to)
+            if (not parsed.scheme and not parsed.netloc
+                    and _re.match(r'^/[a-zA-Z0-9/_\-]*$', parsed.path or return_to)):
+                return RedirectResponse(url=parsed.path, status_code=303)
         return RedirectResponse(url="/labores", status_code=303)
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     labor_data = {
