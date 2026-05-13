@@ -26,6 +26,7 @@
             <i class="fa-solid fa-house me-2"></i><span>Inicio</span>
           </a>
         </li>
+        {% if not guest_view %}
         <li>
           <a href="/dashboard" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">
             <i class="fa-solid fa-chart-line me-2"></i><span>Dashboard</span>
@@ -66,6 +67,7 @@
             <i class="fa-solid fa-gear me-2"></i><span>Configuración</span>
           </a>
         </li>
+        {% endif %}
         <li>
           <a href="/ayuda" class="sidebar-link {% if active_page == 'ayuda' %}active{% endif %}">
             <i class="fa-solid fa-circle-question me-2"></i><span>Ayuda</span>
@@ -103,15 +105,21 @@
           </a>
           {% endif %}
           {% endif %}
+          {% if not guest_view %}
           <a href="/configuracion" class="btn btn-sm btn-outline-secondary" title="Configuración">
             <i class="fa-solid fa-gear me-1"></i><span class="d-none d-md-inline">Configuración</span>
           </a>
           <a href="/docs" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="fa-solid fa-book me-1"></i><span class="d-none d-md-inline">API</span>
           </a>
+          {% endif %}
           {% if user %}
           <a href="/auth/logout" class="btn btn-sm btn-outline-danger" title="Cerrar sesión">
             <i class="fa-solid fa-right-from-bracket me-1"></i><span class="d-none d-md-inline">Salir</span>
+          </a>
+          {% else %}
+          <a href="/auth/login" class="btn btn-sm btn-outline-primary" title="Iniciar sesión">
+            <i class="fa-solid fa-right-to-bracket me-1"></i><span class="d-none d-md-inline">Iniciar sesión</span>
           </a>
           {% endif %}
         </div>

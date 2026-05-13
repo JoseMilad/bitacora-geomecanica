@@ -189,8 +189,10 @@ async def editar_usuario_submit(
     rol = form.get("rol")
     password = form.get("password", "").strip() or None
     activo = form.get("activo") == "on"
+    empresa_id_raw = form.get("empresa_id", "").strip()
+    empresa_id = int(empresa_id_raw) if empresa_id_raw.isdigit() else None
 
-    ok, msg = editar_usuario(user_id, nombre=nombre, rol=rol, activo=activo, password=password)
+    ok, msg = editar_usuario(user_id, nombre=nombre, rol=rol, activo=activo, password=password, empresa_id=empresa_id)
     _set_flash(request, "success" if ok else "error", msg)
     return RedirectResponse(url="/auth/usuarios", status_code=303)
 

@@ -310,10 +310,10 @@ document.getElementById('formDia').addEventListener('submit', function(e) {
   if (noRegistradas.length > 0) {
     e.preventDefault();
     const primera = noRegistradas[0];
-    const confirmar = confirm('La labor "' + primera + '" no está registrada en el sistema.\n\n¿Deseas crearla ahora? (Serás redirigido a la gestión de labores y podrás volver a este formulario.)');
-    if (confirmar) {
-      window.location.href = '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=2';
-    }
+    document.getElementById('modalDiaLaborNombre').textContent = primera;
+    document.getElementById('btnCrearLaborDia').href =
+      '/labores/nueva?nombre=' + encodeURIComponent(primera) + '&return_to=2';
+    new bootstrap.Modal(document.getElementById('modalDiaLaborNoExiste')).show();
     return;
   }
   // Update n_labores to match current max index
@@ -323,4 +323,28 @@ document.getElementById('formDia').addEventListener('submit', function(e) {
 // Add first entry automatically on page load
 agregarLabor();
 </script>
+
+<!-- Modal: Labor no existe (form_dia) -->
+<div class="modal fade" id="modalDiaLaborNoExiste" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">
+          <i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>Labor no registrada
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>La labor <strong id="modalDiaLaborNombre"></strong> no está registrada en el sistema.</p>
+        <p class="text-muted mb-0">¿Deseas crearla ahora? Serás redirigido a la gestión de labores y podrás volver a este formulario.</p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <a id="btnCrearLaborDia" href="#" class="btn btn-warning">
+          <i class="fa-solid fa-plus me-1"></i>Crear labor
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
