@@ -39,11 +39,6 @@
           </a>
         </li>
         <li>
-          <a href="/labores" class="sidebar-link {% if active_page in ('labores', 'clasificaciones') %}active{% endif %}">
-            <i class="fa-solid fa-hard-hat me-2"></i><span>Labores</span>
-          </a>
-        </li>
-        <li>
           <a href="/sostenimiento" class="sidebar-link {% if active_page == 'sostenimiento' %}active{% endif %}">
             <i class="fa-solid fa-layer-group me-2"></i><span>Sostenimiento</span>
           </a>
@@ -56,7 +51,7 @@
         </li>
         {% else %}
         <li>
-          <a href="#" class="sidebar-link disabled" id="kpiDevLink" title="Función en desarrollo" aria-label="KPI - Función en desarrollo, solo disponible para el administrador global">
+          <a href="#" class="sidebar-link disabled" id="kpiDevLink" title="Función en desarrollo" aria-label="KPI - Función en desarrollo, estará disponible próximamente">
             <i class="fa-solid fa-chart-column me-2"></i><span>KPI</span>
             <small class="badge bg-warning text-dark ms-2">En desarrollo</small>
           </a>
@@ -186,7 +181,7 @@
       if (kpiDevLink) {
         kpiDevLink.addEventListener('click', function(e) {
           e.preventDefault();
-          alert('Función en desarrollo. Solo disponible para el administrador global.');
+          alert('Función en desarrollo. Estará disponible próximamente.');
         });
       }
     });

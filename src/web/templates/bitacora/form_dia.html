@@ -105,6 +105,11 @@
               style="z-index:1050;max-height:200px;overflow-y:auto;display:none;"></div>
           </div>
         </div>
+        {# Sistema de clasificación — visible solo si hay 2+ clasificaciones activas #}
+        <div class="col-md-4 campo-sistema-ref">
+          <label class="form-label fw-semibold">Sistema de clasificación</label>
+          <select name="" class="form-select input-sistema-ref"></select>
+        </div>
         {# GSI — shown by data attr gsi-active #}
         <div class="col-md-4 campo-gsi">
           <label class="form-label fw-semibold">GSI</label>
@@ -173,6 +178,26 @@ function agregarLabor() {
   if (!showGSI) { campoGSI.style.display = 'none'; clone.querySelector('.input-gsi').name = ''; }
   if (!showRMR) { campoRMR.style.display = 'none'; clone.querySelector('.input-rmr').name = ''; }
 
+  // Sistema de clasificación dropdown
+  const campoSistemaRef = clone.querySelector('.campo-sistema-ref');
+  const selectSistemaRef = clone.querySelector('.input-sistema-ref');
+  selectSistemaRef.name = 'sistema_ref_' + idx;
+  if (_clasifActivas.length <= 1) {
+    // Only one classification system: hide selector but keep value
+    campoSistemaRef.style.display = 'none';
+    if (_clasifActivas.length === 1) {
+      const opt = document.createElement('option');
+      opt.value = _clasifActivas[0]; opt.textContent = _clasifActivas[0]; opt.selected = true;
+      selectSistemaRef.appendChild(opt);
+    }
+  } else {
+    _clasifActivas.forEach(function(cid) {
+      const opt = document.createElement('option');
+      opt.value = cid; opt.textContent = cid;
+      selectSistemaRef.appendChild(opt);
+    });
+  }
+
   // Render custom classifications (not GSI/RMR)
   const extraContainer = clone.querySelector('.clasif-extra-campos');
   _clasifActivas.filter(c => c !== 'GSI' && c !== 'RMR').forEach(function(cid) {
@@ -205,6 +230,24 @@ function agregarLabor() {
   laborDropdown.id = laborDropdownId;
   initLaborTypeahead(laborInputId, laborDropdownId, todasLabores, {
     onSelect: function(labor) { autocompletarLaborEntrada(labor, addedCard); }
+  });
+
+  // Wire up oninput on classification inputs to recalculate soporte on manual changes
+  const rmrInput = addedCard.querySelector('.input-rmr');
+  const gsiInput = addedCard.querySelector('.input-gsi');
+  const selectorRef = addedCard.querySelector('.input-sistema-ref');
+  if (rmrInput && rmrInput.name) {
+    rmrInput.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
+  }
+  if (gsiInput && gsiInput.name) {
+    gsiInput.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
+  }
+  if (selectorRef) {
+    selectorRef.addEventListener('change', function() { recalcularSoporteEntrada(addedCard); });
+  }
+  // Wire up custom classification inputs
+  addedCard.querySelectorAll('.clasif-extra-campos input').forEach(function(inp) {
+    inp.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
   });
 
   _nEntradas++;
@@ -248,6 +291,36 @@ function toggleEntry(btn) {
   }
 }
 
+// Recalculate soporte when classification values are changed manually in a multi-entry row
+let _recalcTimers = {};
+function recalcularSoporteEntrada(card) {
+  const idx = card.dataset.idx;
+  clearTimeout(_recalcTimers[idx]);
+  _recalcTimers[idx] = setTimeout(async function() {
+    const soporteInput = card.querySelector('.input-soporte');
+    if (!soporteInput) return;
+    // Use the selected sistema de clasificación if available
+    const selectorRef = card.querySelector('.input-sistema-ref');
+    const sistema = selectorRef ? selectorRef.value : (_clasifActivas.length > 0 ? _clasifActivas[0] : null);
+    if (!sistema) return;
+    const inputValor = sistema === 'GSI' ? card.querySelector('.input-gsi')
+                     : sistema === 'RMR' ? card.querySelector('.input-rmr')
+                     : card.querySelector('input[name^="clasif_' + sistema + '_"]');
+    if (!inputValor || !inputValor.value.trim()) return;
+    const laborInput = card.querySelector('.input-labor');
+    const labor = laborInput ? laborInput.value.trim() : '';
+    try {
+      const params = new URLSearchParams({ sistema: sistema, valor: inputValor.value.trim(), labor: labor });
+      const res = await fetch('/bitacora/calcular-soporte-gen?' + params);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.soporte) soporteInput.value = data.soporte;
+    } catch (err) {
+      console.warn('recalcularSoporteEntrada error:', err);
+    }
+  }, 500);
+}
+
 // Auto-populate fields when a labor is selected in a multi-entry row
 async function autocompletarLaborEntrada(nombre, card) {
   if (!nombre || !card) return;
@@ -270,7 +343,9 @@ async function autocompletarLaborEntrada(nombre, card) {
     // If soporte is still empty and there is RMR/GSI value, request recommendation
     const soporteVal = soporteInput ? soporteInput.value.trim() : '';
     if (!soporteVal) {
-      const sistema = _clasifActivas.length > 0 ? _clasifActivas[0] : null;
+      const selectorRef = card.querySelector('.input-sistema-ref');
+      const sistema = selectorRef && selectorRef.value ? selectorRef.value
+                     : (_clasifActivas.length > 0 ? _clasifActivas[0] : null);
       if (sistema) {
         const inputValor = sistema === 'GSI' ? card.querySelector('.input-gsi')
                          : sistema === 'RMR' ? card.querySelector('.input-rmr')
