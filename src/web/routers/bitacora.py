@@ -644,6 +644,10 @@ async def nuevo_dia_save(request: Request):
         rmr = form.get(f"rmr_{i}", "")
         soporte = form.get(f"soporte_{i}", "")
         observaciones = form.get(f"obs_{i}", "")
+        sistema_ref = form.get(f"sistema_ref_{i}", "").strip()
+        # Persist last used classification system in session
+        if sistema_ref:
+            request.session["ultimo_sistema_referencia"] = sistema_ref
 
         # Imagen opcional por entrada
         imagen_path = ""

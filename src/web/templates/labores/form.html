@@ -36,6 +36,7 @@
             </div>
             {% endif %}
 
+            {% if not return_to %}
             {# Determine the active reference system at render time so every field
                gets the right initial <input type> before JavaScript runs.
                A number input whose value is non-numeric is silently cleared by
@@ -152,15 +153,31 @@
                 disabled title="Esta función estará disponible próximamente" />
               <input type="hidden" name="clasificacion_kpi" value="{{ labor.get('Clasificacion_KPI', '') if labor else '' }}" />
             </div>
-          </div>
+            {% else %}
+            {# Simplified creation from bitácora: only name is required; type/phase auto-detected #}
+            <input type="hidden" name="gsi" value="" />
+            <input type="hidden" name="rmr" value="" />
+            <input type="hidden" name="soporte" value="" />
+            <input type="hidden" id="selectTipo" name="tipo" value="Temporal" />
+            <input type="hidden" id="inputFase" name="fase" value="" />
+            <input type="hidden" name="clasificacion_kpi" value="" />
+            <input type="hidden" name="sistema_referencia" value="{{ clasif_activas[0] if clasif_activas else '' }}" />
+            {% endif %}
+          </div><!-- /row g-3 -->
 
           <div class="mt-4 d-flex gap-2">
             <button type="submit" class="btn btn-primary">
               <i class="fa-solid fa-save me-1"></i>Guardar
             </button>
+            {% if return_to %}
+            <a href="/bitacora/nuevo-dia" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-arrow-left me-1"></i>Cancelar
+            </a>
+            {% else %}
             <a href="/labores" class="btn btn-outline-secondary">
               <i class="fa-solid fa-arrow-left me-1"></i>Cancelar
             </a>
+            {% endif %}
           </div>
         </form>
       </div>

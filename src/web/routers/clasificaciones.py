@@ -50,7 +50,7 @@ async def listar_clasificaciones(request: Request):
         "clasificaciones": clasificaciones,
         "kpis": kpis,
         "flash": flash,
-        "active_page": "clasificaciones",
+        "active_page": "configuracion",
         "is_admin": _is_admin(request),
     })
 
