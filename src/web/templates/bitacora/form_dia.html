@@ -237,17 +237,17 @@ function agregarLabor() {
   const gsiInput = addedCard.querySelector('.input-gsi');
   const selectorRef = addedCard.querySelector('.input-sistema-ref');
   if (rmrInput && rmrInput.name) {
-    rmrInput.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
+    rmrInput.addEventListener('input', function() { recalcularSoporteEntrada(this.closest('.labor-entry')); });
   }
   if (gsiInput && gsiInput.name) {
-    gsiInput.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
+    gsiInput.addEventListener('input', function() { recalcularSoporteEntrada(this.closest('.labor-entry')); });
   }
   if (selectorRef) {
-    selectorRef.addEventListener('change', function() { recalcularSoporteEntrada(addedCard); });
+    selectorRef.addEventListener('change', function() { recalcularSoporteEntrada(this.closest('.labor-entry')); });
   }
   // Wire up custom classification inputs
   addedCard.querySelectorAll('.clasif-extra-campos input').forEach(function(inp) {
-    inp.addEventListener('input', function() { recalcularSoporteEntrada(addedCard); });
+    inp.addEventListener('input', function() { recalcularSoporteEntrada(this.closest('.labor-entry')); });
   });
 
   _nEntradas++;
