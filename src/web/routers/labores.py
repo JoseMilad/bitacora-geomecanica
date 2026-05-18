@@ -109,6 +109,7 @@ async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = 
     clasif_ctx = _get_clasif_context(_get_empresa_id(request))
     # Only accept numeric keys from our map (ignore arbitrary URL strings)
     safe_return_to = return_to if return_to in _RETURN_TO_MAP else ""
+    return_to_url = _RETURN_TO_MAP.get(safe_return_to, "")
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -119,6 +120,7 @@ async def nueva_labor_form(request: Request, nombre: str = "", return_to: str = 
         "active_page": "labores",
         "nombre_prefill": nombre.upper() if nombre else "",
         "return_to": safe_return_to,
+        "return_to_url": return_to_url,
         **clasif_ctx,
     })
 
@@ -171,6 +173,7 @@ async def nueva_labor_save(
         "Sistema_Referencia": sistema_referencia,
     }
     labor_data.update(extra_clasifs)
+    return_to_url = _RETURN_TO_MAP.get(return_to, "")
     return templates.TemplateResponse(request, "labores/form.html", context={
         "request": request,
         "app_version": APP_VERSION,
@@ -181,6 +184,7 @@ async def nueva_labor_save(
         "active_page": "labores",
         "nombre_prefill": "",
         "return_to": return_to,
+        "return_to_url": return_to_url,
         **clasif_ctx,
     })
 
@@ -229,6 +233,7 @@ async def editar_labor_form(request: Request, nombre: str):
         "active_page": "labores",
         "nombre_prefill": "",
         "return_to": "",
+        "return_to_url": "",
         **clasif_ctx,
     })
 

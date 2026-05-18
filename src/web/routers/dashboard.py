@@ -18,6 +18,7 @@ from typing import List
 from src.models.bitacora_model import BitacoraModel
 from src.utils.config import APP_VERSION
 from src.utils.config_manager import DEFAULTS, cargar_config
+from src.utils.clasificaciones import detectar_clasificacion
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -226,12 +227,26 @@ async def dashboard(
             df_labores = model._leer_labores_df()
             if not df_labores.empty and "Fase" in df_labores.columns:
                 mapa_fase = df_labores.set_index("Labor")["Fase"].to_dict()
-                df_tmp2 = df_sost_full.copy()
-                df_tmp2["Fase"] = df_tmp2["Labor"].map(mapa_fase).fillna("Sin fase")
-                grp_fase = df_tmp2.groupby("Fase")[col_principal].sum()
-                grp_fase = grp_fase[grp_fase > 0]
-                labels_sost_fase = grp_fase.index.tolist()
-                data_sost_fase = [round(float(v), 2) for v in grp_fase.values.tolist()]
+            else:
+                mapa_fase = {}
+            df_tmp2 = df_sost_full.copy()
+
+            def _resolver_fase(nombre_labor: str) -> str:
+                fase = mapa_fase.get(nombre_labor, "")
+                if fase:
+                    return fase
+                # Intentar detectar la fase desde el nombre de la labor
+                for tipo in ("Temporal", "Permanente"):
+                    _, fase_det = detectar_clasificacion(nombre_labor, tipo)
+                    if fase_det:
+                        return fase_det
+                return "Sin fase"
+
+            df_tmp2["Fase"] = df_tmp2["Labor"].apply(_resolver_fase)
+            grp_fase = df_tmp2.groupby("Fase")[col_principal].sum()
+            grp_fase = grp_fase[grp_fase > 0]
+            labels_sost_fase = grp_fase.index.tolist()
+            data_sost_fase = [round(float(v), 2) for v in grp_fase.values.tolist()]
     except Exception:
         pass
 
